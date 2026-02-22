@@ -65,6 +65,7 @@ struct GameWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.userContentController.add(context.coordinator, name: "haptics")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -100,12 +101,74 @@ struct GameWebView: UIViewRepresentable {
         webView.loadFileURL(indexURL, allowingReadAccessTo: readAccessURL)
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         @Binding private var isLoading: Bool
         var lastReloadToken = UUID()
+        private let lightImpact = UIImpactFeedbackGenerator(style: .light)
+        private let mediumImpact = UIImpactFeedbackGenerator(style: .medium)
+        private let heavyImpact = UIImpactFeedbackGenerator(style: .heavy)
+        private let notificationFeedback = UINotificationFeedbackGenerator()
 
         init(isLoading: Binding<Bool>) {
             _isLoading = isLoading
+            super.init()
+            prepareHaptics()
+        }
+
+        private func prepareHaptics() {
+            lightImpact.prepare()
+            mediumImpact.prepare()
+            heavyImpact.prepare()
+            notificationFeedback.prepare()
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "haptics" else { return }
+
+            var type = "confirm"
+            var strength: String?
+            if let body = message.body as? [String: Any] {
+                if let bodyType = body["type"] as? String, !bodyType.isEmpty {
+                    type = bodyType.lowercased()
+                }
+                if let bodyStrength = body["strength"] as? String, !bodyStrength.isEmpty {
+                    strength = bodyStrength.lowercased()
+                }
+            } else if let bodyType = message.body as? String, !bodyType.isEmpty {
+                type = bodyType.lowercased()
+            }
+
+            DispatchQueue.main.async { [weak self] in
+                self?.fireHaptic(type: type, strength: strength)
+            }
+        }
+
+        private func fireHaptic(type: String, strength: String?) {
+            switch type {
+            case "reward", "success":
+                notificationFeedback.notificationOccurred(.success)
+            case "damage":
+                if strength == "heavy" {
+                    heavyImpact.impactOccurred(intensity: 1.0)
+                } else {
+                    mediumImpact.impactOccurred(intensity: 0.9)
+                }
+            case "fail", "error":
+                notificationFeedback.notificationOccurred(.error)
+            case "warning":
+                notificationFeedback.notificationOccurred(.warning)
+            case "confirm":
+                fallthrough
+            default:
+                if strength == "heavy" {
+                    heavyImpact.impactOccurred(intensity: 0.9)
+                } else if strength == "medium" {
+                    mediumImpact.impactOccurred(intensity: 0.8)
+                } else {
+                    lightImpact.impactOccurred(intensity: 0.7)
+                }
+            }
+            prepareHaptics()
         }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {

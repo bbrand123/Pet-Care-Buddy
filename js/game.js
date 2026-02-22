@@ -1409,10 +1409,29 @@
             }
         }
 
+        function postNativeHaptic(type, options = {}) {
+            try {
+                if (!isHapticsEnabled()) return false;
+                const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.haptics;
+                if (!handler || typeof handler.postMessage !== 'function') return false;
+                handler.postMessage({
+                    type: String(type || 'confirm'),
+                    strength: options.strength || null,
+                    action: options.action || null
+                });
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
         function hapticBuzz(ms) {
             try {
                 if (!isHapticsEnabled()) return;
-                if (navigator.vibrate) navigator.vibrate(ms || 50);
+                const duration = Number(ms) || 50;
+                const nativeType = duration >= 100 ? 'damage' : (duration >= 70 ? 'fail' : 'confirm');
+                const nativeSent = postNativeHaptic(nativeType, { strength: duration >= 100 ? 'heavy' : (duration >= 70 ? 'medium' : 'light') });
+                if (!nativeSent && navigator.vibrate) navigator.vibrate(duration);
             } catch (e) { /* unsupported — silently ignore */ }
         }
 
@@ -1435,7 +1454,22 @@
         function hapticPattern(action) {
             try {
                 if (!isHapticsEnabled()) return;
-                if (navigator.vibrate && HAPTIC_PATTERNS[action]) {
+                const semanticMap = {
+                    achievement: 'reward',
+                    highscore: 'reward',
+                    critical: 'fail',
+                    feed: 'confirm',
+                    wash: 'confirm',
+                    play: 'confirm',
+                    sleep: 'confirm',
+                    medicine: 'confirm',
+                    groom: 'confirm',
+                    exercise: 'confirm',
+                    treat: 'reward',
+                    cuddle: 'confirm'
+                };
+                const nativeSent = postNativeHaptic(semanticMap[action] || 'confirm', { action: action || null });
+                if (!nativeSent && navigator.vibrate && HAPTIC_PATTERNS[action]) {
                     navigator.vibrate(HAPTIC_PATTERNS[action]);
                 }
             } catch (e) { /* unsupported — silently ignore */ }
