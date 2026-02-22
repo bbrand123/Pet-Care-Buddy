@@ -152,6 +152,311 @@
             </span>${safeLabel ? `<span class="sr-only">${safeLabel}</span>` : ''}`;
         }
 
+        // ==================== TOUCH-FIRST MOBILE UI (Phase 1) ====================
+        const GAME_ACTIONS = Object.freeze({
+            FEED: 'ACTION_FEED',
+            WASH: 'ACTION_WASH',
+            PLAY: 'ACTION_PLAY',
+            SLEEP: 'ACTION_SLEEP',
+            CLEAN: 'ACTION_CLEAN',
+            CUDDLE: 'ACTION_CUDDLE',
+            PET: 'ACTION_PET',
+            TREAT: 'ACTION_TREAT',
+            MINIGAMES: 'ACTION_MINIGAMES',
+            COMPETITION: 'ACTION_COMPETITION',
+            INVENTORY: 'ACTION_INVENTORY',
+            EXPLORE: 'ACTION_EXPLORE',
+            TOOLS: 'ACTION_TOOLS',
+            SETTINGS: 'ACTION_SETTINGS',
+            PAUSE: 'ACTION_PAUSE'
+        });
+
+        const GAME_ACTION_TARGETS = Object.freeze({
+            ACTION_FEED: ['core-feed-btn', 'feed-btn'],
+            ACTION_WASH: ['core-wash-btn', 'wash-btn'],
+            ACTION_PLAY: ['core-play-btn', 'play-btn'],
+            ACTION_SLEEP: ['core-sleep-btn', 'sleep-btn'],
+            ACTION_PET: ['pet-btn', 'pet-container'],
+            ACTION_TREAT: ['treat-btn'],
+            ACTION_MINIGAMES: ['minigames-btn'],
+            ACTION_COMPETITION: ['competition-btn'],
+            ACTION_INVENTORY: ['economy-btn'],
+            ACTION_EXPLORE: ['explore-btn'],
+            ACTION_TOOLS: ['tools-btn'],
+            ACTION_SETTINGS: ['settings-btn']
+        });
+
+        function getTouchCapabilities() {
+            const ua = (navigator && navigator.userAgent) || '';
+            let coarsePointer = false;
+            let hoverNone = false;
+            try {
+                coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+                hoverNone = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+            } catch (e) {}
+            const maxTouchPoints = Number(navigator.maxTouchPoints || 0);
+            const isIOS = /iPhone|iPad|iPod/i.test(ua);
+            const isMobileUA = /iPhone|iPad|iPod|Android|Mobile/i.test(ua);
+            const vw = Math.max(0, window.innerWidth || document.documentElement.clientWidth || 0);
+            const vh = Math.max(0, window.innerHeight || document.documentElement.clientHeight || 0);
+            const minSide = Math.min(vw || 9999, vh || 9999);
+            const smallViewport = vw <= 900 || minSide <= 500;
+            const touchCapable = coarsePointer || hoverNone || maxTouchPoints > 0 || isMobileUA;
+            return { coarsePointer, hoverNone, maxTouchPoints, isIOS, isMobileUA, smallViewport, touchCapable };
+        }
+
+        function isMobileTouchUiActive() {
+            const caps = getTouchCapabilities();
+            return !!(caps.touchCapable && (caps.isIOS || caps.smallViewport));
+        }
+
+        function syncMobileUiClasses() {
+            const caps = getTouchCapabilities();
+            const mobileTouch = isMobileTouchUiActive();
+            document.documentElement.classList.toggle('mobile-ui', mobileTouch);
+            document.documentElement.classList.toggle('touch-capable', !!caps.touchCapable);
+            document.documentElement.classList.toggle('ios-device', !!caps.isIOS);
+            if (document.body) {
+                document.body.classList.toggle('mobile-ui', mobileTouch);
+                document.body.classList.toggle('touch-capable', !!caps.touchCapable);
+                document.body.classList.toggle('ios-device', !!caps.isIOS);
+            }
+            return mobileTouch;
+        }
+
+        let _mobileUiSyncQueued = false;
+        function queueMobileUiSync() {
+            if (_mobileUiSyncQueued) return;
+            _mobileUiSyncQueued = true;
+            requestAnimationFrame(() => {
+                _mobileUiSyncQueued = false;
+                syncMobileUiClasses();
+                if (typeof TouchControls !== 'undefined' && TouchControls && typeof TouchControls.render === 'function') {
+                    TouchControls.render();
+                }
+            });
+        }
+
+        function resolveGameActionTarget(actionId) {
+            const ids = GAME_ACTION_TARGETS[actionId] || [];
+            for (let i = 0; i < ids.length; i++) {
+                const el = document.getElementById(ids[i]);
+                if (el) return el;
+            }
+            return null;
+        }
+
+        function closeTouchPauseOverlay(returnFocusEl) {
+            const overlay = document.querySelector('.touch-pause-overlay');
+            if (!overlay) return;
+            const close = overlay._closeOverlay;
+            if (typeof close === 'function') {
+                close();
+                return;
+            }
+            overlay.remove();
+            if (returnFocusEl && typeof returnFocusEl.focus === 'function') returnFocusEl.focus();
+        }
+
+        function showTouchPauseOverlay(returnFocusEl) {
+            if (!isMobileTouchUiActive()) return false;
+            closeTouchPauseOverlay();
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay touch-pause-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', 'Paused');
+            overlay.innerHTML = `
+                <div class="touch-pause-panel">
+                    <div class="touch-pause-header">
+                        <h2 class="touch-pause-title">Pause</h2>
+                        <button type="button" class="touch-pause-close" id="touch-pause-close" aria-label="Resume game">Resume</button>
+                    </div>
+                    <div class="touch-pause-actions" role="group" aria-label="Pause actions">
+                        <button type="button" class="touch-pause-action primary" id="touch-pause-resume">Resume Game</button>
+                        <button type="button" class="touch-pause-action" id="touch-pause-settings">Settings</button>
+                        <button type="button" class="touch-pause-action" id="touch-pause-rewards">Rewards</button>
+                        <button type="button" class="touch-pause-action" id="touch-pause-tools">Tools</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const closeOverlay = () => {
+                popModalEscape(closeOverlay);
+                if (overlay.parentNode) {
+                    overlay.innerHTML = '';
+                    overlay.remove();
+                }
+                if (returnFocusEl && typeof returnFocusEl.focus === 'function') {
+                    returnFocusEl.focus();
+                }
+            };
+            overlay._closeOverlay = closeOverlay;
+
+            const resumeBtn = overlay.querySelector('#touch-pause-resume');
+            const closeBtn = overlay.querySelector('#touch-pause-close');
+            const settingsBtn = overlay.querySelector('#touch-pause-settings');
+            const rewardsBtn = overlay.querySelector('#touch-pause-rewards');
+            const toolsBtn = overlay.querySelector('#touch-pause-tools');
+
+            if (resumeBtn) resumeBtn.addEventListener('click', closeOverlay);
+            if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
+            if (settingsBtn) {
+                settingsBtn.addEventListener('click', () => {
+                    closeOverlay();
+                    if (typeof showSettingsModal === 'function') showSettingsModal();
+                });
+            }
+            if (rewardsBtn) {
+                rewardsBtn.addEventListener('click', () => {
+                    closeOverlay();
+                    const rewards = document.getElementById('rewards-btn');
+                    if (rewards && !rewards.disabled) rewards.click();
+                });
+            }
+            if (toolsBtn) {
+                toolsBtn.addEventListener('click', () => {
+                    closeOverlay();
+                    const tools = document.getElementById('tools-btn');
+                    if (tools && !tools.disabled) tools.click();
+                });
+            }
+
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) closeOverlay();
+            });
+            pushModalEscape(closeOverlay);
+            trapFocus(overlay);
+            if (resumeBtn) resumeBtn.focus();
+            if (typeof hapticBuzz === 'function') hapticBuzz(25);
+            return true;
+        }
+
+        function triggerGameAction(actionId, options = {}) {
+            const action = actionId === GAME_ACTIONS.CUDDLE ? GAME_ACTIONS.PET : actionId;
+            if (!action) return false;
+            if (action === GAME_ACTIONS.PAUSE) {
+                return showTouchPauseOverlay(options.returnFocusEl || null);
+            }
+            if (action === GAME_ACTIONS.SETTINGS) {
+                if (typeof showSettingsModal === 'function') showSettingsModal();
+                return true;
+            }
+            const target = resolveGameActionTarget(action);
+            if (!target || target.disabled) return false;
+            target.click();
+            return true;
+        }
+
+        const TouchControls = {
+            HOLD_MS: 420,
+            HUD_ID: 'touch-controls-layer',
+            _holdTimer: null,
+            _holdButton: null,
+            _holdTriggered: false,
+            render() {
+                const mobile = syncMobileUiClasses();
+                const existing = document.getElementById(this.HUD_ID);
+                const show = mobile && gameState && gameState.phase === 'pet';
+                if (!show) {
+                    if (document.body) document.body.classList.remove('has-touch-controls');
+                    if (existing) existing.remove();
+                    return;
+                }
+                if (document.body) document.body.classList.add('has-touch-controls');
+                const host = existing || document.createElement('nav');
+                host.id = this.HUD_ID;
+                host.className = 'touch-controls-layer';
+                host.setAttribute('aria-label', 'Quick actions');
+                host.innerHTML = `
+                    <div class="touch-controls-row" role="group" aria-label="Quick actions">
+                        <button type="button" class="touch-control-btn" data-touch-action="${GAME_ACTIONS.PET}" data-hold-action="${GAME_ACTIONS.SETTINGS}" aria-label="Pet your friend. Hold for settings">
+                            <span class="touch-control-icon" aria-hidden="true">🤗</span>
+                            <span class="touch-control-label">Pet</span>
+                        </button>
+                        <button type="button" class="touch-control-btn" data-touch-action="${GAME_ACTIONS.TREAT}" aria-label="Give a treat">
+                            <span class="touch-control-icon" aria-hidden="true">🍪</span>
+                            <span class="touch-control-label">Treat</span>
+                        </button>
+                        <button type="button" class="touch-control-btn" data-touch-action="${GAME_ACTIONS.MINIGAMES}" data-hold-action="${GAME_ACTIONS.PLAY}" aria-label="Open mini games. Hold for quick play">
+                            <span class="touch-control-icon" aria-hidden="true">🎮</span>
+                            <span class="touch-control-label">Games</span>
+                        </button>
+                        <button type="button" class="touch-control-btn" data-touch-action="${GAME_ACTIONS.INVENTORY}" aria-label="Open economy and inventory">
+                            <span class="touch-control-icon" aria-hidden="true">🪙</span>
+                            <span class="touch-control-label">Shop</span>
+                        </button>
+                        <button type="button" class="touch-control-btn pause" data-touch-action="${GAME_ACTIONS.PAUSE}" data-hold-action="${GAME_ACTIONS.SETTINGS}" aria-label="Pause menu. Hold for settings">
+                            <span class="touch-control-icon" aria-hidden="true">⏸️</span>
+                            <span class="touch-control-label">Pause</span>
+                        </button>
+                    </div>
+                `;
+                if (!existing) {
+                    document.body.appendChild(host);
+                    this.bind(host);
+                }
+            },
+            bind(host) {
+                if (!host || host._touchControlsBound) return;
+                host._touchControlsBound = true;
+                const clearHold = (btn) => {
+                    if (this._holdTimer) {
+                        clearTimeout(this._holdTimer);
+                        this._holdTimer = null;
+                    }
+                    if (btn) btn.classList.remove('is-pressed', 'is-held');
+                    if (this._holdButton && this._holdButton !== btn) {
+                        this._holdButton.classList.remove('is-pressed', 'is-held');
+                    }
+                    this._holdButton = null;
+                };
+                host.addEventListener('pointerdown', (e) => {
+                    const btn = e.target.closest('[data-touch-action]');
+                    if (!btn || btn.disabled) return;
+                    this._holdTriggered = false;
+                    this._holdButton = btn;
+                    btn.classList.add('is-pressed');
+                    const holdAction = btn.getAttribute('data-hold-action');
+                    if (!holdAction) return;
+                    this._holdTimer = setTimeout(() => {
+                        this._holdTriggered = true;
+                        btn.classList.remove('is-pressed');
+                        btn.classList.add('is-held');
+                        triggerGameAction(holdAction, { returnFocusEl: btn });
+                        if (typeof hapticBuzz === 'function') hapticBuzz(40);
+                    }, this.HOLD_MS);
+                });
+                host.addEventListener('pointerup', (e) => {
+                    const btn = e.target.closest('[data-touch-action]');
+                    clearHold(btn || this._holdButton);
+                });
+                host.addEventListener('pointercancel', () => clearHold(this._holdButton));
+                host.addEventListener('pointerleave', () => clearHold(this._holdButton));
+                host.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-touch-action]');
+                    if (!btn || btn.disabled) return;
+                    if (this._holdTriggered) {
+                        this._holdTriggered = false;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        btn.classList.remove('is-held');
+                        return;
+                    }
+                    const action = btn.getAttribute('data-touch-action');
+                    triggerGameAction(action, { returnFocusEl: btn });
+                });
+            }
+        };
+
+        window.GAME_ACTIONS = GAME_ACTIONS;
+        window.TouchControls = TouchControls;
+        window.isMobileTouchUiActive = isMobileTouchUiActive;
+        syncMobileUiClasses();
+        window.addEventListener('resize', queueMobileUiSync, { passive: true });
+        window.addEventListener('orientationchange', queueMobileUiSync, { passive: true });
+
         function spawnEmojiBurst(container, action) {
             if (!container) return;
             if (isReducedMotionEnabled()) return;
@@ -780,6 +1085,9 @@
         }
 
         function renderEggPhase(maintainFocus = false) {
+            if (typeof TouchControls !== 'undefined' && TouchControls && typeof TouchControls.render === 'function') {
+                TouchControls.render();
+            }
             document.body.classList.remove('has-core-care-dock');
             setCareActionsSkipLinkVisible(false);
             // Initialize egg if not set
@@ -1858,6 +2166,7 @@
             markPetSessionSeen();
             document.body.classList.add('has-core-care-dock');
             setCareActionsSkipLinkVisible(true);
+            const touchMobileUi = isMobileTouchUiActive();
             const mood = getMood(pet);
 
             // Update time of day
@@ -2277,7 +2586,7 @@
 
                 <h2 class="region-heading" id="care-actions-heading">Care Actions</h2>
                 <section class="actions-section" id="care-actions" aria-label="Care actions">
-                    <p class="shortcut-strip" aria-label="Keyboard hints: 1 Feed, 2 Wash, 3 Sleep, 4 Pet, 5 Play, 7 Games">
+                    <p class="shortcut-strip" ${touchMobileUi ? 'hidden aria-hidden="true"' : ''} aria-label="Keyboard hints: 1 Feed, 2 Wash, 3 Sleep, 4 Pet, 5 Play, 7 Games">
                         <kbd>1</kbd> Feed <kbd>2</kbd> Wash <kbd>3</kbd> Sleep <kbd>4</kbd> Pet <kbd>5</kbd> Play <kbd>7</kbd> Games
                     </p>
                     <div class="action-group">
@@ -2409,6 +2718,9 @@
             `;
             setCareActionsSkipLinkVisible(true);
             applyProgressiveOnboardingUI();
+            if (typeof TouchControls !== 'undefined' && TouchControls && typeof TouchControls.render === 'function') {
+                TouchControls.render();
+            }
 
             // Add event listeners
             // Emergency care button
@@ -9434,6 +9746,7 @@
             const remindersEnabled = !!(gameState.reminders && gameState.reminders.enabled);
             const currentBalanceProfile = (typeof getBalanceProfileId === 'function') ? getBalanceProfileId() : 'NORMAL';
             const isQuickBalanceProfile = currentBalanceProfile === 'QUICK_ITERATION_BUILD';
+            const touchMobileUi = isMobileTouchUiActive();
 
             const overlay = document.createElement('div');
             overlay.className = 'settings-overlay';
@@ -9570,13 +9883,13 @@
                             <button class="settings-preset-btn" id="setting-low-stim">Apply Preset</button>
                         </div>
                     </div>
-                    <div class="settings-keyboard-hints">
+                    ${touchMobileUi ? '' : `<div class="settings-keyboard-hints">
                         <h3 class="settings-hints-title">Keyboard Shortcuts</h3>
                         <div class="settings-hint-row"><kbd>1</kbd> Feed &nbsp; <kbd>2</kbd> Wash &nbsp; <kbd>3</kbd> Sleep &nbsp; <kbd>4</kbd> Pet</div>
                         <div class="settings-hint-row"><kbd>5</kbd> Play &nbsp; <kbd>6</kbd> Treat &nbsp; <kbd>7</kbd> Games &nbsp; <kbd>8</kbd> Arena</div>
                         <div class="settings-hint-row"><kbd>Tab</kbd> Navigate &nbsp; <kbd>Enter</kbd> / <kbd>Space</kbd> Activate</div>
                         <div class="settings-hint-row"><kbd>Escape</kbd> Close current dialog</div>
-                    </div>
+                    </div>`}
                     <button class="settings-close" id="settings-close" aria-label="Close settings">Close</button>
                 </div>
             `;
@@ -9928,6 +10241,7 @@
         // ==================== KEYBOARD SHORTCUTS (Item 24) ====================
         document.addEventListener('keydown', (e) => {
             // Don't trigger shortcuts when typing in an input or when a modal is open
+            if (typeof isMobileTouchUiActive === 'function' && isMobileTouchUiActive()) return;
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (document.querySelector('.modal-overlay, [role="dialog"], [role="alertdialog"]')) return;
             if (gameState.phase !== 'pet') return;

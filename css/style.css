@@ -13545,6 +13545,10 @@ body.has-core-care-dock {
     padding-bottom: calc(138px + env(safe-area-inset-bottom));
 }
 
+body.has-touch-controls.has-core-care-dock {
+    padding-bottom: calc(214px + env(safe-area-inset-bottom));
+}
+
 body.has-core-care-dock .toast-container {
     bottom: calc(96px + env(safe-area-inset-bottom));
 }
@@ -13557,6 +13561,122 @@ body.has-core-care-dock .toast-container {
     width: min(520px, calc(100vw - 14px));
     z-index: calc(var(--z-overlay) - 30);
     pointer-events: none;
+}
+
+.touch-controls-layer {
+    position: fixed;
+    left: 50%;
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: min(520px, calc(100vw - 14px));
+    z-index: calc(var(--z-overlay) - 31);
+    pointer-events: none;
+}
+
+.touch-controls-row {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+    backdrop-filter: blur(10px);
+    pointer-events: auto;
+}
+
+.touch-control-btn {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    border: none;
+    border-radius: 12px;
+    background: rgba(39, 101, 136, 0.08);
+    color: #1f2f39;
+    font-family: inherit;
+    font-weight: 800;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 8px 6px;
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+    touch-action: manipulation;
+}
+
+.touch-control-btn.pause {
+    background: rgba(197, 69, 69, 0.12);
+}
+
+.touch-control-btn.is-pressed {
+    transform: translateY(1px) scale(0.98);
+    background: rgba(39, 101, 136, 0.16);
+}
+
+.touch-control-btn.is-held {
+    background: rgba(124, 107, 255, 0.14);
+}
+
+.touch-control-icon {
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+.touch-control-label {
+    font-size: 0.68rem;
+    line-height: 1;
+    letter-spacing: 0.01em;
+}
+
+.touch-pause-panel {
+    width: min(560px, calc(100vw - 16px));
+    background: linear-gradient(180deg, #ffffff, #f7fbff);
+    border-radius: 18px;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: var(--shadow-overlay);
+    padding: 16px;
+}
+
+.touch-pause-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.touch-pause-title {
+    font-size: 1.2rem;
+    font-weight: 900;
+    color: #24414f;
+}
+
+.touch-pause-close,
+.touch-pause-action {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    border-radius: 12px;
+    border: 1px solid #c3d3dc;
+    background: #fff;
+    color: #22333c;
+    font-family: inherit;
+    font-weight: 800;
+    padding: 10px 12px;
+    cursor: pointer;
+}
+
+.touch-pause-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.touch-pause-action.primary {
+    background: #2b90a5;
+    border-color: #2b90a5;
+    color: #fff;
 }
 
 .core-care-dock {
@@ -13869,6 +13989,36 @@ body.has-core-care-dock .duplicate-core-action {
     border-color: rgba(255, 255, 255, 0.16);
 }
 
+[data-theme="dark"] .touch-controls-row {
+    background: rgba(26, 26, 46, 0.9);
+    border-color: rgba(255,255,255,0.14);
+}
+
+[data-theme="dark"] .touch-control-btn {
+    background: rgba(178, 215, 238, 0.12);
+    color: #eef6fb;
+}
+
+[data-theme="dark"] .touch-control-btn.pause {
+    background: rgba(255, 122, 122, 0.18);
+}
+
+[data-theme="dark"] .touch-pause-panel {
+    background: linear-gradient(180deg, #20263a, #1a2234);
+    border-color: rgba(255,255,255,0.12);
+}
+
+[data-theme="dark"] .touch-pause-title {
+    color: #e9f2f8;
+}
+
+[data-theme="dark"] .touch-pause-close,
+[data-theme="dark"] .touch-pause-action {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.15);
+    color: #eef6fb;
+}
+
 [data-theme="dark"] .core-care-btn {
     color: #f1f6fa;
 }
@@ -13918,8 +14068,25 @@ body.has-core-care-dock .duplicate-core-action {
     body.has-core-care-dock {
         padding-bottom: calc(178px + env(safe-area-inset-bottom));
     }
+    body.has-touch-controls.has-core-care-dock {
+        padding-bottom: calc(236px + env(safe-area-inset-bottom));
+    }
     .core-care-btn {
         min-height: 58px;
+    }
+    .touch-controls-layer {
+        bottom: calc(84px + env(safe-area-inset-bottom));
+    }
+    .touch-controls-row {
+        gap: 6px;
+        padding: 7px;
+    }
+    .touch-control-btn {
+        min-height: 48px;
+        border-radius: 11px;
+    }
+    .touch-control-label {
+        font-size: 0.64rem;
     }
     .coach-checklist {
         top: auto;
@@ -13945,6 +14112,19 @@ body.has-core-care-dock .duplicate-core-action {
     .reward-card-pop.show {
         transform: translate(-50%, 0) scale(1);
     }
+}
+
+.mobile-ui .shortcut-strip,
+.mobile-ui .kbd-hint,
+.mobile-ui .settings-keyboard-hints,
+.mobile-ui .minigame-a11y-note,
+.mobile-ui .minigame-menu-keyboard-note:not(.mobile-touch-note) {
+    display: none !important;
+}
+
+.mobile-ui .touch-controls-layer + .core-care-dock-wrap .core-care-btn,
+.mobile-ui .core-care-btn {
+    touch-action: manipulation;
 }
 
 /* ==================== LIGHTWEIGHT PET ACTION LOOPS ==================== */

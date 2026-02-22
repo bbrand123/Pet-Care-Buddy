@@ -9,22 +9,33 @@
             return arr;
         }
 
+        function miniGameTouchMode() {
+            try {
+                if (typeof isMobileTouchUiActive === 'function') return !!isMobileTouchUiActive();
+            } catch (e) {}
+            try {
+                return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900);
+            } catch (e) {
+                return false;
+            }
+        }
+
         const MINI_GAMES = [
-            { id: 'fetch', name: 'Fetch', icon: '🎾', description: 'Throw a ball for your pet! Click or press Enter to throw.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'hideseek', name: 'Hide & Seek', icon: '🍪', description: 'Find hidden treats! Use keyboard (Tab + Enter) or pointer.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'bubblepop', name: 'Bubble Pop', icon: '🫧', description: 'Pop bubbles during bath time! Use pointer or Tab to navigate bubbles.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab to bubbles, Enter to pop' },
-            { id: 'matching', name: 'Matching', icon: '🃏', description: 'Match food & accessory pairs! Use keyboard or click.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'simonsays', name: 'Simon Says', icon: '🎵', description: 'Follow the pattern of colors & sounds! Use keyboard or click.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'coloring', name: 'Coloring', icon: '🎨', description: 'Color your pet or backgrounds! Use pointer or keyboard.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab to regions, Enter to color' },
-            { id: 'racing', name: 'Lane Racing', icon: '🏁', description: 'Switch lanes and dodge obstacles on the race track.', a11y: 'keyboard', a11yNote: 'Keyboard: Left/Right arrows to switch lanes' },
-            { id: 'cooking', name: 'Cooking Lab', icon: '🍲', description: 'Combine ingredients to cook special pet food.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab ingredients, Enter to add and cook' },
-            { id: 'fishing', name: 'Pond Fishing', icon: '🎣', description: 'Cast and catch fish in the park pond timing zone.', a11y: 'keyboard', a11yNote: 'Keyboard: Space to cast and reel in' },
-            { id: 'rhythm', name: 'Rhythm Beats', icon: '🥁', description: 'Match procedural beats and keep your combo alive.', a11y: 'keyboard', a11yNote: 'Keyboard: Space on beat to score' },
-            { id: 'slider', name: 'Slider Puzzle', icon: '🧩', description: 'Solve a sliding portrait puzzle of your pet.', a11y: 'keyboard', a11yNote: 'Keyboard: Arrow keys move the blank tile' },
-            { id: 'trivia', name: 'Animal Trivia', icon: '🦉', description: 'Answer real animal fact questions for rewards.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab choices, Enter to answer' },
-            { id: 'runner', name: 'Endless Runner', icon: '🏃', description: 'Jump over endless obstacles and chase distance.', a11y: 'keyboard', a11yNote: 'Keyboard: Space to jump' },
-            { id: 'tournament', name: 'Tournament Cup', icon: '🏆', description: 'Play bracket rounds, climb leaderboard, win the cup.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab actions, Enter to advance round' },
-            { id: 'coop', name: 'Co-op Relay', icon: '🤝', description: 'Control two pets at once in cooperative challenges.', a11y: 'keyboard', a11yNote: 'Keyboard: Alternate A and L for each pet' }
+            { id: 'fetch', name: 'Fetch', icon: '🎾', description: 'Throw a ball for your pet and bring it back.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'hideseek', name: 'Hide & Seek', icon: '🍪', description: 'Find hidden treats around the play field.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'bubblepop', name: 'Bubble Pop', icon: '🫧', description: 'Pop bubbles during bath time before they float away.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'matching', name: 'Matching', icon: '🃏', description: 'Match food and accessory pairs for points.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'simonsays', name: 'Simon Says', icon: '🎵', description: 'Follow the color and sound pattern.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'coloring', name: 'Coloring', icon: '🎨', description: 'Color your pet or backgrounds with different swatches.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'racing', name: 'Lane Racing', icon: '🏁', description: 'Switch lanes and dodge obstacles on the race track.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'cooking', name: 'Cooking Lab', icon: '🍲', description: 'Combine ingredients to cook special pet food.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'fishing', name: 'Pond Fishing', icon: '🎣', description: 'Time your catch in the fishing zone.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'rhythm', name: 'Rhythm Beats', icon: '🥁', description: 'Match beats and keep your combo going.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'slider', name: 'Slider Puzzle', icon: '🧩', description: 'Rebuild your pet portrait by sliding tiles.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'trivia', name: 'Animal Trivia', icon: '🦉', description: 'Answer animal fact questions for rewards.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'runner', name: 'Endless Runner', icon: '🏃', description: 'Jump over obstacles and chase distance.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'tournament', name: 'Tournament Cup', icon: '🏆', description: 'Play bracket rounds and climb the leaderboard.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
+            { id: 'coop', name: 'Co-op Relay', icon: '🤝', description: 'Control two pets in a cooperative relay.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' }
         ];
 
         // ==================== CELEBRATION EFFECTS ====================
@@ -180,6 +191,7 @@
             };
 
             const playCounts = gameState.minigamePlayCounts || {};
+            const touchMode = miniGameTouchMode();
 
             const startedGames = [];
             const newGames = [];
@@ -204,7 +216,7 @@
                     }).join('');
                     difficultyHTML = `<div class="minigame-difficulty-meter" id="diff-${game.id}" aria-label="Difficulty ${diffLevel} of 10"><span class="difficulty-label">Difficulty:</span><div class="difficulty-bar">${pips}</div></div>`;
                 }
-                const a11yNoteHTML = game.a11yNote ? `<div class="minigame-a11y-note"><span class="a11y-icon" aria-hidden="true">⌨️</span> ${game.a11yNote}</div>` : '';
+                const a11yNoteHTML = (!touchMode && game.a11yNote) ? `<div class="minigame-a11y-note"><span class="a11y-icon" aria-hidden="true">⌨️</span> ${game.a11yNote}</div>` : '';
                 const shortDescription = String(game.description || '').split(/[.!?]/)[0] || game.description || '';
                 const cardHTML = `
                     <button class="minigame-card" data-game="${game.id}" aria-label="Play ${game.name}${best ? ', best: ' + best : ''}${plays > 0 ? ', difficulty ' + diffLevel + ' of 10' : ''}"${plays > 0 ? ` aria-describedby="diff-${game.id}"` : ''}>
@@ -236,7 +248,7 @@
                 <div class="minigame-menu" tabindex="-1">
                     <h2 class="minigame-menu-title" id="minigame-menu-title"><span aria-hidden="true">🎮</span> Mini Games</h2>
                     <p class="minigame-menu-subtitle">Pick a game.</p>
-                    <p class="minigame-menu-keyboard-note"><span aria-hidden="true">⌨️</span> Keyboard: Use Tab to navigate, Enter or Space to play</p>
+                    ${touchMode ? '<p class="minigame-menu-keyboard-note mobile-touch-note"><span aria-hidden="true">👆</span> Tap any game card to play</p>' : '<p class="minigame-menu-keyboard-note"><span aria-hidden="true">⌨️</span> Keyboard: Use Tab to navigate, Enter or Space to play</p>'}
                     ${cardsHTML}
                     <button class="minigame-close-btn" id="minigame-close">Close</button>
                 </div>
@@ -3017,7 +3029,9 @@
                 timerId: null
             };
             renderRacingGame();
-            announce('Lane racing started. Use left and right arrows to dodge obstacles.');
+            announce(miniGameTouchMode()
+                ? 'Lane racing started. Tap left and right buttons to dodge obstacles.'
+                : 'Lane racing started. Use left and right arrows to dodge obstacles.');
         }
 
         function renderRacingGame() {
@@ -3036,7 +3050,7 @@
                         <span id="racing-lives">Lives: 3</span>
                         <span id="racing-time">Time: 32s</span>
                     </div>
-                    <div class="racing-track" id="racing-track" tabindex="0" aria-label="Race track. Use left and right arrows to switch lanes.">
+                    <div class="racing-track" id="racing-track" tabindex="0" aria-label="${miniGameTouchMode() ? 'Race track. Use left and right buttons to switch lanes.' : 'Race track. Use left and right arrows to switch lanes.'}">
                         <div class="racing-lane lane-0"></div>
                         <div class="racing-lane lane-1"></div>
                         <div class="racing-lane lane-2"></div>
@@ -3403,7 +3417,9 @@
             };
             randomizeFishingZone();
             renderFishingGame();
-            announce('Fishing started. Reel in when the bobber enters the fish zone.');
+            announce(miniGameTouchMode()
+                ? 'Fishing started. Tap Catch when the bobber enters the fish zone.'
+                : 'Fishing started. Reel in when the bobber enters the fish zone.');
         }
 
         function randomizeFishingZone() {
@@ -3428,11 +3444,11 @@
                         <span id="fishing-catches">Catches: 0</span>
                         <span id="fishing-misses">Misses: 0</span>
                     </div>
-                    <div class="fishing-meter" id="fishing-meter" tabindex="0" aria-label="Fishing meter. Press Space to reel in.">
+                    <div class="fishing-meter" id="fishing-meter" tabindex="0" aria-label="${miniGameTouchMode() ? 'Fishing meter. Tap Catch when the marker enters the fish zone.' : 'Fishing meter. Press Space to reel in.'}">
                         <div class="fishing-zone" id="fishing-zone"></div>
                         <div class="fishing-marker" id="fishing-marker"></div>
                     </div>
-                    <p class="exp-game-note" id="fishing-note">Press Catch when the marker is inside the fish zone.</p>
+                    <p class="exp-game-note" id="fishing-note">${miniGameTouchMode() ? 'Tap Catch when the marker is inside the fish zone.' : 'Press Catch when the marker is inside the fish zone.'}</p>
                     <div class="exp-game-controls">
                         <button type="button" id="fishing-catch">Catch</button>
                         <button type="button" id="fishing-done">Done</button>
@@ -3449,6 +3465,11 @@
                     e.preventDefault();
                     catchAction();
                 }
+            });
+            overlay.querySelector('#fishing-meter').addEventListener('pointerdown', (e) => {
+                if (!miniGameTouchMode() && e.pointerType === 'mouse') return;
+                e.preventDefault();
+                catchAction();
             });
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(fishingState ? fishingState.catches : 0, () => endFishingGame(false));
@@ -3605,7 +3626,9 @@
                 timerId: null
             };
             renderRhythmGame();
-            announce('Rhythm game started. Press Space on the beat.');
+            announce(miniGameTouchMode()
+                ? 'Rhythm game started. Tap Hit Beat on each pulse.'
+                : 'Rhythm game started. Press Space on the beat.');
         }
 
         function renderRhythmGame() {
@@ -3624,13 +3647,13 @@
                         <span id="rhythm-score">Score: 0</span>
                         <span id="rhythm-combo">Combo: 0</span>
                     </div>
-                    <div class="rhythm-lights" id="rhythm-lights" tabindex="0" aria-label="Rhythm target. Press Space to hit beats.">
+                    <div class="rhythm-lights" id="rhythm-lights" tabindex="0" aria-label="${miniGameTouchMode() ? 'Rhythm target. Tap to hit beats on the pulse.' : 'Rhythm target. Press Space to hit beats.'}">
                         <div class="rhythm-light" data-rhythm-light="0"></div>
                         <div class="rhythm-light" data-rhythm-light="1"></div>
                         <div class="rhythm-light" data-rhythm-light="2"></div>
                         <div class="rhythm-light" data-rhythm-light="3"></div>
                     </div>
-                    <p class="exp-game-note" id="rhythm-note">Hit Space on each beat pulse.</p>
+                    <p class="exp-game-note" id="rhythm-note">${miniGameTouchMode() ? 'Tap on each beat pulse.' : 'Hit Space on each beat pulse.'}</p>
                     <div class="exp-game-controls">
                         <button type="button" id="rhythm-hit">Hit Beat</button>
                         <button type="button" id="rhythm-done">Done</button>
@@ -3647,6 +3670,11 @@
                     e.preventDefault();
                     beatAction();
                 }
+            });
+            overlay.querySelector('#rhythm-lights').addEventListener('pointerdown', (e) => {
+                if (!miniGameTouchMode() && e.pointerType === 'mouse') return;
+                e.preventDefault();
+                beatAction();
             });
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(rhythmState ? rhythmState.score : 0, () => endRhythmGame(false));
@@ -3809,7 +3837,7 @@
                         <span id="slider-moves">Moves: 0</span>
                         <span id="slider-time">Time: 0s</span>
                     </div>
-                    <div class="slider-grid" id="slider-grid" tabindex="0" aria-label="Slider puzzle board. Use arrow keys to move tiles."></div>
+                    <div class="slider-grid" id="slider-grid" tabindex="0" aria-label="${miniGameTouchMode() ? 'Slider puzzle board. Tap tiles next to the blank space to move them.' : 'Slider puzzle board. Use arrow keys to move tiles.'}"></div>
                     <p class="exp-game-note">Rebuild your pet portrait in order.</p>
                     <div class="exp-game-controls">
                         <button type="button" id="slider-done">Done</button>
@@ -4116,7 +4144,9 @@
                 timerId: null
             };
             renderRunnerGame();
-            announce('Endless runner started. Press Space to jump.');
+            announce(miniGameTouchMode()
+                ? 'Endless runner started. Tap Jump or tap the track to jump.'
+                : 'Endless runner started. Press Space to jump.');
         }
 
         function renderRunnerGame() {
@@ -4134,7 +4164,7 @@
                         <span id="runner-score">Meters: 0</span>
                         <span id="runner-speed">Speed: ${runnerState.speed.toFixed(1)}</span>
                     </div>
-                    <div class="runner-track" id="runner-track" tabindex="0" aria-label="Runner track. Press space to jump obstacles.">
+                    <div class="runner-track" id="runner-track" tabindex="0" aria-label="${miniGameTouchMode() ? 'Runner track. Tap to jump over obstacles.' : 'Runner track. Press space to jump obstacles.'}">
                         <div class="runner-ground"></div>
                         <div class="runner-player" id="runner-player">🐾</div>
                         <div class="runner-obstacles" id="runner-obstacles"></div>
@@ -4155,6 +4185,12 @@
                     e.preventDefault();
                     jumpAction();
                 }
+            });
+            overlay.querySelector('#runner-track').addEventListener('pointerdown', (e) => {
+                if (!miniGameTouchMode() && e.pointerType === 'mouse') return;
+                if (e.target && typeof e.target.closest === 'function' && e.target.closest('#runner-done')) return;
+                e.preventDefault();
+                jumpAction();
             });
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(runnerState ? runnerState.score : 0, () => endRunnerGame(false, false));
@@ -4554,7 +4590,9 @@
                 timerId: null
             };
             renderCoopRelayGame();
-            announce('Co-op relay started. Alternate A for left pet and L for right pet.');
+            announce(miniGameTouchMode()
+                ? 'Co-op relay started. Tap left and right to keep the rhythm going.'
+                : 'Co-op relay started. Alternate A for left pet and L for right pet.');
         }
 
         function renderCoopRelayGame() {
@@ -4576,22 +4614,22 @@
                         <span id="coop-combo">Combo: 0</span>
                         <span id="coop-time">Time: 32s</span>
                     </div>
-                    <div class="coop-lanes" id="coop-lanes" tabindex="0" aria-label="Co-op relay. Alternate A and L keys.">
+                    <div class="coop-lanes" id="coop-lanes" tabindex="0" aria-label="${miniGameTouchMode() ? 'Co-op relay. Tap left and right lanes to alternate.' : 'Co-op relay. Alternate A and L keys.'}">
                         <div class="coop-lane">
                             <div class="coop-pet">${generatePetSVG(leftPet, leftMood)}</div>
                             <div class="coop-bar"><div class="coop-bar-fill" id="coop-left-fill"></div></div>
-                            <div class="coop-key">A</div>
+                            <div class="coop-key">${miniGameTouchMode() ? 'Left' : 'A'}</div>
                         </div>
                         <div class="coop-lane">
                             <div class="coop-pet">${generatePetSVG(rightPet, rightMood)}</div>
                             <div class="coop-bar"><div class="coop-bar-fill" id="coop-right-fill"></div></div>
-                            <div class="coop-key">L</div>
+                            <div class="coop-key">${miniGameTouchMode() ? 'Right' : 'L'}</div>
                         </div>
                     </div>
-                    <p class="exp-game-note" id="coop-note">Press A to start, then alternate A and L.</p>
+                    <p class="exp-game-note" id="coop-note">${miniGameTouchMode() ? 'Tap Left to start, then alternate Left and Right.' : 'Press A to start, then alternate A and L.'}</p>
                     <div class="exp-game-controls">
-                        <button type="button" id="coop-a">Left (A)</button>
-                        <button type="button" id="coop-l">Right (L)</button>
+                        <button type="button" id="coop-a">${miniGameTouchMode() ? 'Left' : 'Left (A)'}</button>
+                        <button type="button" id="coop-l">${miniGameTouchMode() ? 'Right' : 'Right (L)'}</button>
                         <button type="button" id="coop-done">Done</button>
                     </div>
                 </div>
@@ -4607,6 +4645,14 @@
                     e.preventDefault();
                     handleCoopInput(key);
                 }
+            });
+            overlay.querySelector('#coop-lanes').addEventListener('pointerdown', (e) => {
+                if (!miniGameTouchMode() && e.pointerType === 'mouse') return;
+                const lanes = overlay.querySelector('#coop-lanes');
+                if (!lanes) return;
+                const rect = lanes.getBoundingClientRect();
+                const useLeft = (e.clientX - rect.left) < (rect.width / 2);
+                handleCoopInput(useLeft ? 'a' : 'l');
             });
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(coopState ? coopState.score : 0, () => endCoopRelayGame(false));
@@ -4638,12 +4684,16 @@
                     coopState.rightProgress = Math.min(100, coopState.rightProgress + 10);
                     coopState.expected = 'a';
                 }
-                if (note) note.textContent = `Great teamwork! Next key: ${coopState.expected.toUpperCase()}`;
+                if (note) note.textContent = miniGameTouchMode()
+                    ? `Great teamwork! Next: ${coopState.expected === 'a' ? 'Left' : 'Right'}`
+                    : `Great teamwork! Next key: ${coopState.expected.toUpperCase()}`;
                 if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
             } else {
                 coopState.combo = 0;
                 coopState.score = Math.max(0, coopState.score - 3);
-                if (note) note.textContent = `Out of sync. Press ${coopState.expected.toUpperCase()} next.`;
+                if (note) note.textContent = miniGameTouchMode()
+                    ? `Out of sync. Tap ${coopState.expected === 'a' ? 'Left' : 'Right'} next.`
+                    : `Out of sync. Press ${coopState.expected.toUpperCase()} next.`;
                 if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
             }
             updateCoopUI();
