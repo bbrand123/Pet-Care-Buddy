@@ -1,0 +1,6 @@
+.playwright-cli/
+UPDATED_FILES_FULL_CONTENTS.txt
+
+# Xcode user-specific state
+*.xcuserstate
+**/xcuserdata/

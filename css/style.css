@@ -5667,7 +5667,7 @@
             box-shadow: var(--shadow-medium);
         }
 
-        /* ==================== PET CARE VARIANTS ==================== */
+        /* ==================== CARE VARIANTS ==================== */
 
         .pet-svg.care-shiny {
             filter: brightness(1.1) saturate(1.2) drop-shadow(0 0 5px rgba(255,215,0,0.3));

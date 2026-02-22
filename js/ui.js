@@ -1636,13 +1636,13 @@
         function getProgressiveOnboardingStorageKey() {
             return (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.progressiveOnboarding)
                 ? STORAGE_KEYS.progressiveOnboarding
-                : 'petCareBuddy_progressiveOnboarding';
+                : 'myLittleFriend_progressiveOnboarding';
         }
 
         function getRovingHintDismissedKey() {
             return (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.rovingHintDismissed)
                 ? STORAGE_KEYS.rovingHintDismissed
-                : 'petCareBuddy_rovingHintDismissed';
+                : 'myLittleFriend_rovingHintDismissed';
         }
 
         function getProgressiveOnboardingDefaults() {

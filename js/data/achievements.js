@@ -182,7 +182,7 @@ const BADGE_CATEGORIES = {
 // ==================== STICKER COLLECTION ====================
 
 const STICKERS = {
-    // Animal stickers - earned through pet care
+    // Animal stickers - earned through caring actions
     happyPup: { id: 'happyPup', name: 'Happy Pup', emoji: '🐶', category: 'animals', rarity: 'common', source: 'Feed a dog pet' },
     sleepyKitty: { id: 'sleepyKitty', name: 'Sleepy Kitty', emoji: '😸', category: 'animals', rarity: 'common', source: 'Pet a cat' },
     bouncyBunny: { id: 'bouncyBunny', name: 'Bouncy Bunny', emoji: '🐇', category: 'animals', rarity: 'common', source: 'Play with a bunny' },

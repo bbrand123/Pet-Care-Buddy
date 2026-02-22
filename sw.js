@@ -1,8 +1,7 @@
 // Import shared version constant so cache version lives in one place
 importScripts('./js/version.js');
 const CACHE_VERSION = (typeof APP_VERSION !== 'undefined') ? APP_VERSION : 12;
-const CACHE_NAME = `pet-care-buddy-v${CACHE_VERSION}`;
-const FONT_CACHE_NAME = `pet-care-buddy-fonts-v${CACHE_VERSION}`;
+const CACHE_NAME = `my-little-friend-v${CACHE_VERSION}`;
 
 const ASSETS = [
     './',
@@ -108,16 +107,12 @@ const ASSETS = [
     './icon-512.png'
 ];
 
-const FONT_STYLESHEETS = [
-    'https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap'
-];
-
 const OFFLINE_HTML = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Pet Care Buddy</title>
+  <title>My Little Friend</title>
   <style>
     body { font-family: Nunito, system-ui, -apple-system, sans-serif; margin: 0; background: #fff8f0; color: #3e2723; }
     main { min-height: 100vh; display: grid; place-items: center; padding: 24px; text-align: center; }
@@ -129,40 +124,20 @@ const OFFLINE_HTML = `<!doctype html>
   <main>
     <div>
       <h1>You're offline</h1>
-      <p>Pet Care Buddy will load automatically once your connection returns.</p>
+      <p>My Little Friend will load automatically once your connection returns.</p>
     </div>
   </main>
 </body>
 </html>`;
 
-function isFontRequest(request) {
-    const url = new URL(request.url);
-    return url.hostname === 'fonts.googleapis.com' || url.hostname === 'fonts.gstatic.com';
-}
-
 async function cacheCoreAssets() {
     const cache = await caches.open(CACHE_NAME);
-    const fontCache = await caches.open(FONT_CACHE_NAME);
     await Promise.allSettled(
         ASSETS.map(async (asset) => {
             try {
                 await cache.add(asset);
             } catch (err) {
                 console.warn('[SW] Failed to precache asset:', asset, err);
-            }
-        })
-    );
-
-    await Promise.allSettled(
-        FONT_STYLESHEETS.map(async (url) => {
-            try {
-                const req = new Request(url, { mode: 'cors' });
-                const res = await fetch(req);
-                if (res && (res.ok || res.type === 'opaque')) {
-                    await fontCache.put(req, res.clone());
-                }
-            } catch (err) {
-                console.warn('[SW] Failed to precache font stylesheet:', url, err);
             }
         })
     );
@@ -185,28 +160,12 @@ self.addEventListener('activate', (event) => {
         const keys = await caches.keys();
         await Promise.all(
             keys
-                .filter((key) => key !== CACHE_NAME && key !== FONT_CACHE_NAME)
+                .filter((key) => key !== CACHE_NAME)
                 .map((key) => caches.delete(key))
         );
         await self.clients.claim();
     })());
 });
-
-async function handleFontRequest(request) {
-    const fontCache = await caches.open(FONT_CACHE_NAME);
-    const cached = await fontCache.match(request);
-
-    const networkPromise = fetch(request)
-        .then((response) => {
-            if (response && (response.ok || response.type === 'opaque')) {
-                fontCache.put(request, response.clone()).catch(() => {});
-            }
-            return response;
-        })
-        .catch(() => null);
-
-    return cached || (await networkPromise) || new Response('', { status: 204 });
-}
 
 async function handleNavigationFallback() {
     const cachedIndex = await caches.match('./index.html');
@@ -220,11 +179,6 @@ async function handleNavigationFallback() {
 
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
-
-    if (isFontRequest(event.request)) {
-        event.respondWith(handleFontRequest(event.request));
-        return;
-    }
 
     event.respondWith((async () => {
         const cached = await caches.match(event.request);

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pet Care Test</title>
+    <title>My Little Friend Test</title>
     <link rel="icon" href="data:,">
 </head>
 <body>
@@ -37,7 +37,7 @@
         }
 
         // Save existing game data before tests and restore after
-        const _savedGameData = localStorage.getItem('petCareBuddy');
+        const _savedGameData = localStorage.getItem('myLittleFriend');
 
         try {
             // Test 1: Constants loaded
@@ -294,9 +294,9 @@
         } finally {
             // Restore game data to avoid test pollution
             if (_savedGameData !== null) {
-                localStorage.setItem('petCareBuddy', _savedGameData);
+                localStorage.setItem('myLittleFriend', _savedGameData);
             } else {
-                localStorage.removeItem('petCareBuddy');
+                localStorage.removeItem('myLittleFriend');
             }
         }
     </script>

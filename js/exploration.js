@@ -272,7 +272,7 @@
 
             const petData = (typeof getAllPetTypeData === 'function' ? getAllPetTypeData(resolvedType) : null) || PET_TYPES[resolvedType];
             const prefixes = ['Curious', 'Gentle', 'Brave', 'Swift', 'Misty', 'Sunny', 'Starry'];
-            const suffixes = ['Scout', 'Pal', 'Wanderer', 'Paws', 'Fluff', 'Buddy', 'Friend'];
+            const suffixes = ['Scout', 'Pal', 'Wanderer', 'Paws', 'Fluff', 'Companion', 'Friend'];
             const npcName = `${randomFromArray(prefixes)} ${randomFromArray(suffixes)}`;
             const npc = {
                 id: `npc_${Date.now()}_${Math.floor(Math.random() * 100000)}`,

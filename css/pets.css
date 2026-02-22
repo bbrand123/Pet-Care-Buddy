@@ -1,4 +1,4 @@
-/* Extracted from style.css - Care quality & age display, evolution button, celebration modals, pet care variants, compact growth progress, care quality details, responsive adjustments, mood face indicator, pet speech bubbles, pet journal, personality & preferences, personality badge, elder pet styles */
+/* Extracted from style.css - Care quality & age display, evolution button, celebration modals, care variants, compact growth progress, care quality details, responsive adjustments, mood face indicator, pet speech bubbles, pet journal, personality & preferences, personality badge, elder pet styles */
 
         /* ==================== CARE QUALITY & AGE DISPLAY ==================== */
 
@@ -248,7 +248,7 @@
             box-shadow: var(--shadow-medium);
         }
 
-        /* ==================== PET CARE VARIANTS ==================== */
+        /* ==================== CARE VARIANTS ==================== */
 
         .pet-svg.care-shiny {
             filter: brightness(1.1) saturate(1.2) drop-shadow(0 0 5px rgba(255,215,0,0.3));

@@ -1,6 +1,6 @@
-# 🐾 Pet Care Buddy
+# 🐾 My Little Friend
 
-A fun, interactive virtual pet care game built with vanilla JavaScript, HTML, and CSS.
+A fun, interactive virtual pet game built with vanilla JavaScript, HTML, and CSS.
 
 ## 🎮 Features
 

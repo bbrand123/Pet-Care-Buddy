@@ -382,7 +382,7 @@ const ROOM_MEMORY_THRESHOLDS = {
     bathroom: {
         stat: 'washCount',
         thresholds: [
-            { count: 8, emoji: '🧴', label: 'Bath Buddy', description: '{name}\'s favorite bath toy sits on the edge of the tub, always ready.' },
+            { count: 8, emoji: '🧴', label: 'Bath Friend', description: '{name}\'s favorite bath toy sits on the edge of the tub, always ready.' },
             { count: 20, emoji: '🫧', label: 'Splash Zone', description: 'Water marks on the wall from {name}\'s enthusiastic bath times. Memories in every splash.' }
         ]
     },
@@ -1873,7 +1873,7 @@ const PET_COMMENTARY = {
         energetic: [
             '{speaker} and {target} chase each other in joyful circles!',
             '{speaker} challenges {target} to a race! "Ready set GO!"',
-            '{speaker} bounces: "{target}! You\'re the BEST adventure buddy!"'
+            '{speaker} bounces: "{target}! You\'re the BEST adventure friend!"'
         ],
         curious: [
             '{speaker} and {target} investigate a sound together. Teamwork!',

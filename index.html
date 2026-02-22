@@ -3,24 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Pet Care Buddy - A fun virtual pet care game for all ages!">
+    <meta name="description" content="My Little Friend - A fun virtual pet game for all ages!">
     <meta name="theme-color" content="#A8D8EA">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='65' rx='22' ry='18' fill='%23F8BBD0'/%3E%3Ccircle cx='28' cy='35' r='12' fill='%23F8BBD0'/%3E%3Ccircle cx='72' cy='35' r='12' fill='%23F8BBD0'/%3E%3Ccircle cx='18' cy='18' r='10' fill='%23F8BBD0'/%3E%3Ccircle cx='82' cy='18' r='10' fill='%23F8BBD0'/%3E%3C/svg%3E">
     <link rel="manifest" href="manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="Pet Buddy">
+    <meta name="apple-mobile-web-app-title" content="My Little Friend">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
-    <title>Pet Care Buddy</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" as="style">
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <title>My Little Friend</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <!-- Splash/Loading Screen (shown immediately, dismissed by JS after init) -->
-    <div id="splash-screen" role="status" aria-label="Loading Pet Care Buddy" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#FFF8F0,#A8D8EA);transition:opacity 0.3s ease;">
+    <div id="splash-screen" role="status" aria-label="Loading My Little Friend" style="position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#FFF8F0,#A8D8EA);transition:opacity 0.3s ease;">
         <svg class="splash-egg" viewBox="0 0 100 130" width="80" height="104" aria-hidden="true" style="animation:splashBounce 1s ease-in-out infinite;">
             <defs>
                 <linearGradient id="splashEggGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -39,7 +35,7 @@
             <circle cx="55" cy="80" r="7" fill="#CE93D8" opacity="0.7"/>
             <ellipse cx="35" cy="45" rx="15" ry="20" fill="url(#splashEggShine)"/>
         </svg>
-        <p style="margin-top:16px;font-family:'Nunito',sans-serif;font-size:1.3rem;font-weight:700;color:#5D4037;">Pet Care Buddy</p>
+        <p style="margin-top:16px;font-family:'Nunito',sans-serif;font-size:1.3rem;font-weight:700;color:#5D4037;">My Little Friend</p>
         <p style="margin-top:4px;font-family:'Nunito',sans-serif;font-size:0.85rem;color:#8D6E63;">Loading...</p>
     </div>
     <style>
@@ -96,7 +92,7 @@
     <a href="#status-heading" class="skip-link skip-link-status" hidden aria-hidden="true" tabindex="-1">Skip to status</a>
     <main class="game-container">
         <header class="game-header">
-            <h1 class="game-title">Pet Care Buddy</h1>
+            <h1 class="game-title">My Little Friend</h1>
         </header>
 
         <div id="game-content" role="region" aria-label="Game content">
@@ -127,7 +123,7 @@
     <script src="js/minigames.js"></script>
     <script src="js/competition.js"></script>
     <script>
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
             navigator.serviceWorker.register('./sw.js').then(function(reg) {
                 // F40: Update detection
                 reg.addEventListener('updatefound', function() {

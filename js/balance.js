@@ -153,61 +153,96 @@ const GAME_BALANCE = Object.freeze({
  */
 const STORAGE_KEYS = Object.freeze({
     /** Main game save data */
-    gameSave: 'petCareBuddy',
+    gameSave: 'myLittleFriend',
     /** Sound enabled toggle */
-    soundEnabled: 'petCareBuddy_soundEnabled',
+    soundEnabled: 'myLittleFriend_soundEnabled',
     /** Music enabled toggle */
-    musicEnabled: 'petCareBuddy_musicEnabled',
+    musicEnabled: 'myLittleFriend_musicEnabled',
     /** SFX volume (0-1) */
-    sfxVolume: 'petCareBuddy_sfxVolume',
+    sfxVolume: 'myLittleFriend_sfxVolume',
     /** Ambient volume (0-1) */
-    ambientVolume: 'petCareBuddy_ambientVolume',
+    ambientVolume: 'myLittleFriend_ambientVolume',
     /** Music volume (0-1) */
-    musicVolume: 'petCareBuddy_musicVolume',
+    musicVolume: 'myLittleFriend_musicVolume',
     /** Sample pack enabled toggle */
-    samplePackEnabled: 'petCareBuddy_samplePackEnabled',
+    samplePackEnabled: 'myLittleFriend_samplePackEnabled',
     /** UI theme (light/dark) */
-    theme: 'petCareBuddy_theme',
+    theme: 'myLittleFriend_theme',
     /** Tutorial completed flag */
-    tutorialDone: 'petCareBuddy_tutorialDone',
+    tutorialDone: 'myLittleFriend_tutorialDone',
     /** Haptic feedback disabled flag */
-    hapticOff: 'petCareBuddy_hapticOff',
+    hapticOff: 'myLittleFriend_hapticOff',
     /** TTS disabled flag */
-    ttsOff: 'petCareBuddy_ttsOff',
+    ttsOff: 'myLittleFriend_ttsOff',
     /** Text size preference */
-    textSize: 'petCareBuddy_textSize',
+    textSize: 'myLittleFriend_textSize',
     /** Reduced motion preference */
-    reducedMotion: 'petCareBuddy_reducedMotion',
+    reducedMotion: 'myLittleFriend_reducedMotion',
     /** Screen reader verbosity mode */
-    srVerbosity: 'petCareBuddy_srVerbosity',
+    srVerbosity: 'myLittleFriend_srVerbosity',
     /** Favorite quick actions */
-    favorites: 'petCareBuddy_favorites',
+    favorites: 'myLittleFriend_favorites',
     /** More actions expanded preference */
-    moreActionsExpanded: 'petCareBuddy_moreActionsExpanded',
+    moreActionsExpanded: 'myLittleFriend_moreActionsExpanded',
     /** Cross-device auction house data */
-    auctionHouse: 'petCareBuddy_auctionHouse',
+    auctionHouse: 'myLittleFriend_auctionHouse',
     /** Current auction slot ID */
-    auctionSlotId: 'petCareBuddy_auctionSlotId',
+    auctionSlotId: 'myLittleFriend_auctionSlotId',
     /** Balance profile (NORMAL or QUICK_ITERATION_BUILD) */
-    balanceProfile: 'petCareBuddy_balanceProfile',
+    balanceProfile: 'myLittleFriend_balanceProfile',
     /** Onboarding tooltips shown state */
-    onboardingShown: 'petCareBuddy_onboardingShown',
+    onboardingShown: 'myLittleFriend_onboardingShown',
     /** Progressive onboarding disclosure milestones */
-    progressiveOnboarding: 'petCareBuddy_progressiveOnboarding',
+    progressiveOnboarding: 'myLittleFriend_progressiveOnboarding',
     /** Roving keyboard hint dismissed */
-    rovingHintDismissed: 'petCareBuddy_rovingHintDismissed',
+    rovingHintDismissed: 'myLittleFriend_rovingHintDismissed',
     /** Coach checklist minimized state */
-    coachChecklistMinimized: 'petCareBuddy_coachChecklistMinimized',
+    coachChecklistMinimized: 'myLittleFriend_coachChecklistMinimized',
     /** Coach checklist data */
-    coachChecklist: 'petCareBuddy_coachChecklist',
+    coachChecklist: 'myLittleFriend_coachChecklist',
     /** Pet session counter */
-    petSessions: 'petCareBuddy_petSessions',
+    petSessions: 'myLittleFriend_petSessions',
     /** First-run accessibility defaults applied flag */
-    firstRunA11yDefaults: 'petCareBuddy_firstRunA11yDefaultsV1',
+    firstRunA11yDefaults: 'myLittleFriend_firstRunA11yDefaultsV1',
     /** Calm mode preference */
-    calmMode: 'petCareBuddy_calmMode',
+    calmMode: 'myLittleFriend_calmMode',
     /** Sound cue captions preference */
-    soundCueCaptions: 'petCareBuddy_soundCueCaptions',
+    soundCueCaptions: 'myLittleFriend_soundCueCaptions',
     /** Session-scoped: pet session seen this session */
-    petSessionSeen: 'petCareBuddy_petSessionSeen'
+    petSessionSeen: 'myLittleFriend_petSessionSeen'
 });
+
+/**
+ * Preserve existing players by migrating legacy "petCareBuddy*" keys.
+ * This runs once at startup and only copies values when the new key is missing.
+ */
+function migrateLegacyStorageKeys() {
+    try {
+        Object.keys(STORAGE_KEYS).forEach((name) => {
+            const newKey = STORAGE_KEYS[name];
+            const legacyKey = newKey === 'myLittleFriend'
+                ? 'petCareBuddy'
+                : newKey.replace(/^myLittleFriend/, 'petCareBuddy');
+
+            if (!legacyKey || legacyKey === newKey) return;
+
+            if (localStorage.getItem(newKey) === null) {
+                const legacyValue = localStorage.getItem(legacyKey);
+                if (legacyValue !== null) {
+                    localStorage.setItem(newKey, legacyValue);
+                }
+            }
+
+            if (name === 'petSessionSeen' && sessionStorage.getItem(newKey) === null) {
+                const legacySessionValue = sessionStorage.getItem(legacyKey);
+                if (legacySessionValue !== null) {
+                    sessionStorage.setItem(newKey, legacySessionValue);
+                }
+            }
+        });
+    } catch (e) {
+        // Ignore storage errors (private browsing, quota, blocked storage).
+    }
+}
+
+migrateLegacyStorageKeys();

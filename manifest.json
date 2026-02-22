@@ -1,7 +1,7 @@
 {
-    "name": "Pet Care Buddy",
-    "short_name": "Pet Buddy",
-    "description": "A fun virtual pet care game for all ages!",
+    "name": "My Little Friend",
+    "short_name": "My Little Friend",
+    "description": "A fun virtual pet game for all ages!",
     "start_url": "./index.html",
     "display": "standalone",
     "background_color": "#FFF8F0",

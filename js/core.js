@@ -1402,7 +1402,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `pet-care-buddy-save-${new Date().toISOString().slice(0,10)}.json`;
+                a.download = `my-little-friend-save-${new Date().toISOString().slice(0,10)}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -2068,7 +2068,7 @@
                 gameState.phase = 'egg';
                 gameState.eggTaps = gameState.eggTaps || 0;
                 renderEggPhase();
-                announce('Welcome to Pet Care Buddy! Tap the egg to hatch your new pet!');
+                announce('Welcome to My Little Friend! Tap the egg to hatch your new pet!');
 
                 // Show tutorial on first visit
                 try {
