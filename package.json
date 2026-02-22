@@ -4,7 +4,8 @@
   "description": "A fun, interactive virtual pet game built with vanilla JavaScript, HTML, and CSS.",
   "main": "sw.js",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "validate:content": "node scripts/validate-content-packs.js"
   },
   "repository": {
     "type": "git",
