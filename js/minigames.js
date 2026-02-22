@@ -416,9 +416,14 @@
             `;
             document.body.appendChild(overlay);
             if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+                if (typeof SoundManager.playRewardCue === 'function') {
+                    SoundManager.playRewardCue(personalBest ? 'milestone' : 'big');
+                } else {
+                    SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+                }
                 if (coinReward > 0) {
-                    SoundManager.playSFXByName('coin-jingle', SoundManager.sfx.celebration);
+                    if (typeof SoundManager.playRewardCue === 'function') SoundManager.playRewardCue('medium');
+                    else SoundManager.playSFXByName('coin-jingle', SoundManager.sfx.celebration);
                 }
             }
 
@@ -2145,6 +2150,16 @@
         function simonPlayTone(color, duration) {
             if (typeof SoundManager !== 'undefined' && !SoundManager.getEnabled()) return;
             try {
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playMiniGameTone === 'function') {
+                    SoundManager.playMiniGameTone({
+                        bus: 'gameplay',
+                        type: 'sine',
+                        frequency: SIMON_FREQUENCIES[color],
+                        durationMs: duration,
+                        gain: 0.22
+                    });
+                    return;
+                }
                 const ctx = simonGetAudioCtx();
                 if (!ctx) return;
                 const osc = ctx.createOscillator();
@@ -2154,7 +2169,9 @@
                 gain.gain.setValueAtTime(0.3, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
                 osc.connect(gain);
-                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain()) || ctx.destination;
+                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getBusInputNode && SoundManager.getBusInputNode('gameplay')) ||
+                    (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain());
+                if (!dest) return;
                 gain.connect(dest);
                 osc.start();
                 osc.stop(ctx.currentTime + duration / 1000);
@@ -2167,6 +2184,19 @@
         function simonPlayErrorTone() {
             if (typeof SoundManager !== 'undefined' && !SoundManager.getEnabled()) return;
             try {
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playMiniGameTone === 'function') {
+                    SoundManager.playMiniGameTone({
+                        bus: 'gameplay',
+                        type: 'sawtooth',
+                        frequency: 150,
+                        durationMs: 600,
+                        gain: 0.2
+                    });
+                    if (typeof SoundManager.emitAccessibilityCue === 'function') {
+                        SoundManager.emitAccessibilityCue('error', { playSound: false });
+                    }
+                    return;
+                }
                 const ctx = simonGetAudioCtx();
                 if (!ctx) return;
                 const osc = ctx.createOscillator();
@@ -2176,7 +2206,9 @@
                 gain.gain.setValueAtTime(0.25, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
                 osc.connect(gain);
-                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain()) || ctx.destination;
+                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getBusInputNode && SoundManager.getBusInputNode('gameplay')) ||
+                    (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain());
+                if (!dest) return;
                 gain.connect(dest);
                 osc.start();
                 osc.stop(ctx.currentTime + 0.6);
@@ -2214,6 +2246,9 @@
             renderSimonSaysGame();
             if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
             simonState._roundTransitionTimer = setTimeout(() => simonNextRound(), 800);
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                SoundManager.emitAccessibilityCue('objectiveStart', { playSound: false, caption: 'Simon Says started' });
+            }
 
             announce('Simon Says! Watch the pattern, then repeat it!');
         }
@@ -2253,6 +2288,9 @@
             `;
 
             document.body.appendChild(overlay);
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                SoundManager.emitAccessibilityCue('focusPlayfield', { playSound: false, caption: 'Focus on Simon game board' });
+            }
 
             // Pad click listeners
             overlay.querySelectorAll('.simonsays-pad').forEach(pad => {
@@ -2472,6 +2510,9 @@
 
             const overlay = document.querySelector('.simonsays-game-overlay');
             if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                SoundManager.emitAccessibilityCue('objectiveEnd', { playSound: false, caption: 'Simon Says ended' });
+            }
 
             incrementMinigamePlayCount('simonsays', simonState ? simonState.score : 0);
 
@@ -3770,21 +3811,19 @@
         // ==================== RHYTHM MINI-GAME ====================
 
         let rhythmState = null;
-        let _rhythmAudioCtx = null;
-
-        function getRhythmAudioContext() {
-            try {
-                const Ctx = window.AudioContext || window.webkitAudioContext;
-                if (!Ctx) return null;
-                if (!_rhythmAudioCtx) _rhythmAudioCtx = new Ctx();
-                return _rhythmAudioCtx;
-            } catch (e) {
-                return null;
-            }
-        }
 
         function playProceduralBeat(accent) {
-            const ctx = getRhythmAudioContext();
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.playMiniGameTone === 'function') {
+                SoundManager.playMiniGameTone({
+                    bus: 'gameplay',
+                    type: accent ? 'square' : 'triangle',
+                    frequency: accent ? 220 : 160,
+                    durationMs: 130,
+                    gain: accent ? 0.14 : 0.11
+                });
+                return;
+            }
+            const ctx = (typeof SoundManager !== 'undefined' && SoundManager.getContext) ? SoundManager.getContext() : null;
             if (!ctx) return;
             if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const now = ctx.currentTime;
@@ -3796,7 +3835,9 @@
             gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            const dest = (typeof SoundManager !== 'undefined' && SoundManager.getBusInputNode && SoundManager.getBusInputNode('gameplay'));
+            if (!dest) return;
+            gain.connect(dest);
             osc.start(now);
             osc.stop(now + 0.13);
         }
@@ -3820,6 +3861,9 @@
                 timerId: null
             };
             renderRhythmGame();
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                SoundManager.emitAccessibilityCue('objectiveStart', { playSound: false, caption: 'Rhythm game started' });
+            }
             announce(miniGameTouchMode()
                 ? 'Rhythm game started. Tap Hit Beat on each pulse.'
                 : 'Rhythm game started. Press Space on the beat.');
@@ -3880,6 +3924,9 @@
             rhythmState._escapeHandler = rhythmEscapeHandler;
             trapFocus(overlay);
             overlay.querySelector('#rhythm-lights').focus();
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                SoundManager.emitAccessibilityCue('focusPlayfield', { playSound: false, caption: 'Focus on rhythm playfield' });
+            }
 
             rhythmState.timerId = setInterval(stepRhythmBeat, rhythmState.intervalMs);
             stepRhythmBeat();
@@ -3896,6 +3943,11 @@
             rhythmState.lastRegisteredBeat = -1;
             const accent = rhythmState.beat % 4 === 1;
             playProceduralBeat(accent);
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                if (rhythmState.totalBeats - rhythmState.beat <= 3) {
+                    SoundManager.emitAccessibilityCue('countdownDanger', { playSound: false, caption: 'Rhythm game ending soon' });
+                }
+            }
             const lights = document.querySelectorAll('.rhythm-light');
             const lightIndex = (rhythmState.beat - 1) % lights.length;
             lights.forEach((light, idx) => light.classList.toggle('active', idx === lightIndex));
@@ -3917,6 +3969,12 @@
                 rhythmState.score += 3 + Math.floor(rhythmState.combo / 4);
                 if (note) note.textContent = 'Perfect beat!';
                 if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playRewardCue === 'function') {
+                    SoundManager.playRewardCue(rhythmState.combo >= 8 ? 'medium' : 'small', { comboCount: rhythmState.combo, gain: rhythmState.combo >= 8 ? 0.8 : 0.55 });
+                }
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function' && rhythmState.combo >= 3 && rhythmState.combo % 3 === 0) {
+                    SoundManager.emitAccessibilityCue('comboRise', { playSound: false, caption: `Combo ${rhythmState.combo}` });
+                }
             } else if (delta <= 190) {
                 rhythmState.combo = Math.max(0, rhythmState.combo - 1);
                 rhythmState.score += 1;
@@ -3939,6 +3997,9 @@
             if (rhythmState._escapeHandler) popModalEscape(rhythmState._escapeHandler);
             const overlay = document.querySelector('.rhythm-game-overlay');
             if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                SoundManager.emitAccessibilityCue('objectiveEnd', { playSound: false, caption: 'Rhythm game ended' });
+            }
 
             const score = rhythmState.score;
             if (score > 0 || completed) {

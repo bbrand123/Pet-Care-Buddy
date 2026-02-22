@@ -300,6 +300,9 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            if (typeof SoundManager !== 'undefined' && typeof SoundManager.playUiCue === 'function') {
+                SoundManager.playUiCue('open', { gain: 0.85 });
+            }
 
             const close = () => {
                 popModalEscape(close);
@@ -4036,7 +4039,11 @@
         window.addEventListener('petcare:sound-cue-caption', (event) => {
             const detail = event && event.detail ? event.detail : null;
             if (!detail || !detail.label) return;
-            const text = detail.description ? `${detail.label}: ${detail.description}` : `${detail.label} cue played.`;
+            const categoryPrefix = detail.category ? `[${String(detail.category)}] ` : '';
+            const captionText = detail.caption ? `${detail.caption}. ` : '';
+            const text = detail.description
+                ? `${categoryPrefix}${captionText}${detail.label}: ${detail.description}`
+                : `${categoryPrefix}${captionText}${detail.label} cue played.`;
             showToast(`🔊 ${text}`, '#90A4AE', { announce: true });
         });
 
@@ -4122,7 +4129,12 @@
             card.style.setProperty('--reward-card-accent', cardData.color);
             document.body.appendChild(card);
             if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+                if (typeof SoundManager.playRewardCue === 'function') {
+                    const tier = (cardData.type === 'achievement' || cardData.type === 'trophy') ? 'milestone' : 'big';
+                    SoundManager.playRewardCue(tier);
+                } else {
+                    SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+                }
             }
             requestAnimationFrame(() => card.classList.add('show'));
 
@@ -4197,6 +4209,9 @@
                 actionCooldown = false;
                 actionCooldownTimer = null;
                 restoreActionButtonsFromCooldown();
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                    SoundManager.emitAccessibilityCue('cooldownComplete', { playSound: false, caption: 'Actions ready' });
+                }
             }, ACTION_COOLDOWN_MS);
         }
 
@@ -4511,6 +4526,9 @@
                 actionCooldownTimer = null;
                 // Re-query current buttons in case renderPetPhase() rebuilt the DOM.
                 restoreActionButtonsFromCooldown();
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                    SoundManager.emitAccessibilityCue('cooldownComplete', { playSound: false, caption: 'Actions ready' });
+                }
             }, ACTION_COOLDOWN_MS);
 
             const pet = gameState.pet;
@@ -10091,6 +10109,9 @@
             const musicVolumeSetting = typeof SoundManager !== 'undefined' && typeof SoundManager.getMusicVolumeSetting === 'function'
                 ? SoundManager.getMusicVolumeSetting()
                 : 1;
+            const audioPresetSelection = (typeof SoundManager !== 'undefined' && typeof SoundManager.getAudioPreset === 'function')
+                ? SoundManager.getAudioPreset()
+                : (localStorage.getItem('myLittleFriend_audioPreset') || 'silent');
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
                 (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
             const hapticEnabled = !(localStorage.getItem(STORAGE_KEYS.hapticOff) === 'true');
@@ -10146,6 +10167,10 @@
                                 <span class="settings-toggle-knob"></span>
                             </button>
                             <span class="settings-toggle-state" id="state-setting-sample-pack">${samplePackEnabled ? 'On' : 'Off'}</span>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-row-label">🎚️ Audio Setup</span>
+                            <button class="settings-preset-btn" id="setting-audio-setup" type="button" aria-label="Open audio setup. Current preset ${escapeHTML(audioPresetSelection)}">Silent / Calm / Standard</button>
                         </div>
                         <div class="settings-row settings-sound-cue-row">
                             <div class="settings-sound-cue-meta">
@@ -10335,6 +10360,17 @@
                     showToast(enabled ? '🎧 Sample audio pack enabled' : '🎛️ Sample audio pack disabled', '#A8D8EA');
                 }
             });
+
+            const audioSetupBtn = document.getElementById('setting-audio-setup');
+            if (audioSetupBtn) {
+                audioSetupBtn.addEventListener('click', function() {
+                    if (typeof showAudioOnboardingModal === 'function') {
+                        showAudioOnboardingModal({ force: true, source: 'settings' });
+                    } else {
+                        showToast('Audio setup is unavailable right now.', '#FFA726', { announce: true });
+                    }
+                });
+            }
 
             const soundCueCaptionBtn = document.getElementById('setting-sound-captions');
             if (soundCueCaptionBtn) {
@@ -10545,6 +10581,9 @@
             }
 
             function closeSettings() {
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playUiCue === 'function') {
+                    SoundManager.playUiCue('close', { gain: 0.75 });
+                }
                 popModalEscape(closeSettings);
                 overlay.remove();
                 const trigger = document.getElementById('settings-btn');
@@ -10568,6 +10607,7 @@
             const lowThreshold = 20;
             const hasLowStat = pet.hunger < lowThreshold || pet.cleanliness < lowThreshold ||
                                pet.happiness < lowThreshold || pet.energy < lowThreshold;
+            if (!updateLowStatWarnings._lastCueAt) updateLowStatWarnings._lastCueAt = 0;
 
             // Add/remove warning indicator on room nav
             const roomNav = document.querySelector('.room-nav');
@@ -10587,6 +10627,11 @@
                 if (pet.energy < lowThreshold) lowStats.push('😴');
                 indicator.innerHTML = `<span class="low-stat-pulse">${lowStats.join('')} Needs care now</span>`;
                 roomNav.appendChild(indicator);
+                const now = Date.now();
+                if (now - updateLowStatWarnings._lastCueAt > 10000 && typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+                    SoundManager.emitAccessibilityCue('lowStatUrgency', { playSound: false, caption: 'Pet needs care now' });
+                    updateLowStatWarnings._lastCueAt = now;
+                }
             } else if (!hasLowStat && indicator) {
                 indicator.remove();
             } else if (hasLowStat && indicator) {
@@ -10644,6 +10689,103 @@
             document.querySelectorAll('.action-btn.btn-pressed, .core-care-btn.btn-pressed').forEach(b => b.classList.remove('btn-pressed'));
         });
 
+        // ==================== AUDIO ONBOARDING (2026 audio pass) ====================
+        function getAudioOnboardingStorageKey() {
+            return 'myLittleFriend_audioOnboardingShownV1';
+        }
+
+        function closeAudioOnboardingModal() {
+            const existing = document.querySelector('.audio-onboarding-overlay');
+            if (!existing) return;
+            if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+            existing.remove();
+        }
+
+        function showAudioOnboardingModal(options = {}) {
+            const force = !!options.force;
+            try {
+                if (!force && localStorage.getItem(getAudioOnboardingStorageKey()) === 'true') return;
+            } catch (e) {}
+            closeAudioOnboardingModal();
+
+            const currentPreset = (typeof SoundManager !== 'undefined' && typeof SoundManager.getAudioPreset === 'function')
+                ? (SoundManager.getAudioPreset() || 'silent')
+                : (localStorage.getItem('myLittleFriend_audioPreset') || 'silent');
+
+            const choices = [
+                { id: 'silent', title: 'Silent', desc: 'Keep audio off by default. Captions can still be used.' },
+                { id: 'calm', title: 'Calm', desc: 'Low volumes and gentler layers for a quiet experience.' },
+                { id: 'standard', title: 'Standard', desc: 'Full mix with adaptive music, ambience, and feedback cues.' }
+            ];
+
+            const overlay = document.createElement('div');
+            overlay.className = 'audio-onboarding-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', 'audio-onboarding-title');
+            overlay.innerHTML = `
+                <div class="audio-onboarding-modal" style="max-width:520px;width:min(92vw,520px);margin:8vh auto;background:var(--panel-bg, #fff);color:var(--text-color, #222);border-radius:16px;padding:16px;box-shadow:0 18px 40px rgba(0,0,0,0.18);">
+                    <h2 id="audio-onboarding-title" style="margin:0 0 8px;font-size:1.25rem;">Choose Your Audio Setup</h2>
+                    <p style="margin:0 0 14px;line-height:1.4;">Audio stays safe by default. You can preview each option and change it later in Settings.</p>
+                    <div class="audio-onboarding-list" role="list" aria-label="Audio setup options">
+                        ${choices.map((choice) => `
+                            <div role="listitem" class="audio-onboarding-choice" data-audio-choice="${choice.id}" style="border:1px solid rgba(0,0,0,0.12);border-radius:12px;padding:12px;margin-bottom:10px;">
+                                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+                                    <div>
+                                        <div style="font-weight:700;">${escapeHTML(choice.title)}${currentPreset === choice.id ? ' (Current)' : ''}</div>
+                                        <div style="font-size:0.92rem;opacity:0.9;line-height:1.35;">${escapeHTML(choice.desc)}</div>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                                    <button type="button" class="audio-onboarding-preview" data-audio-preview="${choice.id}" aria-label="Preview ${escapeHTML(choice.title)} audio option" style="min-height:44px;min-width:44px;padding:10px 14px;border-radius:10px;">Preview</button>
+                                    <button type="button" class="audio-onboarding-apply" data-audio-apply="${choice.id}" aria-label="Use ${escapeHTML(choice.title)} audio setup" style="min-height:44px;min-width:44px;padding:10px 14px;border-radius:10px;font-weight:700;">Use ${escapeHTML(choice.title)}</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button type="button" id="audio-onboarding-close" aria-label="Close audio setup" style="min-height:44px;min-width:44px;padding:10px 14px;border-radius:10px;width:100%;margin-top:4px;">Maybe later</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            function applyChoice(choiceId) {
+                if (typeof SoundManager !== 'undefined' && typeof SoundManager.applyAudioPreset === 'function') {
+                    SoundManager.applyAudioPreset(choiceId, { persist: true });
+                } else {
+                    try { localStorage.setItem('myLittleFriend_audioPreset', choiceId); } catch (e) {}
+                }
+                try { localStorage.setItem(getAudioOnboardingStorageKey(), 'true'); } catch (e) {}
+                const labels = { silent: 'Silent', calm: 'Calm', standard: 'Standard' };
+                showToast(`Audio setup set to ${labels[choiceId] || choiceId}.`, '#4ECDC4', { announce: true });
+                closeAudioOnboardingModal();
+            }
+
+            overlay.querySelectorAll('[data-audio-preview]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const choiceId = btn.getAttribute('data-audio-preview');
+                    if (typeof SoundManager !== 'undefined' && typeof SoundManager.previewAudioPreset === 'function') {
+                        SoundManager.previewAudioPreset(choiceId);
+                    } else {
+                        showToast('Audio preview unavailable in this build.', '#FFA726', { announce: true });
+                    }
+                });
+            });
+            overlay.querySelectorAll('[data-audio-apply]').forEach((btn) => {
+                btn.addEventListener('click', () => applyChoice(btn.getAttribute('data-audio-apply')));
+            });
+            overlay.querySelector('#audio-onboarding-close').addEventListener('click', () => {
+                try { localStorage.setItem(getAudioOnboardingStorageKey(), 'true'); } catch (e) {}
+                closeAudioOnboardingModal();
+            });
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeAudioOnboardingModal(); });
+            function closeHandler() { closeAudioOnboardingModal(); }
+            pushModalEscape(closeHandler);
+            overlay._closeOverlay = closeHandler;
+            trapFocus(overlay);
+            const firstInteractive = overlay.querySelector('.audio-onboarding-preview') || overlay.querySelector('#audio-onboarding-close');
+            if (firstInteractive) firstInteractive.focus();
+        }
+
         // ==================== TEXT SIZE RESTORE (Item 30) ====================
         (function restoreTextSize() {
             try {
@@ -10671,6 +10813,11 @@
                     if (typeof SoundManager.getEnabled === 'function' && SoundManager.getEnabled()) SoundManager.toggle();
                     if (typeof SoundManager.getMusicEnabled === 'function' && SoundManager.getMusicEnabled()) SoundManager.toggleMusic();
                     if (typeof SoundManager.getSamplePackEnabled === 'function' && typeof SoundManager.toggleSamplePack === 'function' && SoundManager.getSamplePackEnabled()) SoundManager.toggleSamplePack();
+                }
+                if (shouldApplyFirstRunDefaults) {
+                    setTimeout(() => {
+                        if (typeof showAudioOnboardingModal === 'function') showAudioOnboardingModal({ force: false, source: 'first-run' });
+                    }, 250);
                 }
             } catch (e) {}
         })();
