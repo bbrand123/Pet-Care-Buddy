@@ -9,6 +9,64 @@
             return arr;
         }
 
+        function getMiniGameContentSelection(scope, key, pool, options) {
+            const items = Array.isArray(pool) ? pool.filter(Boolean) : [];
+            if (items.length === 0) return null;
+            if (typeof chooseRotatingContentWithHistory === 'function') {
+                return chooseRotatingContentWithHistory(items, Object.assign({
+                    scope: `minigame:${scope || 'shared'}`,
+                    key: key || 'default',
+                    recentWindow: 4,
+                    idKey: 'id',
+                    state: gameState
+                }, options || {}));
+            }
+            return items[Math.floor(Math.random() * items.length)];
+        }
+
+        function getMinigameRuleModifier(gameId) {
+            if (typeof getDeterministicRuleModifier !== 'function') return null;
+            return getDeterministicRuleModifier(gameId, 'minigameRule', 'minigames');
+        }
+
+        function getCompetitionStyleRuleModifier(modeId) {
+            if (typeof getDeterministicRuleModifier !== 'function') return null;
+            return getDeterministicRuleModifier(modeId, 'competitionRule', 'competition');
+        }
+
+        function getPackedTriviaPool(baseQuestions) {
+            if (typeof getPackTriviaQuestions === 'function') return getPackTriviaQuestions(baseQuestions);
+            return Array.isArray(baseQuestions) ? baseQuestions.slice() : [];
+        }
+
+        function getPackedMatchingDeckPool(baseItems) {
+            if (typeof getPackMatchingDecks === 'function') return getPackMatchingDecks(baseItems);
+            return [{ id: 'base_matching', theme: 'Classic', pairs: Array.isArray(baseItems) ? baseItems.slice() : [] }];
+        }
+
+        function getPackedCookingCatalog(baseIngredients) {
+            if (typeof getPackCookingRecipes === 'function') return getPackCookingRecipes(baseIngredients);
+            return {
+                ingredients: Array.isArray(baseIngredients) ? baseIngredients.slice() : [],
+                recipes: []
+            };
+        }
+
+        function getPackedFishingCatchPool() {
+            if (typeof getPackFishingCatches === 'function') return getPackFishingCatches();
+            return [];
+        }
+
+        function getPackedColoringTemplatePool() {
+            if (typeof getPackColoringTemplates === 'function') return getPackColoringTemplates();
+            return [];
+        }
+
+        function getPackedTournamentRivalNames(baseNames) {
+            if (typeof getPackTournamentRivals === 'function') return getPackTournamentRivals(baseNames);
+            return Array.isArray(baseNames) ? baseNames.slice() : [];
+        }
+
         function miniGameTouchMode() {
             try {
                 if (typeof isMobileTouchUiActive === 'function') return !!isMobileTouchUiActive();
@@ -1732,12 +1790,24 @@
             if (existing) existing.remove();
 
             const matchDiff = getEscalatedMinigameDifficulty('matching');
+            const deckPool = getPackedMatchingDeckPool(MATCHING_ITEMS);
+            const selectedDeck = getMiniGameContentSelection('matching', 'decks', deckPool, {
+                recentWindow: 3,
+                idKey: 'id'
+            }) || deckPool[0] || { id: 'base_matching', theme: 'Classic', pairs: [] };
+            const ruleModifier = getMinigameRuleModifier('matching');
+            const deckPairs = Array.isArray(selectedDeck.pairs) ? selectedDeck.pairs : [];
+            const pairCapBonus = Math.max(0, Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraPairs) || 0));
             // Scale pairs: 6 at base, up to 10 at max difficulty (capped by available items)
-            const pairCount = Math.min(6 + Math.floor((matchDiff - 1) * 4), MATCHING_ITEMS.length);
+            const pairCount = Math.min(6 + Math.floor((matchDiff - 1) * 4) + pairCapBonus, deckPairs.length || MATCHING_ITEMS.length);
 
             // Pick random items to make pairs — assign a pairId so matching is
             // based on pair identity rather than emoji equality alone.
-            const shuffledItems = shuffleArray([...MATCHING_ITEMS]);
+            const shuffledItems = shuffleArray(deckPairs.map((pair, idx) => ({
+                id: pair.id || `pair_${idx + 1}`,
+                emoji: pair.emoji,
+                name: pair.name || pair.label || `Pair ${idx + 1}`
+            })));
             const selected = shuffledItems.slice(0, pairCount);
             const paired = selected.flatMap((item, i) => [
                 { ...item, pairId: i },
@@ -1760,12 +1830,15 @@
                 totalPairs: pairCount,
                 moves: 0,
                 difficulty: matchDiff,
+                deck: selectedDeck,
+                ruleModifier,
                 locked: false,
                 _timeouts: []
             };
 
             renderMatchingGame();
-            announce('Matching game started! Flip cards to find matching pairs!');
+            const modNote = ruleModifier && ruleModifier.name ? ` Rule: ${ruleModifier.name}.` : '';
+            announce(`Matching game started! Theme: ${selectedDeck.theme || 'Classic'}. Flip cards to find matching pairs!${modNote}`);
         }
 
         function renderMatchingGame() {
@@ -1789,14 +1862,14 @@
 
             overlay.innerHTML = `
                 <div class="matching-game">
-                    <h2 class="matching-game-title">🃏 Matching Game!</h2>
+                    <h2 class="matching-game-title">🃏 Matching Game${matchingState.deck && matchingState.deck.theme ? ` · ${escapeHTML(matchingState.deck.theme)}` : ''}!</h2>
                     <p class="matching-game-score" id="matching-score" aria-live="polite">Pairs found: 0 / ${matchingState.totalPairs}</p>
                     <p class="matching-game-moves" id="matching-moves">Moves: 0</p>
                     <p class="sr-only" id="matching-live" aria-live="assertive" aria-atomic="true"></p>
                     <div class="matching-grid" id="matching-grid">
                         ${cardsHTML}
                     </div>
-                    <p class="matching-instruction" id="matching-instruction">Flip two cards to find a match!</p>
+                    <p class="matching-instruction" id="matching-instruction">${matchingState.ruleModifier && matchingState.ruleModifier.name ? `Rule: ${escapeHTML(matchingState.ruleModifier.name)}. ` : ''}Flip two cards to find a match!</p>
                     <div class="matching-buttons">
                         <button class="matching-done-btn" id="matching-done" aria-label="Stop playing Matching Game">Done</button>
                     </div>
@@ -2478,15 +2551,21 @@
 
             const existing = document.querySelector('.coloring-game-overlay');
             if (existing) existing.remove();
+            const templatePool = getPackedColoringTemplatePool();
+            const selectedTemplate = getMiniGameContentSelection('coloring', 'templates', templatePool, {
+                recentWindow: 4,
+                idKey: 'id'
+            }) || { id: 'classic_meadow', name: 'Sunny Meadow', variant: 'meadow' };
 
             coloringState = {
                 selectedColor: COLORING_PALETTE[0].hex,
                 regionsColored: new Set(),
-                totalRegions: 0
+                totalRegions: 0,
+                template: selectedTemplate
             };
 
             renderColoringGame();
-            announce('Coloring time! Pick a color and click or tap parts of the picture to color them!');
+            announce(`Coloring time! Template: ${selectedTemplate.name || 'Classic Scene'}. Pick a color and click or tap parts of the picture to color them!`);
         }
 
         function renderColoringGame() {
@@ -2497,7 +2576,7 @@
             overlay.setAttribute('aria-label', 'Coloring mini-game');
 
             const petType = gameState.pet.type;
-            const scene = generateColoringScene(petType);
+            const scene = generateColoringScene(petType, coloringState && coloringState.template);
 
             let paletteHTML = '';
             COLORING_PALETTE.forEach((color) => {
@@ -2511,8 +2590,8 @@
 
             overlay.innerHTML = `
                 <div class="coloring-game">
-                    <h2 class="coloring-game-title">🎨 Coloring Time!</h2>
-                    <p class="coloring-game-hint" id="coloring-hint" aria-live="polite">Pick a color, then click or tap to paint! Use Tab to move between regions.</p>
+                    <h2 class="coloring-game-title">🎨 Coloring Time${coloringState && coloringState.template && coloringState.template.name ? ` · ${escapeHTML(coloringState.template.name)}` : ''}!</h2>
+                    <p class="coloring-game-hint" id="coloring-hint" aria-live="polite">${coloringState && coloringState.template && coloringState.template.description ? escapeHTML(coloringState.template.description) + ' ' : ''}Pick a color, then click or tap to paint! Use Tab to move between regions.</p>
                     <div class="coloring-canvas-wrap">
                         ${scene}
                     </div>
@@ -2646,13 +2725,35 @@
             overlay.querySelector('#coloring-done').focus();
         }
 
-        function generateColoringScene(petType) {
+        function generateColoringScene(petType, template) {
             const petParts = getColoringPetParts(petType);
+            const variant = (template && template.variant) ? String(template.variant) : 'meadow';
 
             let petPartsHTML = '';
             petParts.forEach(part => {
                 petPartsHTML += part;
             });
+
+            let extraSceneRegions = '';
+            if (variant === 'moonlight') {
+                extraSceneRegions = `
+                    <circle class="coloring-region" data-region="moon" cx="245" cy="52" r="22" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <path class="coloring-region" data-region="hill-back" d="M0 230 Q70 180 140 230 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <path class="coloring-region" data-region="hill-front" d="M120 230 Q210 165 300 230 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                `;
+            } else if (variant === 'pond') {
+                extraSceneRegions = `
+                    <ellipse class="coloring-region" data-region="pond" cx="165" cy="260" rx="62" ry="22" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <path class="coloring-region" data-region="reeds-left" d="M110 250 Q108 235 113 220 Q118 235 116 250 Z" fill="#F5F5F5" stroke="#333" stroke-width="1.5"/>
+                    <path class="coloring-region" data-region="reeds-right" d="M215 252 Q213 236 219 222 Q224 237 222 252 Z" fill="#F5F5F5" stroke="#333" stroke-width="1.5"/>
+                `;
+            } else if (variant === 'festival') {
+                extraSceneRegions = `
+                    <path class="coloring-region" data-region="banner" d="M70 85 Q150 40 230 85 L228 100 Q150 58 72 100 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <circle class="coloring-region" data-region="lantern-left" cx="92" cy="112" r="10" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <circle class="coloring-region" data-region="lantern-right" cx="208" cy="112" r="10" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                `;
+            }
 
             return `
                 <svg class="coloring-scene" viewBox="0 0 300 360" xmlns="http://www.w3.org/2000/svg">
@@ -2677,6 +2778,7 @@
 
                     <!-- Cloud -->
                     <path class="coloring-region" data-region="cloud" d="M40 70 Q50 40 75 55 Q85 30 110 48 Q125 35 138 58 Q140 75 110 78 Q80 80 50 78 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    ${extraSceneRegions}
 
                     <!-- Tree trunk -->
                     <rect class="coloring-region" data-region="trunk" x="32" y="175" width="22" height="60" rx="3" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
@@ -3223,22 +3325,48 @@
                 showToast('You need a pet before cooking.', '#FFA726');
                 return;
             }
+            const cookingContent = getPackedCookingCatalog(COOKING_INGREDIENTS);
+            const ruleModifier = getMinigameRuleModifier('cooking');
+            const extraRounds = Math.max(0, Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraRounds) || 0));
             cookingState = {
                 round: 1,
-                maxRounds: 5,
+                maxRounds: 5 + extraRounds,
                 successes: 0,
                 failures: 0,
                 selected: [],
-                recipe: []
+                recipe: [],
+                recipeMeta: null,
+                recipes: Array.isArray(cookingContent.recipes) ? cookingContent.recipes : [],
+                ingredientCatalog: Array.isArray(cookingContent.ingredients) ? cookingContent.ingredients : COOKING_INGREDIENTS.slice(),
+                ruleModifier,
+                dailySpecialTag: ruleModifier && ruleModifier.effect ? ruleModifier.effect.preferTag : null
             };
-            cookingState.recipe = generateCookingRecipe();
+            cookingState.recipeMeta = generateCookingRecipe();
+            cookingState.recipe = (cookingState.recipeMeta && Array.isArray(cookingState.recipeMeta.ingredients))
+                ? cookingState.recipeMeta.ingredients.slice()
+                : [];
             renderCookingGame();
-            announce('Cooking mini game started. Match ingredients to craft special pet food.');
+            const modNote = ruleModifier && ruleModifier.name ? ` Rule: ${ruleModifier.name}.` : '';
+            announce(`Cooking mini game started. Match ingredients to craft special pet food.${modNote}`);
         }
 
         function generateCookingRecipe() {
-            const picks = shuffleArray([...COOKING_INGREDIENTS]).slice(0, 3);
-            return picks.map((item) => item.id);
+            if (!cookingState) {
+                const picks = shuffleArray([...COOKING_INGREDIENTS]).slice(0, 3);
+                return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id) };
+            }
+            const fullPool = Array.isArray(cookingState.recipes) ? cookingState.recipes : [];
+            const taggedPool = cookingState.dailySpecialTag
+                ? fullPool.filter((recipe) => Array.isArray(recipe.tags) && recipe.tags.includes(cookingState.dailySpecialTag))
+                : [];
+            const candidatePool = taggedPool.length > 0 ? taggedPool : fullPool;
+            const choice = getMiniGameContentSelection('cooking', 'recipes', candidatePool, {
+                recentWindow: 4,
+                idKey: 'id'
+            });
+            if (choice && Array.isArray(choice.ingredients) && choice.ingredients.length === 3) return choice;
+            const picks = shuffleArray([...(Array.isArray(cookingState.ingredientCatalog) ? cookingState.ingredientCatalog : COOKING_INGREDIENTS)]).slice(0, 3);
+            return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id), rewardProfile: { specialFood: 1 } };
         }
 
         function renderCookingGame() {
@@ -3251,16 +3379,16 @@
             overlay.setAttribute('aria-label', 'Cooking mini game');
             overlay.innerHTML = `
                 <div class="exp-game-shell">
-                    <h2 class="exp-game-title">🍲 Cooking Lab</h2>
+                    <h2 class="exp-game-title">🍲 Cooking Lab${cookingState.recipeMeta && cookingState.recipeMeta.name ? ` · ${escapeHTML(cookingState.recipeMeta.name)}` : ''}</h2>
                     <div class="exp-game-hud">
-                        <span id="cooking-round">Round 1/5</span>
+                        <span id="cooking-round">Round 1/${cookingState.maxRounds}</span>
                         <span id="cooking-success">Recipes: 0</span>
                         <span id="cooking-stock">Special Food: ${Math.floor((ensureMiniGameExpansionMeta().specialFoodStock || 0))}</span>
                     </div>
                     <div class="cooking-recipe" id="cooking-recipe"></div>
                     <div class="cooking-selected" id="cooking-selected" aria-live="polite"></div>
                     <div class="cooking-grid" id="cooking-grid"></div>
-                    <p class="exp-game-note" id="cooking-note">Select exactly 3 ingredients, then cook.</p>
+                    <p class="exp-game-note" id="cooking-note">${cookingState.ruleModifier && cookingState.ruleModifier.name ? `Rule: ${escapeHTML(cookingState.ruleModifier.name)}. ` : ''}Select exactly 3 ingredients, then cook.</p>
                     <div class="exp-game-controls">
                         <button type="button" id="cook-btn">Cook Recipe</button>
                         <button type="button" id="cook-clear">Clear</button>
@@ -3270,7 +3398,7 @@
             `;
             document.body.appendChild(overlay);
             const grid = overlay.querySelector('#cooking-grid');
-            grid.innerHTML = COOKING_INGREDIENTS.map((item) => (
+            grid.innerHTML = (Array.isArray(cookingState.ingredientCatalog) ? cookingState.ingredientCatalog : COOKING_INGREDIENTS).map((item) => (
                 `<button type="button" class="cooking-item" data-ing="${item.id}">${item.icon} ${escapeHTML(item.name)}</button>`
             )).join('');
 
@@ -3322,12 +3450,16 @@
             if (roundEl) roundEl.textContent = `Round ${Math.min(cookingState.round, cookingState.maxRounds)}/${cookingState.maxRounds}`;
             if (successEl) successEl.textContent = `Recipes: ${cookingState.successes}`;
             if (stockEl) stockEl.textContent = `Special Food: ${Math.floor((ensureMiniGameExpansionMeta().specialFoodStock || 0))}`;
-            const recipeDetails = cookingState.recipe.map((id) => COOKING_INGREDIENTS.find((i) => i.id === id)).filter(Boolean);
-            if (recipeEl) recipeEl.innerHTML = `<strong>Target Recipe:</strong> ${recipeDetails.map((i) => `${i.icon} ${escapeHTML(i.name)}`).join(' + ')}`;
+            const ingredientCatalog = Array.isArray(cookingState.ingredientCatalog) ? cookingState.ingredientCatalog : COOKING_INGREDIENTS;
+            const recipeDetails = cookingState.recipe.map((id) => ingredientCatalog.find((i) => i.id === id)).filter(Boolean);
+            if (recipeEl) {
+                const extra = cookingState.recipeMeta && cookingState.recipeMeta.difficulty ? ` <span class="cooking-recipe-meta">(${escapeHTML(String(cookingState.recipeMeta.difficulty))})</span>` : '';
+                recipeEl.innerHTML = `<strong>Target Recipe:</strong> ${recipeDetails.map((i) => `${i.icon} ${escapeHTML(i.name)}`).join(' + ')}${extra}`;
+            }
             if (selectedEl) {
                 selectedEl.innerHTML = cookingState.selected.length > 0
                     ? `<strong>Selected:</strong> ${cookingState.selected.map((id) => {
-                        const item = COOKING_INGREDIENTS.find((i) => i.id === id);
+                        const item = ingredientCatalog.find((i) => i.id === id);
                         return item ? `${item.icon} ${escapeHTML(item.name)}` : id;
                     }).join(' + ')}`
                     : '<strong>Selected:</strong> (none)';
@@ -3354,9 +3486,10 @@
             const noteEl = document.getElementById('cooking-note');
             if (pick === target) {
                 cookingState.successes += 1;
-                grantSpecialPetFood(1);
+                const rewardFood = Math.max(1, Math.floor(Number(cookingState.recipeMeta && cookingState.recipeMeta.rewardProfile && cookingState.recipeMeta.rewardProfile.specialFood) || 1));
+                grantSpecialPetFood(rewardFood);
                 if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
-                if (noteEl) noteEl.textContent = 'Perfect mix! Special pet food crafted.';
+                if (noteEl) noteEl.textContent = `Perfect mix! ${cookingState.recipeMeta && cookingState.recipeMeta.name ? escapeHTML(cookingState.recipeMeta.name) + ' crafted. ' : ''}Special pet food +${rewardFood}.`;
             } else {
                 cookingState.failures += 1;
                 if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
@@ -3370,7 +3503,10 @@
                 endCookingGame(true);
                 return;
             }
-            cookingState.recipe = generateCookingRecipe();
+            cookingState.recipeMeta = generateCookingRecipe();
+            cookingState.recipe = (cookingState.recipeMeta && Array.isArray(cookingState.recipeMeta.ingredients))
+                ? cookingState.recipeMeta.ingredients.slice()
+                : [];
             updateCookingUI();
         }
 
@@ -3413,14 +3549,37 @@
 
         let fishingState = null;
 
+        function getFishingCatchCandidates() {
+            const packCatches = getPackedFishingCatchPool();
+            if (!Array.isArray(packCatches) || packCatches.length === 0) return [];
+            const season = (typeof getCurrentSeason === 'function') ? getCurrentSeason() : null;
+            const timeOfDay = gameState && gameState.timeOfDay ? gameState.timeOfDay : null;
+            const roomId = gameState && gameState.currentRoom ? gameState.currentRoom : null;
+            const biomeHint = roomId === 'beach' ? 'beach'
+                : roomId === 'garden' ? 'pond'
+                : roomId === 'park' ? 'pond'
+                : roomId === 'bathroom' ? 'indoor'
+                : 'pond';
+            const filtered = packCatches.filter((entry) => {
+                if (!entry) return false;
+                if (Array.isArray(entry.seasons) && entry.seasons.length && season && !entry.seasons.includes(season)) return false;
+                if (Array.isArray(entry.times) && entry.times.length && timeOfDay && !entry.times.includes(timeOfDay)) return false;
+                if (Array.isArray(entry.biomes) && entry.biomes.length && !entry.biomes.includes(biomeHint) && !entry.biomes.includes('any')) return false;
+                return true;
+            });
+            return filtered.length ? filtered : packCatches;
+        }
+
         function startFishingGame() {
             if (!gameState.pet) {
                 showToast('You need a pet for pond fishing.', '#FFA726');
                 return;
             }
             const difficulty = getEscalatedMinigameDifficulty('fishing');
+            const ruleModifier = getMinigameRuleModifier('fishing');
+            const extraCasts = Math.max(0, Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraCasts) || 0));
             fishingState = {
-                roundsLeft: 10,
+                roundsLeft: 10 + extraCasts,
                 catches: 0,
                 misses: 0,
                 marker: 0,
@@ -3428,13 +3587,16 @@
                 velocity: 1.8 + difficulty * 0.9,
                 zoneStart: 35,
                 zoneSize: Math.max(20, Math.round(38 / Math.max(difficulty, 0.75))),
-                timerId: null
+                timerId: null,
+                ruleModifier,
+                caughtFish: [],
+                lastCatch: null
             };
             randomizeFishingZone();
             renderFishingGame();
             announce(miniGameTouchMode()
-                ? 'Fishing started. Tap Catch when the bobber enters the fish zone.'
-                : 'Fishing started. Reel in when the bobber enters the fish zone.');
+                ? `Fishing started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Tap Catch when the bobber enters the fish zone.`
+                : `Fishing started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Reel in when the bobber enters the fish zone.`);
         }
 
         function randomizeFishingZone() {
@@ -3453,9 +3615,9 @@
             overlay.setAttribute('aria-label', 'Pond fishing mini game');
             overlay.innerHTML = `
                 <div class="exp-game-shell">
-                    <h2 class="exp-game-title">🎣 Pond Fishing</h2>
+                    <h2 class="exp-game-title">🎣 Pond Fishing${fishingState.ruleModifier && fishingState.ruleModifier.name ? ` · ${escapeHTML(fishingState.ruleModifier.name)}` : ''}</h2>
                     <div class="exp-game-hud">
-                        <span id="fishing-rounds">Casts Left: 10</span>
+                        <span id="fishing-rounds">Casts Left: ${fishingState.roundsLeft}</span>
                         <span id="fishing-catches">Catches: 0</span>
                         <span id="fishing-misses">Misses: 0</span>
                     </div>
@@ -3541,7 +3703,18 @@
             fishingState.roundsLeft -= 1;
             if (inZone) {
                 fishingState.catches += 1;
-                if (note) note.textContent = 'Nice catch! Cast again.';
+                const catchPool = getFishingCatchCandidates();
+                const caught = getMiniGameContentSelection('fishing', 'catches', catchPool, {
+                    recentWindow: 5,
+                    idKey: 'id'
+                });
+                if (caught) {
+                    fishingState.lastCatch = caught;
+                    fishingState.caughtFish.push({ id: caught.id, name: caught.name, rarity: caught.rarity });
+                    if (note) note.textContent = `Nice catch! ${caught.emoji || '🐟'} ${caught.name}${caught.flavor ? ` — ${caught.flavor}` : ''}`;
+                } else if (note) {
+                    note.textContent = 'Nice catch! Cast again.';
+                }
                 if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.catch);
             } else {
                 fishingState.misses += 1;
@@ -3568,6 +3741,7 @@
             if (catches > 0 || completed) {
                 const attempts = catches + fishingState.misses;
                 const accuracy = attempts > 0 ? Math.round((catches / attempts) * 100) : 0;
+                const uniqueCatchCount = new Set((fishingState.caughtFish || []).map((c) => c && c.id).filter(Boolean)).size;
                 finalizeExpandedMiniGame({
                     gameId: 'fishing',
                     gameName: 'Pond Fishing',
@@ -3582,6 +3756,7 @@
                     summaryStats: [
                         { label: 'Catches', value: catches },
                         { label: 'Accuracy', value: accuracy },
+                        { label: 'Unique Fish', value: uniqueCatchCount },
                         { label: 'Happiness', value: Math.min(22, catches * 4) }
                     ],
                     medalThresholds: { bronze: 3, silver: 6, gold: 8 }
@@ -4003,14 +4178,31 @@
                 showToast('A pet is needed for trivia time.', '#FFA726');
                 return;
             }
+            const ruleModifier = getMinigameRuleModifier('trivia');
+            const questionPool = getPackedTriviaPool(TRIVIA_QUESTIONS);
+            const questionCount = Math.max(5, Math.min(8, 5 + Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraQuestions) || 0)));
+            const pickPool = questionPool.slice();
+            const selectedQuestions = [];
+            while (pickPool.length > 0 && selectedQuestions.length < questionCount) {
+                const next = getMiniGameContentSelection('trivia', 'questions', pickPool, {
+                    recentWindow: 8,
+                    idKey: 'id'
+                }) || pickPool[0];
+                selectedQuestions.push(next);
+                const nextId = String(next.id || next.q || selectedQuestions.length);
+                const idx = pickPool.findIndex((item) => String(item.id || item.q) === nextId);
+                if (idx >= 0) pickPool.splice(idx, 1);
+                else pickPool.shift();
+            }
             triviaState = {
-                questions: shuffleArray([...TRIVIA_QUESTIONS]).slice(0, 5),
+                questions: selectedQuestions.length ? selectedQuestions : shuffleArray([...TRIVIA_QUESTIONS]).slice(0, 5),
                 index: 0,
                 correct: 0,
-                answered: false
+                answered: false,
+                ruleModifier
             };
             renderTriviaGame();
-            announce('Animal trivia started. Choose the best answer for each fact.');
+            announce(`Animal trivia started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Choose the best answer for each fact.`);
         }
 
         function renderTriviaGame() {
@@ -4023,14 +4215,14 @@
             overlay.setAttribute('aria-label', 'Animal trivia mini game');
             overlay.innerHTML = `
                 <div class="exp-game-shell">
-                    <h2 class="exp-game-title">🦉 Animal Trivia</h2>
+                    <h2 class="exp-game-title">🦉 Animal Trivia${triviaState.ruleModifier && triviaState.ruleModifier.name ? ` · ${escapeHTML(triviaState.ruleModifier.name)}` : ''}</h2>
                     <div class="exp-game-hud">
-                        <span id="trivia-progress">Q 1/5</span>
+                        <span id="trivia-progress">Q 1/${triviaState.questions.length}</span>
                         <span id="trivia-score">Correct: 0</span>
                     </div>
                     <div class="trivia-question" id="trivia-question"></div>
                     <div class="trivia-options" id="trivia-options"></div>
-                    <p class="exp-game-note" id="trivia-fact">Pick an answer.</p>
+                    <p class="exp-game-note" id="trivia-fact">${triviaState.ruleModifier && triviaState.ruleModifier.name ? `Rule: ${escapeHTML(triviaState.ruleModifier.name)}. ` : ''}Pick an answer.</p>
                     <div class="exp-game-controls">
                         <button type="button" id="trivia-next" disabled>Next</button>
                         <button type="button" id="trivia-done">Done</button>
@@ -4062,13 +4254,16 @@
             const factEl = document.getElementById('trivia-fact');
             const nextBtn = document.getElementById('trivia-next');
             if (!q) return;
+            const qPrompt = q.prompt || q.q || 'Question';
+            const qChoices = Array.isArray(q.choices) ? q.choices : (Array.isArray(q.options) ? q.options : []);
+            const qFact = q.fact || q.explanation || 'Pick an answer.';
             if (progress) progress.textContent = `Q ${triviaState.index + 1}/${triviaState.questions.length}`;
             if (score) score.textContent = `Correct: ${triviaState.correct}`;
-            if (questionEl) questionEl.textContent = q.q;
-            if (factEl) factEl.textContent = triviaState.answered ? q.fact : 'Pick an answer.';
+            if (questionEl) questionEl.textContent = qPrompt;
+            if (factEl) factEl.textContent = triviaState.answered ? qFact : 'Pick an answer.';
             if (nextBtn) nextBtn.disabled = !triviaState.answered;
             if (optionsEl) {
-                optionsEl.innerHTML = q.options.map((opt, idx) => (
+                optionsEl.innerHTML = qChoices.map((opt, idx) => (
                     `<button type="button" class="trivia-option" data-opt="${idx}" ${triviaState.answered ? 'disabled' : ''}>${escapeHTML(opt)}</button>`
                 )).join('');
                 optionsEl.querySelectorAll('.trivia-option').forEach((btn) => {
@@ -4328,6 +4523,24 @@
 
         let tournamentState = null;
 
+        function pickTournamentRivalNames(count) {
+            const targetCount = Math.max(1, Math.floor(Number(count) || 7));
+            const pool = getPackedTournamentRivalNames(TOURNAMENT_RIVALS).map((name, idx) => ({ id: `tour_name_${idx}_${name}`, name }));
+            const available = pool.slice();
+            const picked = [];
+            while (available.length > 0 && picked.length < targetCount) {
+                const next = getMiniGameContentSelection('tournament', 'rivalNames', available, {
+                    recentWindow: 6,
+                    idKey: 'id'
+                }) || available[0];
+                picked.push(next.name);
+                const idx = available.findIndex((entry) => entry.id === next.id);
+                if (idx >= 0) available.splice(idx, 1);
+                else available.shift();
+            }
+            return picked;
+        }
+
         function getTournamentState() {
             const expansion = ensureMiniGameExpansionMeta();
             if (!expansion.tournament || typeof expansion.tournament !== 'object') {
@@ -4340,7 +4553,7 @@
         }
 
         function startNewTournamentSeason(tournament) {
-            const entrants = ['You', ...shuffleArray([...TOURNAMENT_RIVALS]).slice(0, 7)];
+            const entrants = ['You', ...pickTournamentRivalNames(7)];
             const quarter = [];
             for (let i = 0; i < entrants.length; i += 2) {
                 quarter.push({ a: entrants[i], b: entrants[i + 1], winner: '', aScore: 0, bScore: 0 });
@@ -4368,10 +4581,13 @@
 
         function simulateTournamentMatch(match) {
             const petStrength = typeof getPetMiniGameStrength === 'function' ? getPetMiniGameStrength(gameState.pet) : 0.5;
+            const ruleModifier = tournamentState && tournamentState.ruleModifier ? tournamentState.ruleModifier : getMinigameRuleModifier('tournament');
+            const scoreBias = Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.playerScoreBonus) || 0;
+            const varianceMult = Math.max(0.5, Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.scoreVarianceMultiplier) || 1);
             const scoreFor = (name) => {
-                const base = 52 + Math.random() * 42;
+                const base = 52 + (Math.random() * 42 * varianceMult);
                 const playerBoost = name === 'You'
-                    ? ((petStrength - 0.45) * 36)
+                    ? ((petStrength - 0.45) * 36) + scoreBias
                     : ((Math.random() * 8 - 4) - ((petStrength - 0.5) * 8));
                 return Math.max(18, Math.round(base + playerBoost + Math.random() * 18));
             };
@@ -4446,7 +4662,7 @@
                 gameId: 'tournament',
                 gameName: 'Tournament Cup',
                 score,
-                coinScore: wins * 12 + championBonus * 8,
+                coinScore: Math.round((wins * 12 + championBonus * 8) * Math.max(0.5, Number((tournamentState && tournamentState.ruleModifier && tournamentState.ruleModifier.effect && tournamentState.ruleModifier.effect.coinMultiplier) || 1))),
                 runDifficulty: getEscalatedMinigameDifficulty('tournament'),
                 statDelta: {
                     happiness: Math.min(30, 8 + wins * 4 + championBonus * 3),
@@ -4503,6 +4719,7 @@
                 return;
             }
             tournamentState = getTournamentState();
+            tournamentState.ruleModifier = getMinigameRuleModifier('tournament');
             const existing = document.querySelector('.tournament-game-overlay');
             if (existing) existing.remove();
             const overlay = document.createElement('div');
@@ -4512,7 +4729,7 @@
             overlay.setAttribute('aria-label', 'Mini game tournament');
             overlay.innerHTML = `
                 <div class="exp-game-shell tournament-shell">
-                    <h2 class="exp-game-title">🏆 Tournament Cup</h2>
+                    <h2 class="exp-game-title">🏆 Tournament Cup${tournamentState.ruleModifier && tournamentState.ruleModifier.name ? ` · ${escapeHTML(tournamentState.ruleModifier.name)}` : ''}</h2>
                     <div class="exp-game-hud">
                         <span id="tour-season">Season ${tournamentState.season || 1}</span>
                         <span id="tour-round">Round: ${tournamentState.round + 1}</span>
@@ -4531,7 +4748,7 @@
                             </table>
                         </div>
                     </div>
-                    <p class="exp-game-note" id="tour-note">Advance the bracket one round at a time.</p>
+                    <p class="exp-game-note" id="tour-note">${tournamentState.ruleModifier && tournamentState.ruleModifier.description ? escapeHTML(tournamentState.ruleModifier.description) : 'Advance the bracket one round at a time.'}</p>
                     <div class="exp-game-controls">
                         <button type="button" id="tour-next">Play Next Round</button>
                         <button type="button" id="tour-done">Done</button>

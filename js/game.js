@@ -738,6 +738,7 @@
         function ensureMiniGameExpansionState(targetState) {
             const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
             state.minigameExpansion = normalizeMiniGameExpansionState(state.minigameExpansion);
+            if (typeof ensureContentRotationState === 'function') ensureContentRotationState(state);
             return state.minigameExpansion;
         }
 
@@ -2027,13 +2028,36 @@
 
         function generateLootBundle(lootPool, rolls, options) {
             const pool = Array.isArray(lootPool) && lootPool.length > 0 ? lootPool : ['ancientCoin'];
+            const ctx = options && typeof options === 'object' ? options : {};
+            const packedLootTables = (typeof getPackedBiomeLootWeights === 'function') ? getPackedBiomeLootWeights() : null;
+            const derivedBiomeId = ctx.biomeId || (ctx.roomId && typeof getRoomBiomeForTreasure === 'function' ? getRoomBiomeForTreasure(ctx.roomId) : null);
+            const packedTable = packedLootTables && derivedBiomeId ? packedLootTables[derivedBiomeId] : null;
+            const packedLootHistory = (packedTable && typeof ensureContentRotationHistoryBucket === 'function')
+                ? ensureContentRotationHistoryBucket('exploration', `loot:${derivedBiomeId}`, gameState)
+                : null;
             const rewardMap = {};
             const totalRolls = Math.max(1, Math.floor(rolls || 1));
             for (let i = 0; i < totalRolls; i++) {
-                const lootId = pickWeightedLootId(pool, options);
+                let lootId = null;
+                let amountOverride = null;
+                if (packedTable && Array.isArray(packedTable.entries) && packedTable.entries.length > 0) {
+                    const choice = (typeof chooseNextFromPool === 'function')
+                        ? chooseNextFromPool(packedTable.entries, packedLootHistory, { idKey: 'id', recentWindow: 4 })
+                        : null;
+                    if (choice && choice.id) {
+                        lootId = choice.id;
+                        if (typeof recordContentRotationSelection === 'function') {
+                            recordContentRotationSelection('exploration', `loot:${derivedBiomeId}`, choice.id, { state: gameState, recentWindow: 4 });
+                        }
+                        const min = Math.max(1, Math.floor(Number(choice.min) || 1));
+                        const max = Math.max(min, Math.floor(Number(choice.max) || min));
+                        amountOverride = min + Math.floor(Math.random() * (max - min + 1));
+                    }
+                }
+                if (!lootId) lootId = pickWeightedLootId(pool, options);
                 if (!lootId || !EXPLORATION_LOOT[lootId]) continue;
                 const rarity = EXPLORATION_LOOT[lootId].rarity || 'common';
-                let amount = 1;
+                let amount = amountOverride || 1;
                 if (rarity === 'common' && Math.random() < 0.18) amount++;
                 if (rarity === 'uncommon' && Math.random() < 0.08) amount++;
                 if (rarity === 'rare' && Math.random() < 0.04) amount++;
@@ -2141,6 +2165,25 @@
             const prefixes = ['Curious', 'Gentle', 'Brave', 'Swift', 'Misty', 'Sunny', 'Starry'];
             const suffixes = ['Scout', 'Pal', 'Wanderer', 'Paws', 'Fluff', 'Companion', 'Friend'];
             const npcName = `${randomFromArray(prefixes)} ${randomFromArray(suffixes)}`;
+            let introText = '';
+            if (typeof getPackedBiomeEvents === 'function') {
+                const npcTextPool = getPackedBiomeEvents('npc', sourceBiome || 'forest')
+                    .filter((entry) => !entry.npcType || entry.npcType === resolvedType || entry.npcType === 'any');
+                const pickedNpcText = (typeof chooseRotatingContentWithHistory === 'function')
+                    ? chooseRotatingContentWithHistory(npcTextPool, {
+                        scope: 'exploration',
+                        key: `npc:${sourceBiome || 'forest'}`,
+                        idKey: 'id',
+                        recentWindow: 5,
+                        state: gameState
+                    })
+                    : null;
+                if (pickedNpcText && pickedNpcText.text) {
+                    introText = String(pickedNpcText.text)
+                        .replace(/\{npcName\}/g, npcName)
+                        .replace(/\{biome\}/g, String(sourceLabel || ((EXPLORATION_BIOMES[sourceBiome] || {}).name || 'the wilds')));
+                }
+            }
             const npc = {
                 id: `npc_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
                 type: resolvedType,
@@ -2154,7 +2197,8 @@
                 status: 'wild',
                 befriended: false,
                 discoveredAt: Date.now(),
-                lastBefriendAt: 0
+                lastBefriendAt: 0,
+                introText
             };
             ex.npcEncounters.unshift(npc);
             if (ex.npcEncounters.length > 12) ex.npcEncounters = ex.npcEncounters.slice(0, 12);
@@ -2356,7 +2400,8 @@
                     }
                 }
                 if (npc) {
-                    setTimeout(() => showToast(`${npc.icon} You discovered ${npc.name} in the wild!`, '#FFD54F'), 620);
+                    const npcMessage = npc.introText || `${npc.icon} You discovered ${npc.name} in the wild!`;
+                    setTimeout(() => showToast(npcMessage, '#FFD54F'), 620);
                 }
                 if (newlyUnlocked.length > 0) {
                     newlyUnlocked.forEach((id, idx) => {
@@ -5180,6 +5225,24 @@
         function pickDailyModeTasks(dateKey) {
             const pool = Array.isArray(DAILY_MODE_TASKS) ? [...DAILY_MODE_TASKS] : [];
             if (pool.length <= 2) return pool;
+            if (typeof chooseRotatingContentWithHistory === 'function') {
+                const selected = [];
+                while (pool.length > 0 && selected.length < 2) {
+                    const choice = chooseRotatingContentWithHistory(pool, {
+                        scope: 'tasks',
+                        key: 'dailyMode',
+                        idKey: 'id',
+                        recentWindow: 4,
+                        state: gameState
+                    }) || pool[0];
+                    selected.push(choice);
+                    const choiceId = String((choice && choice.id) || '');
+                    const idx = pool.findIndex((task) => String((task && task.id) || '') === choiceId);
+                    if (idx >= 0) pool.splice(idx, 1);
+                    else pool.shift();
+                }
+                return selected;
+            }
             const selected = [];
             let seed = hashDailySeed(`mode:${dateKey}`);
             while (pool.length > 0 && selected.length < 2) {
@@ -5193,6 +5256,15 @@
         function pickDailyWildcardTask(stage, dateKey) {
             const pool = (Array.isArray(DAILY_WILDCARD_TASKS) ? DAILY_WILDCARD_TASKS : []).filter((task) => canUseWildcardTask(task, stage));
             if (pool.length === 0) return null;
+            if (typeof chooseRotatingContentWithHistory === 'function') {
+                return chooseRotatingContentWithHistory(pool, {
+                    scope: 'tasks',
+                    key: `dailyWildcard:${stage || 'baby'}`,
+                    idKey: 'id',
+                    recentWindow: 5,
+                    state: gameState
+                });
+            }
             const idx = hashDailySeed(`wild:${dateKey}:${stage}`) % pool.length;
             return pool[idx];
         }
@@ -5384,7 +5456,15 @@
             if (!gameState.weeklyArc || gameState.weeklyArc.weekKey !== weekKey) {
                 const arcs = Array.isArray(WEEKLY_THEMED_ARCS) ? WEEKLY_THEMED_ARCS : [];
                 if (arcs.length === 0) return null;
-                const arc = arcs[hashDailySeed(`arc:${weekKey}`) % arcs.length];
+                const arc = (typeof chooseRotatingContentWithHistory === 'function')
+                    ? (chooseRotatingContentWithHistory(arcs, {
+                        scope: 'tasks',
+                        key: 'weeklyArcs',
+                        idKey: 'id',
+                        recentWindow: 3,
+                        state: gameState
+                    }) || arcs[0])
+                    : arcs[hashDailySeed(`arc:${weekKey}`) % arcs.length];
                 gameState.weeklyArc = {
                     weekKey,
                     arcId: arc.id,

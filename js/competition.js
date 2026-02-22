@@ -712,15 +712,53 @@
 
         // ==================== BOSS ENCOUNTER SYSTEM ====================
 
+        function getCompetitionRivalRoster() {
+            const base = Array.isArray(RIVAL_TRAINERS) ? RIVAL_TRAINERS : [];
+            return base.map((trainer, idx) => {
+                const id = trainer && trainer.id ? trainer.id : `rival_${idx}`;
+                return { id, ...trainer, _index: idx };
+            });
+        }
+
+        function getCompetitionRuleModifier(modeId) {
+            if (typeof getDeterministicRuleModifier !== 'function') return null;
+            return getDeterministicRuleModifier(modeId, 'competitionRule', 'competition');
+        }
+
+        function recordCompetitionRotation(scope, id) {
+            if (typeof recordContentRotationSelection !== 'function') return;
+            recordContentRotationSelection('competition', scope, id, { state: gameState, recentWindow: 4 });
+        }
+
+        function sortByLeastRecentCompetitionHistory(scope, list) {
+            if (!Array.isArray(list) || list.length <= 1 || typeof ensureContentRotationHistoryBucket !== 'function') return list || [];
+            const history = ensureContentRotationHistoryBucket('competition', scope, gameState);
+            const seen = history && history.lastSeenOrder ? history.lastSeenOrder : {};
+            const counter = Number(history && history.count) || 0;
+            return [...list].sort((a, b) => {
+                const aId = String((a && (a.id || a._index)) || '');
+                const bId = String((b && (b.id || b._index)) || '');
+                const aSeen = Number(seen[aId]) || 0;
+                const bSeen = Number(seen[bId]) || 0;
+                const aDistance = aSeen ? (counter - aSeen) : Number.MAX_SAFE_INTEGER;
+                const bDistance = bSeen ? (counter - bSeen) : Number.MAX_SAFE_INTEGER;
+                if (aDistance !== bDistance) return bDistance - aDistance;
+                return aId.localeCompare(bId);
+            });
+        }
+
         function getAvailableBosses() {
             const season = gameState.season || getCurrentSeason();
             const bosses = [];
             for (const [id, boss] of Object.entries(BOSS_ENCOUNTERS)) {
-                if (boss.season === null || boss.season === season) {
+                const rematchReq = Math.max(0, Number(boss && boss.rematchRequiresBossesDefeated) || 0);
+                const defeatedCount = Object.keys((gameState.competition && gameState.competition.bossesDefeated) || {}).length;
+                const seasonOk = (boss.season === null || boss.season === season);
+                if (seasonOk && defeatedCount >= rematchReq) {
                     bosses.push({ id, ...boss });
                 }
             }
-            return bosses;
+            return sortByLeastRecentCompetitionHistory('bosses', bosses);
         }
 
         function openBossEncounter() {
@@ -732,6 +770,7 @@
 
             const comp = initCompetitionState();
             const bosses = getAvailableBosses();
+            const bossRuleModifier = getCompetitionRuleModifier('boss');
             if (bosses.length === 0) {
                 showToast('No bosses available right now!', '#FFA726');
                 return;
@@ -748,7 +787,7 @@
                     <div class="modal-content competition-modal boss-select-modal">
                         <button class="competition-close-btn" id="boss-close" aria-label="Close">&times;</button>
                         <h2 class="competition-title"><span aria-hidden="true">👹</span> Boss Encounters</h2>
-                        <p class="competition-subtitle">Team up with your pets to defeat powerful bosses!</p>
+                        <p class="competition-subtitle">Team up with your pets to defeat powerful bosses!${bossRuleModifier && bossRuleModifier.name ? ` Rule: ${bossRuleModifier.name}.` : ''}</p>
                         <div class="boss-list">
                             ${bosses.map(boss => {
                                 const defeated = comp.bossesDefeated[boss.id];
@@ -758,6 +797,7 @@
                                         <span class="boss-name">${boss.name}</span>
                                         <span class="boss-hp-label">HP: ${boss.maxHP}</span>
                                         ${defeated ? '<span class="boss-defeated-badge">Defeated!</span>' : ''}
+                                        ${boss.rematchTier ? `<span class="boss-season">↺ Rematch T${boss.rematchTier}</span>` : ''}
                                         ${boss.season && SEASONS[boss.season] ? `<span class="boss-season">${SEASONS[boss.season].icon} ${SEASONS[boss.season].name}</span>` : '<span class="boss-season">⭐ Special</span>'}
                                     </button>
                                 `;
@@ -785,11 +825,13 @@
                 if (!bossEntry.ok) return;
                 const boss = BOSS_ENCOUNTERS[bossId];
                 if (!boss) return;
+                const activeBossModifier = getCompetitionRuleModifier('boss');
+                const bossHpMult = Math.max(0.75, Number(activeBossModifier && activeBossModifier.effect && activeBossModifier.effect.bossHpMultiplier) || 1);
 
                 // Gather all pets for cooperative fight
                 const allPets = (gameState.pets && gameState.pets.length > 0) ? gameState.pets.filter(p => p) : [pet];
-                let bossHP = boss.maxHP;
-                const bossMaxHP = boss.maxHP;
+                let bossHP = Math.max(1, Math.round(boss.maxHP * bossHpMult));
+                const bossMaxHP = Math.max(1, Math.round(boss.maxHP * bossHpMult));
                 let currentPetIdx = 0;
                 let petHPs = allPets.map(p => calculateBattleHP(p));
                 let petMaxHPs = [...petHPs];
@@ -806,7 +848,7 @@
                     overlay.innerHTML = `
                         <div class="modal-content competition-modal boss-fight-modal">
                             <button class="competition-close-btn" id="boss-fight-close" aria-label="Close">&times;</button>
-                            <h2 class="competition-title"><span aria-hidden="true">${boss.emoji}</span> ${boss.name}</h2>
+                            <h2 class="competition-title"><span aria-hidden="true">${boss.emoji}</span> ${boss.name}${activeBossModifier && activeBossModifier.name ? ` · ${activeBossModifier.name}` : ''}</h2>
                             <div class="battle-field boss-field">
                                 <div class="battle-pet player-pet">
                                     <span class="battle-pet-name">${currentPetName}</span>
@@ -952,11 +994,14 @@
                     const roomCompPct = Math.round((((typeof getRoomSystemMultiplier === 'function') ? getRoomSystemMultiplier('competition') : 1) - 1) * 100);
                     let victoryRewards = { coins: 0, summary: [] };
                     if (won) {
+                        recordCompetitionRotation('bosses', bossId);
                         comp.bossesDefeated[bossId] = { defeated: true, defeatedAt: Date.now() };
                         // Report #5: Boss wins now have an economy payout lane.
                         victoryRewards = buildCompetitionVictoryRewards('boss', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.bossWinBaseCoins) || 40, bossDifficulty, true);
                         if (victoryRewards.coins > 0) {
-                            const award = awardCompetitionCoins(victoryRewards.coins, { modeId: 'boss', outcome: 'win', targetId: bossId, reason: 'Boss Victory' });
+                            const modCoinMult = Math.max(0.5, Number(activeBossModifier && activeBossModifier.effect && activeBossModifier.effect.coinMultiplier) || 1);
+                            const adjustedCoinBase = Math.max(0, Math.round(victoryRewards.coins * modCoinMult));
+                            const award = awardCompetitionCoins(adjustedCoinBase, { modeId: 'boss', outcome: 'win', targetId: bossId, reason: 'Boss Victory' });
                             victoryRewards.coins = award.coins || 0;
                             victoryRewards.summary = [`🪙 ${victoryRewards.coins} coins`].concat(victoryRewards.loot ? [`${victoryRewards.loot.emoji} ${victoryRewards.loot.name}`] : []);
                         }
@@ -1274,6 +1319,8 @@
             }
 
             const comp = initCompetitionState();
+            const rivals = getCompetitionRivalRoster();
+            const rivalRuleModifier = getCompetitionRuleModifier('rival');
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay competition-overlay';
             overlay.setAttribute('role', 'dialog');
@@ -1467,12 +1514,16 @@
                     <div class="modal-content competition-modal rival-modal">
                         <button class="competition-close-btn" id="rival-close" aria-label="Close">&times;</button>
                         <h2 class="competition-title"><span aria-hidden="true">🏅</span> Rival Trainers</h2>
-                        <p class="competition-subtitle">Defeat trainers to progress! Each one is tougher than the last. Rival record: ${comp.rivalBattlesWon}W / ${comp.rivalBattlesLost}L.</p>
+                        <p class="competition-subtitle">Defeat trainers to progress! Each one is tougher than the last. Rival record: ${comp.rivalBattlesWon}W / ${comp.rivalBattlesLost}L.${rivalRuleModifier && rivalRuleModifier.name ? ` Rule: ${rivalRuleModifier.name}.` : ''}</p>
                         <div class="rival-list">
-                            ${RIVAL_TRAINERS.map((trainer, idx) => {
+                            ${rivals.map((trainer, idx) => {
                                 const isDefeated = comp.rivalsDefeated.includes(idx);
-                                const isNext = idx === comp.currentRivalIndex;
-                                const isLocked = idx > comp.currentRivalIndex && !isDefeated;
+                                const minDefeated = Math.max(0, Number(trainer.minRivalsDefeated) || 0);
+                                const gateIndex = Number.isFinite(trainer.unlockAfterIndex) ? Math.max(0, Math.floor(trainer.unlockAfterIndex)) : idx;
+                                const gateLocked = gateIndex > comp.currentRivalIndex && !isDefeated;
+                                const progressLocked = comp.rivalsDefeated.length < minDefeated && !isDefeated;
+                                const isLocked = gateLocked || progressLocked;
+                                const isNext = !isLocked && (idx === comp.currentRivalIndex || !!trainer.variantOf);
                                 return `
                                     <button class="rival-card ${isDefeated ? 'defeated' : ''} ${isNext ? 'next' : ''} ${isLocked ? 'locked' : ''}"
                                             data-rival="${idx}" ${isLocked ? 'disabled' : ''}
@@ -1482,6 +1533,7 @@
                                             <span class="rival-name">${trainer.name}</span>
                                             <span class="rival-title">${trainer.title}</span>
                                             <span class="rival-pet">${PET_TYPES[trainer.petType] ? PET_TYPES[trainer.petType].emoji : '?'} ${trainer.petName}</span>
+                                            ${trainer.rematchTier ? `<span class="rival-title">Rematch Tier ${trainer.rematchTier}</span>` : ''}
                                         </div>
                                         <div class="rival-status">
                                             ${isDefeated ? '<span class="rival-badge defeated-badge">Defeated!</span>' :
@@ -1512,8 +1564,10 @@
             function startRivalBattle(rivalIdx) {
                 const rivalEntry = chargeCompetitionEntryFee('rival');
                 if (!rivalEntry.ok) return;
-                const trainer = RIVAL_TRAINERS[rivalIdx];
+                const trainer = rivals[rivalIdx];
                 if (!trainer) return;
+                const activeRivalModifier = getCompetitionRuleModifier('rival');
+                const rivalHpMult = Math.max(0.75, Number(activeRivalModifier && activeRivalModifier.effect && activeRivalModifier.effect.rivalHpMultiplier) || 1);
 
                 // Create rival pet from trainer data
                 const rivalPet = {
@@ -1526,7 +1580,7 @@
                 };
 
                 const playerMaxHP = calculateBattleHP(pet);
-                const rivalMaxHP = Math.max(calculateBattleHP(rivalPet), trainer.battleHP || 0);
+                const rivalMaxHP = Math.max(1, Math.round(Math.max(calculateBattleHP(rivalPet), trainer.battleHP || 0) * rivalHpMult));
                 let playerHP = playerMaxHP;
                 let rivalHP = rivalMaxHP;
                 let fightOver = false;
@@ -1540,7 +1594,7 @@
                         <div class="modal-content competition-modal rival-fight-modal">
                             <button class="competition-close-btn" id="rival-fight-close" aria-label="Close">&times;</button>
                             <h2 class="competition-title">
-                                <span aria-hidden="true">${trainer.emoji}</span> VS ${trainer.name}
+                                <span aria-hidden="true">${trainer.emoji}</span> VS ${trainer.name}${activeRivalModifier && activeRivalModifier.name ? ` · ${activeRivalModifier.name}` : ''}
                             </h2>
                             <div class="battle-field">
                                 <div class="battle-pet player-pet">
@@ -1656,24 +1710,26 @@
 
                 function endRivalFight(rivalIdx, won) {
                     const comp = initCompetitionState();
-                    const rivalDifficulty = 1 + (trainer.difficulty * 0.14);
+                    const rivalDifficulty = 1 + ((trainer.difficulty + Math.max(0, Number(trainer.rematchTier) || 0)) * 0.14);
                     const rewardMult = getCompetitionRewardMultiplier(pet, rivalDifficulty) * (typeof getRewardCompetitionMultiplier === 'function' ? getRewardCompetitionMultiplier() : 1);
                     const roomCompPct = Math.round((((typeof getRoomSystemMultiplier === 'function') ? getRoomSystemMultiplier('competition') : 1) - 1) * 100);
                     let rivalRewards = { coins: 0, summary: [] };
                     if (won) {
                         comp.rivalBattlesWon++;
+                        recordCompetitionRotation('rivals', trainer.id || rivalIdx);
                         const isFirstDefeat = !comp.rivalsDefeated.includes(rivalIdx);
                         if (isFirstDefeat) {
                             comp.rivalsDefeated.push(rivalIdx);
                         }
-                        if (rivalIdx >= comp.currentRivalIndex) {
+                        if (!trainer.variantOf && rivalIdx >= comp.currentRivalIndex) {
                             comp.currentRivalIndex = rivalIdx + 1;
                         }
                         const happyGain = Math.max(8, Math.round((8 + trainer.difficulty * 1.8) * rewardMult));
                         // Report #5: Rival victories now award coins and possible tradable loot.
                         rivalRewards = buildCompetitionVictoryRewards('rival', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.rivalWinBaseCoins) || 22, rivalDifficulty, true);
                         if (rivalRewards.coins > 0) {
-                            const award = awardCompetitionCoins(rivalRewards.coins, { modeId: 'rival', outcome: 'win', targetId: rivalIdx, reason: 'Rival Victory' });
+                            const modCoinMult = Math.max(0.5, Number(activeRivalModifier && activeRivalModifier.effect && activeRivalModifier.effect.coinMultiplier) || 1);
+                            const award = awardCompetitionCoins(Math.max(0, Math.round(rivalRewards.coins * modCoinMult)), { modeId: 'rival', outcome: 'win', targetId: rivalIdx, reason: 'Rival Victory' });
                             rivalRewards.coins = award.coins || 0;
                             rivalRewards.summary = [`🪙 ${rivalRewards.coins} coins`].concat(rivalRewards.loot ? [`${rivalRewards.loot.emoji} ${rivalRewards.loot.name}`] : []);
                         }
@@ -1707,7 +1763,7 @@
                                 <h3>${won ? '🏅 Rival Defeated!' : '😢 Defeat'}</h3>
                                 <p>${won ? trainer.winMessage : trainer.loseMessage}</p>
                                 ${formatVictoryRewardsSummary(rivalRewards)}
-                                <p class="battle-stats-summary">Rivals defeated: ${comp.rivalsDefeated.length}/${RIVAL_TRAINERS.length} | Rival record: ${comp.rivalBattlesWon}W / ${comp.rivalBattlesLost}L</p>
+                                <p class="battle-stats-summary">Rivals defeated: ${comp.rivalsDefeated.length}/${rivals.length} | Rival record: ${comp.rivalBattlesWon}W / ${comp.rivalBattlesLost}L</p>
                                 <div class="battle-result-actions">
                                     <button class="competition-btn primary" id="rival-done">Done</button>
                                     <button class="competition-btn secondary" id="rival-back-hub">Back to Hub</button>

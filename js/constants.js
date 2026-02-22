@@ -1264,6 +1264,9 @@ function getRoomSystemMultiplier(systemKey, roomId) {
     if (typeof gameState !== 'undefined' && gameState && gameState._prestigeOwned && gameState._prestigeOwned.luxuryRoomUpgrade > 0 && PRESTIGE_EFFECTS.luxuryRoomUpgrade) {
         mult *= Math.max(1, Number(PRESTIGE_EFFECTS.luxuryRoomUpgrade.roomSystemMultiplier) || 1);
     }
+    if (typeof getPackedRoomCosmeticSystemBonusMultiplier === 'function') {
+        mult *= Math.max(0.9, Number(getPackedRoomCosmeticSystemBonusMultiplier(key, resolvedRoom)) || 1);
+    }
     return Math.max(0.75, Math.min(1.75, mult));
 }
 
@@ -6362,9 +6365,26 @@ const EXPLORATION_NARRATIVES = {
  */
 function getExplorationNarrative(biomeId, petName) {
     const pool = EXPLORATION_NARRATIVES[biomeId];
-    if (!pool || pool.length === 0) return null;
-    const msg = pool[Math.floor(Math.random() * pool.length)];
-    return msg.replace(/\{name\}/g, petName || 'Your pet');
+    const basePool = Array.isArray(pool) ? pool.map((text, idx) => ({ id: `base_${biomeId}_${idx + 1}`, text })) : [];
+    let combinedPool = basePool;
+    if (typeof getPackedBiomeEvents === 'function') {
+        const packedEvents = getPackedBiomeEvents('event', biomeId)
+            .map((entry, idx) => ({ id: entry.id || `pack_${biomeId}_${idx + 1}`, text: entry.text || entry.message || '' }))
+            .filter((entry) => entry.text);
+        if (packedEvents.length > 0) combinedPool = basePool.concat(packedEvents);
+    }
+    if (!combinedPool || combinedPool.length === 0) return null;
+    const picked = (typeof chooseRotatingContentWithHistory === 'function')
+        ? chooseRotatingContentWithHistory(combinedPool, {
+            scope: 'exploration',
+            key: `narrative:${biomeId}`,
+            idKey: 'id',
+            recentWindow: 6,
+            state: (typeof gameState !== 'undefined' ? gameState : null)
+        })
+        : combinedPool[Math.floor(Math.random() * combinedPool.length)];
+    const msg = (picked && picked.text) ? picked.text : (combinedPool[0] && combinedPool[0].text) || '';
+    return String(msg).replace(/\{name\}/g, petName || 'Your pet');
 }
 
 // ==================== MILESTONE PERSONALITY REACTIONS ====================
@@ -6908,4 +6928,36 @@ function generateDiaryEntry(pet, dailyProgress, season, dayNum) {
         closing: closing,
         fullText: parts.join(' ')
     };
+}
+
+// Pack bridge: expose core mutable content tables on `window` so additive pack data
+// can merge into the existing runtime without refactoring legacy constants modules.
+if (typeof window !== "undefined") {
+    Object.assign(window, {
+        PET_TYPES,
+        ROOMS,
+        FURNITURE,
+        ROOM_THEMES,
+        ROOM_FURNITURE_ITEMS,
+        EXPLORATION_BIOMES,
+        BIOME_LOOT_POOLS,
+        EXPLORATION_LOOT,
+        DAILY_FIXED_TASKS,
+        DAILY_MODE_TASKS,
+        DAILY_WILDCARD_TASKS,
+        DAILY_TASKS,
+        REWARD_MODIFIERS,
+        REWARD_BUNDLES,
+        BADGES,
+        STICKERS,
+        TROPHIES,
+        WEEKLY_THEMED_ARCS,
+        PET_TYPE_ADVANTAGES,
+        BOSS_ENCOUNTERS,
+        RIVAL_TRAINERS,
+        MUTATION_COLORS,
+        MUTATION_PATTERNS,
+        HYBRID_PET_TYPES,
+        HYBRID_LOOKUP
+    });
 }

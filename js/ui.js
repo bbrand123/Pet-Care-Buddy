@@ -7636,6 +7636,15 @@
             let celebMsg = `Welcome, baby ${typeName}!`;
             if (newPet.hasMutation) celebMsg += ' This baby has a rare mutation!';
             if (newPet.isHybrid) celebMsg += ' A unique hybrid creature!';
+            if (typeof getBreedingFlavorLine === 'function') {
+                const extraFlavor = getBreedingFlavorLine({
+                    petType: newPet.type,
+                    isHybrid: !!newPet.isHybrid,
+                    hasMutation: !!newPet.hasMutation,
+                    state: gameState
+                });
+                if (extraFlavor) celebMsg += ` ${extraFlavor}`;
+            }
 
             showBreedingCelebration(newPet, celebMsg);
         }
