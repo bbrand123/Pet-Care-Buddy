@@ -20,6 +20,21 @@
             }
         }
 
+        let _minigameDomWriteRAF = 0;
+        const _minigameDomWriteQueue = [];
+        function queueMinigameDOMWrite(fn) {
+            if (typeof fn !== 'function') return;
+            _minigameDomWriteQueue.push(fn);
+            if (_minigameDomWriteRAF) return;
+            _minigameDomWriteRAF = requestAnimationFrame(() => {
+                _minigameDomWriteRAF = 0;
+                const queued = _minigameDomWriteQueue.splice(0);
+                for (let i = 0; i < queued.length; i++) {
+                    try { queued[i](); } catch (e) {}
+                }
+            });
+        }
+
         const MINI_GAMES = [
             { id: 'fetch', name: 'Fetch', icon: '🎾', description: 'Throw a ball for your pet and bring it back.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
             { id: 'hideseek', name: 'Hide & Seek', icon: '🍪', description: 'Find hidden treats around the play field.', a11y: 'keyboard', a11yNote: 'Touch and keyboard supported' },
@@ -3496,23 +3511,27 @@
                 fishingState.marker = 0;
                 fishingState.velocity *= -1;
             }
-            const marker = document.getElementById('fishing-marker');
-            if (marker) marker.style.left = `${fishingState.marker}%`;
+            queueMinigameDOMWrite(() => {
+                const marker = document.getElementById('fishing-marker');
+                if (marker) marker.style.left = `${fishingState.marker}%`;
+            });
         }
 
         function updateFishingUI() {
             if (!fishingState) return;
-            const zone = document.getElementById('fishing-zone');
-            const rounds = document.getElementById('fishing-rounds');
-            const catches = document.getElementById('fishing-catches');
-            const misses = document.getElementById('fishing-misses');
-            if (zone) {
-                zone.style.left = `${fishingState.zoneStart}%`;
-                zone.style.width = `${fishingState.zoneSize}%`;
-            }
-            if (rounds) rounds.textContent = `Casts Left: ${fishingState.roundsLeft}`;
-            if (catches) catches.textContent = `Catches: ${fishingState.catches}`;
-            if (misses) misses.textContent = `Misses: ${fishingState.misses}`;
+            queueMinigameDOMWrite(() => {
+                const zone = document.getElementById('fishing-zone');
+                const rounds = document.getElementById('fishing-rounds');
+                const catches = document.getElementById('fishing-catches');
+                const misses = document.getElementById('fishing-misses');
+                if (zone) {
+                    zone.style.left = `${fishingState.zoneStart}%`;
+                    zone.style.width = `${fishingState.zoneSize}%`;
+                }
+                if (rounds) rounds.textContent = `Casts Left: ${fishingState.roundsLeft}`;
+                if (catches) catches.textContent = `Catches: ${fishingState.catches}`;
+                if (misses) misses.textContent = `Misses: ${fishingState.misses}`;
+            });
         }
 
         function attemptFishingCatch() {
@@ -4251,18 +4270,20 @@
 
         function updateRunnerUI() {
             if (!runnerState) return;
-            const scoreEl = document.getElementById('runner-score');
-            const speedEl = document.getElementById('runner-speed');
-            const playerEl = document.getElementById('runner-player');
-            const obstaclesEl = document.getElementById('runner-obstacles');
-            if (scoreEl) scoreEl.textContent = `Meters: ${runnerState.score}`;
-            if (speedEl) speedEl.textContent = `Speed: ${runnerState.speed.toFixed(1)}`;
-            if (playerEl) playerEl.style.bottom = `${16 + runnerState.y}px`;
-            if (obstaclesEl) {
-                obstaclesEl.innerHTML = runnerState.obstacles
-                    .map((obs) => `<div class="runner-obstacle" style="left:${obs.x}%;width:${obs.width}%"></div>`)
-                    .join('');
-            }
+            queueMinigameDOMWrite(() => {
+                const scoreEl = document.getElementById('runner-score');
+                const speedEl = document.getElementById('runner-speed');
+                const playerEl = document.getElementById('runner-player');
+                const obstaclesEl = document.getElementById('runner-obstacles');
+                if (scoreEl) scoreEl.textContent = `Meters: ${runnerState.score}`;
+                if (speedEl) speedEl.textContent = `Speed: ${runnerState.speed.toFixed(1)}`;
+                if (playerEl) playerEl.style.transform = `translate3d(0, ${-runnerState.y}px, 0)`;
+                if (obstaclesEl) {
+                    obstaclesEl.innerHTML = runnerState.obstacles
+                        .map((obs) => `<div class="runner-obstacle" style="left:${obs.x}%;width:${obs.width}%"></div>`)
+                        .join('');
+                }
+            });
         }
 
         function endRunnerGame(completed, crashed) {

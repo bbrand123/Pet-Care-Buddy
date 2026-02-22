@@ -15176,6 +15176,7 @@ html[data-reduced-motion="true"] *::after {
     border-radius: 4px;
     background: #e53935;
     transform: translateX(-50%);
+    will-change: left;
 }
 
 .rhythm-lights {
@@ -15279,12 +15280,14 @@ html[data-reduced-motion="true"] *::after {
     left: 12%;
     bottom: 16px;
     font-size: 2rem;
-    transition: bottom 0.05s linear;
+    transition: transform 0.05s linear;
+    will-change: transform;
 }
 
 .runner-obstacles {
     position: absolute;
     inset: 0;
+    contain: layout paint;
 }
 
 .runner-obstacle {
@@ -15293,6 +15296,30 @@ html[data-reduced-motion="true"] *::after {
     height: 32px;
     background: linear-gradient(180deg, #533017, #2a170a);
     border-radius: 5px;
+}
+
+.debug-fps-meter {
+    position: fixed;
+    top: calc(6px + var(--safe-top));
+    right: calc(6px + var(--safe-right));
+    z-index: 20000;
+    min-width: 88px;
+    min-height: 32px;
+    padding: 6px 9px;
+    border-radius: 10px;
+    background: rgba(13, 22, 30, 0.82);
+    color: #e7f6ff;
+    font: 800 12px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+    pointer-events: none;
+}
+
+.debug-fps-meter.warn {
+    background: rgba(124, 35, 35, 0.88);
+    color: #fff0f0;
 }
 
 .tournament-shell {

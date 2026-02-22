@@ -670,13 +670,81 @@
         window.addEventListener('resize', queueMobileUiSync, { passive: true });
         window.addEventListener('orientationchange', queueMobileUiSync, { passive: true });
 
+        // ==================== DEBUG FPS METER (Phase 1 perf instrumentation) ====================
+        const DebugFPSMeter = {
+            _rafId: 0,
+            _lastFrameAt: 0,
+            _sampleStartedAt: 0,
+            _sampleFrames: 0,
+            _el: null,
+            isEnabled() {
+                try {
+                    const fromQuery = new URLSearchParams(window.location.search).get('debugFps');
+                    if (fromQuery === '1' || fromQuery === 'true') return true;
+                    return localStorage.getItem('mlf_debug_fps') === '1';
+                } catch (e) {
+                    return false;
+                }
+            },
+            ensureEl() {
+                if (this._el && document.contains(this._el)) return this._el;
+                const el = document.createElement('div');
+                el.id = 'debug-fps-meter';
+                el.className = 'debug-fps-meter';
+                el.setAttribute('aria-hidden', 'true');
+                el.textContent = 'FPS --';
+                document.body.appendChild(el);
+                this._el = el;
+                return el;
+            },
+            start() {
+                if (!this.isEnabled() || this._rafId) return;
+                this.ensureEl();
+                this._lastFrameAt = performance.now();
+                this._sampleStartedAt = this._lastFrameAt;
+                this._sampleFrames = 0;
+                const tick = (now) => {
+                    if (!this.isEnabled()) {
+                        this.stop();
+                        return;
+                    }
+                    this._sampleFrames += 1;
+                    const elapsed = now - this._sampleStartedAt;
+                    if (elapsed >= 500) {
+                        const fps = Math.round((this._sampleFrames * 1000) / Math.max(1, elapsed));
+                        const frameMs = (now - this._lastFrameAt).toFixed(1);
+                        const el = this.ensureEl();
+                        el.textContent = `FPS ${fps} · ${frameMs}ms`;
+                        el.classList.toggle('warn', fps < 55);
+                        this._sampleFrames = 0;
+                        this._sampleStartedAt = now;
+                    }
+                    this._lastFrameAt = now;
+                    this._rafId = requestAnimationFrame(tick);
+                };
+                this._rafId = requestAnimationFrame(tick);
+            },
+            stop() {
+                if (this._rafId) cancelAnimationFrame(this._rafId);
+                this._rafId = 0;
+                if (this._el && this._el.parentNode) this._el.remove();
+                this._el = null;
+            },
+            sync() {
+                if (this.isEnabled()) this.start();
+                else this.stop();
+            }
+        };
+        window.DebugFPSMeter = DebugFPSMeter;
+        DebugFPSMeter.sync();
+        document.addEventListener('visibilitychange', () => DebugFPSMeter.sync());
+
         function spawnEmojiBurst(container, action) {
             if (!container) return;
             if (isReducedMotionEnabled()) return;
             const emojis = EMOJI_BURST_MAP[action] || ['❤️', '⭐', '✨'];
             const visualLoad = document.querySelectorAll('.toast, .onboarding-tooltip').length;
             const count = visualLoad > 0 ? 4 : 6;
-            const rect = container.getBoundingClientRect();
             for (let i = 0; i < count; i++) {
                 const el = document.createElement('span');
                 el.className = 'emoji-burst-particle';
