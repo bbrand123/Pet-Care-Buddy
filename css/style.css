@@ -108,6 +108,10 @@
             --z-overlay-game: 1100;   /* Minigame overlays (opened from menu) */
             --z-overlay-dialog: 1200; /* Confirmation dialogs: naming, seed picker, remove crop */
             --z-overlay-alert: 1300;  /* Top-level alerts: minigame exit confirmation */
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
         }
 
         body {
@@ -121,6 +125,13 @@
             padding: 20px;
             color: var(--color-text);
             line-height: 1.4;
+        }
+
+        body.mobile-ui {
+            padding-top: max(8px, var(--safe-top));
+            padding-right: max(8px, var(--safe-right));
+            padding-bottom: max(8px, var(--safe-bottom));
+            padding-left: max(8px, var(--safe-left));
         }
 
         body.modal-open {
@@ -195,6 +206,11 @@
             text-align: center;
             border: none;
             margin: 0;
+        }
+
+        .mobile-ui .game-container {
+            max-width: 100%;
+            width: min(100%, 560px);
         }
 
         /* Header */
@@ -4074,6 +4090,66 @@
             animation: modalPop 0.3s ease;
         }
 
+        .mobile-ui body > [role="dialog"][aria-modal="true"],
+        .mobile-ui body > [role="alertdialog"][aria-modal="true"] {
+            padding: 0;
+            align-items: stretch;
+            justify-content: stretch;
+            background: rgba(12, 18, 24, 0.78);
+        }
+
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .modal-content,
+        .mobile-ui body > [role="alertdialog"][aria-modal="true"] > .modal-content,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .settings-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .codex-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .stats-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .minigame-menu,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .exploration-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .rewards-hub-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .daily-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .achievements-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .badges-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .sticker-book-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .trophy-room-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .streak-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .welcome-back-modal,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .touch-pause-panel,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .mobile-list-picker-panel,
+        .mobile-ui body > [role="alertdialog"][aria-modal="true"] > .mobile-confirm-panel,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .exp-game-shell,
+        .mobile-ui body > [role="dialog"][aria-modal="true"] > .racing-game-shell {
+            width: 100%;
+            max-width: none !important;
+            min-height: calc(100vh - var(--safe-top) - var(--safe-bottom));
+            max-height: none !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-top: max(16px, var(--safe-top));
+            padding-right: max(14px, var(--safe-right));
+            padding-bottom: max(18px, calc(14px + var(--safe-bottom)));
+            padding-left: max(14px, var(--safe-left));
+        }
+
+        .mobile-ui .exploration-modal,
+        .mobile-ui .minigame-menu,
+        .mobile-ui .settings-modal,
+        .mobile-ui .rewards-hub-modal,
+        .mobile-ui .streak-modal,
+        .mobile-ui .badges-modal,
+        .mobile-ui .sticker-book-modal,
+        .mobile-ui .trophy-room-modal,
+        .mobile-ui .daily-modal,
+        .mobile-ui .achievements-modal,
+        .mobile-ui .codex-modal,
+        .mobile-ui .stats-modal,
+        .mobile-ui .exp-game-shell,
+        .mobile-ui .racing-game-shell {
+            box-shadow: none !important;
+            border: none !important;
+        }
+
         @keyframes modalPop {
             0% { transform: translateY(16px); opacity: 0; }
             100% { transform: translateY(0); opacity: 1; }
@@ -5141,6 +5217,16 @@
             padding: 0;
             opacity: 0;
             transition: opacity 0.2s ease;
+        }
+
+        .mobile-ui .garden-plot-remove {
+            top: 4px;
+            right: 4px;
+            width: 44px;
+            height: 44px;
+            font-size: 1rem;
+            opacity: 1;
+            background: rgba(0,0,0,0.45);
         }
 
         .garden-plot:hover .garden-plot-remove,
@@ -13278,6 +13364,147 @@ body.beginner-ui #explore-btn {
     font-family: inherit;
 }
 
+.mobile-picker-native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+.mobile-picker-trigger {
+    width: 100%;
+    min-height: var(--touch-target-min);
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    background: #fff;
+    color: var(--color-text);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    padding: 10px 12px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.mobile-picker-trigger-label {
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #466272;
+}
+
+.mobile-picker-trigger-value {
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #203643;
+}
+
+.mobile-picker-trigger-chevron {
+    font-size: 0.9rem;
+    color: #466272;
+}
+
+.mobile-list-picker-panel,
+.mobile-confirm-panel {
+    background: linear-gradient(180deg, #ffffff, #f7fbff);
+}
+
+.mobile-list-picker-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.mobile-list-picker-title,
+.mobile-confirm-title {
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: #223c49;
+}
+
+.mobile-list-picker-close,
+.mobile-confirm-btn {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    border-radius: 12px;
+    border: 1px solid #c4d2da;
+    background: #fff;
+    font-family: inherit;
+    font-weight: 800;
+    color: #203643;
+    padding: 10px 12px;
+    cursor: pointer;
+}
+
+.mobile-list-picker-list {
+    display: grid;
+    gap: 8px;
+}
+
+.mobile-list-picker-option {
+    min-height: var(--touch-target-min);
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    text-align: left;
+    font-family: inherit;
+    font-weight: 800;
+    color: #203643;
+    cursor: pointer;
+}
+
+.mobile-list-picker-option.selected {
+    border-color: #4ea3bd;
+    background: #eef9fd;
+}
+
+.mobile-list-picker-check {
+    min-width: 1.2em;
+    text-align: center;
+    color: #2b90a5;
+}
+
+.mobile-confirm-panel {
+    width: min(560px, calc(100vw - 16px));
+    border-radius: 18px;
+    border: 1px solid rgba(0,0,0,0.08);
+    box-shadow: var(--shadow-overlay);
+    padding: 16px;
+}
+
+.mobile-confirm-message {
+    font-size: 0.92rem;
+    color: #2f4955;
+    margin: 10px 0 14px;
+}
+
+.mobile-confirm-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.mobile-confirm-btn.confirm {
+    background: #2b90a5;
+    border-color: #2b90a5;
+    color: #fff;
+}
+
+.mobile-confirm-btn.danger {
+    background: #d64f4f;
+    border-color: #d64f4f;
+    color: #fff;
+}
+
 .explore-expedition-panel,
 .explore-dungeon-panel {
     border: 1px solid rgba(0, 0, 0, 0.12);
@@ -14019,6 +14246,41 @@ body.has-core-care-dock .duplicate-core-action {
     color: #eef6fb;
 }
 
+[data-theme="dark"] .mobile-picker-trigger,
+[data-theme="dark"] .mobile-list-picker-option,
+[data-theme="dark"] .mobile-list-picker-close,
+[data-theme="dark"] .mobile-confirm-btn {
+    background: rgba(255,255,255,0.06);
+    border-color: rgba(255,255,255,0.14);
+    color: #eef6fb;
+}
+
+[data-theme="dark"] .mobile-picker-trigger-label,
+[data-theme="dark"] .mobile-picker-trigger-chevron {
+    color: #b6d2e1;
+}
+
+[data-theme="dark"] .mobile-picker-trigger-value {
+    color: #edf6fb;
+}
+
+[data-theme="dark"] .mobile-list-picker-panel,
+[data-theme="dark"] .mobile-confirm-panel {
+    background: linear-gradient(180deg, #20263a, #1a2234);
+    border-color: rgba(255,255,255,0.12);
+}
+
+[data-theme="dark"] .mobile-list-picker-title,
+[data-theme="dark"] .mobile-confirm-title,
+[data-theme="dark"] .mobile-confirm-message {
+    color: #e7f1f8;
+}
+
+[data-theme="dark"] .mobile-list-picker-option.selected {
+    background: rgba(78, 163, 189, 0.18);
+    border-color: rgba(78, 163, 189, 0.65);
+}
+
 [data-theme="dark"] .core-care-btn {
     color: #f1f6fa;
 }
@@ -14120,6 +14382,43 @@ body.has-core-care-dock .duplicate-core-action {
 .mobile-ui .minigame-a11y-note,
 .mobile-ui .minigame-menu-keyboard-note:not(.mobile-touch-note) {
     display: none !important;
+}
+
+.mobile-ui .action-btn-tooltip {
+    display: none !important;
+}
+
+.mobile-ui .touch-pause-panel,
+.mobile-ui .mobile-list-picker-panel,
+.mobile-ui .mobile-confirm-panel {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: calc(100vh - var(--safe-top) - var(--safe-bottom));
+    border-radius: 0 !important;
+    margin: 0 !important;
+}
+
+.mobile-ui button,
+.mobile-ui [role="button"],
+.mobile-ui .top-action-btn,
+.mobile-ui .room-btn,
+.mobile-ui .settings-toggle,
+.mobile-ui .settings-choice,
+.mobile-ui .modal-btn,
+.mobile-ui .rewards-hub-card {
+    min-width: var(--touch-target-min);
+    min-height: var(--touch-target-min);
+    touch-action: manipulation;
+}
+
+.mobile-ui .top-action-btn,
+.mobile-ui .room-btn {
+    padding: 8px 10px;
+}
+
+.mobile-ui .pet-container.pettable:hover,
+.mobile-ui .pet-container.pettable:hover::after {
+    transform: none !important;
 }
 
 .mobile-ui .touch-controls-layer + .core-care-dock-wrap .core-care-btn,

@@ -210,6 +210,216 @@
             return !!(caps.touchCapable && (caps.isIOS || caps.smallViewport));
         }
 
+        function syncTitleTooltipsForMobile(root) {
+            const scope = root || document;
+            if (!scope || !scope.querySelectorAll) return;
+            const isMobile = isMobileTouchUiActive();
+            const nodes = [];
+            if (scope instanceof Element && scope.hasAttribute && scope.hasAttribute('title')) nodes.push(scope);
+            scope.querySelectorAll('[title], [data-title-desktop]').forEach((el) => nodes.push(el));
+            nodes.forEach((el) => {
+                if (!(el instanceof Element)) return;
+                if (isMobile) {
+                    if (el.hasAttribute('title')) {
+                        el.setAttribute('data-title-desktop', el.getAttribute('title') || '');
+                        el.removeAttribute('title');
+                    }
+                } else if (!el.hasAttribute('title') && el.hasAttribute('data-title-desktop')) {
+                    const restore = el.getAttribute('data-title-desktop');
+                    if (restore) el.setAttribute('title', restore);
+                    el.removeAttribute('data-title-desktop');
+                }
+            });
+        }
+
+        let _mobileTooltipObserver = null;
+        function ensureMobileUiDomObserver() {
+            if (_mobileTooltipObserver || !document.body || typeof MutationObserver === 'undefined') return;
+            _mobileTooltipObserver = new MutationObserver((mutations) => {
+                if (!isMobileTouchUiActive()) return;
+                mutations.forEach((m) => {
+                    m.addedNodes.forEach((node) => {
+                        if (node && node.nodeType === 1) syncTitleTooltipsForMobile(node);
+                    });
+                });
+            });
+            _mobileTooltipObserver.observe(document.body, { childList: true, subtree: true });
+        }
+
+        function getSelectLabelText(selectEl) {
+            if (!selectEl) return 'Choose';
+            const id = selectEl.id;
+            if (id) {
+                const label = document.querySelector(`label[for="${id}"]`);
+                if (label) return label.textContent.trim();
+            }
+            const wrapLabel = selectEl.closest('label');
+            if (wrapLabel) return wrapLabel.textContent.trim();
+            return selectEl.getAttribute('aria-label') || 'Choose';
+        }
+
+        function openMobileListPicker(selectEl) {
+            if (!selectEl || !isMobileTouchUiActive()) return;
+            const existing = document.querySelector('.mobile-list-picker-overlay');
+            if (existing && existing._closeOverlay) existing._closeOverlay();
+
+            const title = getSelectLabelText(selectEl);
+            const options = Array.from(selectEl.options || []).map((opt) => ({
+                value: opt.value,
+                label: opt.textContent || opt.label || opt.value,
+                disabled: !!opt.disabled,
+                selected: !!opt.selected
+            }));
+
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay mobile-list-picker-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', `${title} picker`);
+            overlay.innerHTML = `
+                <div class="mobile-list-picker-panel">
+                    <div class="mobile-list-picker-head">
+                        <h2 class="mobile-list-picker-title">${escapeHTML(title)}</h2>
+                        <button type="button" class="mobile-list-picker-close" id="mobile-list-picker-close">Back</button>
+                    </div>
+                    <div class="mobile-list-picker-list" role="listbox" aria-label="${escapeHTML(title)} options">
+                        ${options.map((opt, idx) => `
+                            <button
+                                type="button"
+                                class="mobile-list-picker-option${opt.selected ? ' selected' : ''}"
+                                role="option"
+                                aria-selected="${opt.selected ? 'true' : 'false'}"
+                                data-mobile-picker-value="${escapeHTML(String(opt.value))}"
+                                ${opt.disabled ? 'disabled' : ''}
+                                id="mobile-picker-opt-${idx}">
+                                <span>${escapeHTML(String(opt.label))}</span>
+                                <span class="mobile-list-picker-check" aria-hidden="true">${opt.selected ? '✓' : ''}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const close = () => {
+                popModalEscape(close);
+                if (overlay.parentNode) overlay.remove();
+                if (typeof selectEl._mobilePickerTriggerFocus === 'function') selectEl._mobilePickerTriggerFocus();
+            };
+            overlay._closeOverlay = close;
+
+            overlay.querySelector('#mobile-list-picker-close')?.addEventListener('click', close);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+            overlay.querySelectorAll('[data-mobile-picker-value]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (btn.disabled) return;
+                    const nextValue = btn.getAttribute('data-mobile-picker-value');
+                    if (nextValue == null) return;
+                    selectEl.value = nextValue;
+                    selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    selectEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    close();
+                });
+            });
+            pushModalEscape(close);
+            trapFocus(overlay);
+            const selectedBtn = overlay.querySelector('.mobile-list-picker-option.selected') || overlay.querySelector('.mobile-list-picker-option');
+            if (selectedBtn) selectedBtn.focus();
+            syncTitleTooltipsForMobile(overlay);
+        }
+
+        function enhanceMobileSelects(root) {
+            if (!root || !root.querySelectorAll) return;
+            if (!isMobileTouchUiActive()) return;
+            root.querySelectorAll('select.explore-duration-select').forEach((selectEl) => {
+                if (!(selectEl instanceof HTMLSelectElement)) return;
+                if (selectEl.dataset.mobilePickerEnhanced === 'true') {
+                    const trigger = selectEl.parentElement && selectEl.parentElement.querySelector(`[data-mobile-picker-for="${selectEl.id}"]`);
+                    if (trigger) {
+                        trigger.disabled = !!selectEl.disabled;
+                        const selected = selectEl.options[selectEl.selectedIndex];
+                        trigger.querySelector('.mobile-picker-trigger-value').textContent = selected ? selected.textContent : 'Choose';
+                    }
+                    return;
+                }
+                if (!selectEl.id) {
+                    selectEl.id = `mobile-picker-${Math.random().toString(36).slice(2, 9)}`;
+                }
+                selectEl.dataset.mobilePickerEnhanced = 'true';
+                selectEl.classList.add('mobile-picker-native');
+                selectEl.setAttribute('tabindex', '-1');
+                const trigger = document.createElement('button');
+                trigger.type = 'button';
+                trigger.className = 'mobile-picker-trigger';
+                trigger.setAttribute('data-mobile-picker-for', selectEl.id);
+                trigger.setAttribute('aria-haspopup', 'dialog');
+                trigger.innerHTML = `
+                    <span class="mobile-picker-trigger-label">${escapeHTML(getSelectLabelText(selectEl))}</span>
+                    <span class="mobile-picker-trigger-value"></span>
+                    <span class="mobile-picker-trigger-chevron" aria-hidden="true">▾</span>
+                `;
+                const syncTrigger = () => {
+                    const selected = selectEl.options[selectEl.selectedIndex];
+                    const valueEl = trigger.querySelector('.mobile-picker-trigger-value');
+                    if (valueEl) valueEl.textContent = (selected && selected.textContent) ? selected.textContent : 'Choose';
+                    trigger.disabled = !!selectEl.disabled;
+                    trigger.setAttribute('aria-label', `${getSelectLabelText(selectEl)}: ${(selected && selected.textContent) ? selected.textContent : 'Choose'}`);
+                };
+                selectEl._mobilePickerTriggerFocus = () => { if (document.contains(trigger)) trigger.focus(); };
+                trigger.addEventListener('click', () => openMobileListPicker(selectEl));
+                selectEl.addEventListener('change', syncTrigger);
+                selectEl.insertAdjacentElement('afterend', trigger);
+                syncTrigger();
+            });
+        }
+
+        function showInGameConfirmOverlay(options = {}) {
+            const title = options.title || 'Are you sure?';
+            const message = options.message || 'Please confirm this action.';
+            const confirmText = options.confirmText || 'Confirm';
+            const cancelText = options.cancelText || 'Back';
+            const danger = !!options.danger;
+            if (!isMobileTouchUiActive()) {
+                try {
+                    return Promise.resolve(window.confirm(message));
+                } catch (e) {
+                    return Promise.resolve(false);
+                }
+            }
+            return new Promise((resolve) => {
+                const overlay = document.createElement('div');
+                overlay.className = 'modal-overlay mobile-confirm-overlay';
+                overlay.setAttribute('role', 'alertdialog');
+                overlay.setAttribute('aria-modal', 'true');
+                overlay.setAttribute('aria-label', title);
+                overlay.innerHTML = `
+                    <div class="mobile-confirm-panel">
+                        <div class="mobile-confirm-title">${escapeHTML(title)}</div>
+                        <p class="mobile-confirm-message">${escapeHTML(message)}</p>
+                        <div class="mobile-confirm-actions">
+                            <button type="button" class="mobile-confirm-btn" id="mobile-confirm-cancel">${escapeHTML(cancelText)}</button>
+                            <button type="button" class="mobile-confirm-btn ${danger ? 'danger' : 'confirm'}" id="mobile-confirm-ok">${escapeHTML(confirmText)}</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+                const close = (value) => {
+                    popModalEscape(closeHandler);
+                    if (overlay.parentNode) overlay.remove();
+                    resolve(!!value);
+                };
+                const closeHandler = () => close(false);
+                overlay._closeOverlay = closeHandler;
+                overlay.querySelector('#mobile-confirm-cancel')?.addEventListener('click', () => close(false));
+                overlay.querySelector('#mobile-confirm-ok')?.addEventListener('click', () => close(true));
+                overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+                pushModalEscape(closeHandler);
+                trapFocus(overlay);
+                overlay.querySelector('#mobile-confirm-cancel')?.focus();
+                syncTitleTooltipsForMobile(overlay);
+            });
+        }
+
         function syncMobileUiClasses() {
             const caps = getTouchCapabilities();
             const mobileTouch = isMobileTouchUiActive();
@@ -221,6 +431,7 @@
                 document.body.classList.toggle('touch-capable', !!caps.touchCapable);
                 document.body.classList.toggle('ios-device', !!caps.isIOS);
             }
+            syncTitleTooltipsForMobile(document.body || document);
             return mobileTouch;
         }
 
@@ -453,7 +664,9 @@
         window.GAME_ACTIONS = GAME_ACTIONS;
         window.TouchControls = TouchControls;
         window.isMobileTouchUiActive = isMobileTouchUiActive;
+        window.showInGameConfirmOverlay = showInGameConfirmOverlay;
         syncMobileUiClasses();
+        ensureMobileUiDomObserver();
         window.addEventListener('resize', queueMobileUiSync, { passive: true });
         window.addEventListener('orientationchange', queueMobileUiSync, { passive: true });
 
@@ -2718,6 +2931,7 @@
             `;
             setCareActionsSkipLinkVisible(true);
             applyProgressiveOnboardingUI();
+            syncTitleTooltipsForMobile(content);
             if (typeof TouchControls !== 'undefined' && TouchControls && typeof TouchControls.render === 'function') {
                 TouchControls.render();
             }
@@ -3182,6 +3396,7 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            syncTitleTooltipsForMobile(overlay);
 
             const runAction = (action) => {
                 if (action === 'furniture' && typeof showFurnitureModal === 'function') showFurnitureModal();
@@ -9048,6 +9263,8 @@
                         </section>
                     </div>
                 `;
+                enhanceMobileSelects(overlay);
+                syncTitleTooltipsForMobile(overlay);
 
                 const closeBtn = overlay.querySelector('#economy-close-btn');
                 if (closeBtn) closeBtn.addEventListener('click', closeEconomyModal);
@@ -9518,6 +9735,8 @@
                         </section>
                     </div>
                 `;
+                enhanceMobileSelects(overlay);
+                syncTitleTooltipsForMobile(overlay);
 
                 const closeBtn = overlay.querySelector('#explore-close-btn');
                 if (closeBtn) closeBtn.addEventListener('click', closeExplorationModal);
@@ -9554,7 +9773,7 @@
 
                 const collectBtn = overlay.querySelector('#expedition-collect-btn');
                 if (collectBtn) {
-                    collectBtn.addEventListener('click', () => {
+                    collectBtn.addEventListener('click', async () => {
                         if (typeof resolveExpeditionIfReady !== 'function') return;
                         const res = resolveExpeditionIfReady(false, false);
                         if (res && !res.ok && res.reason === 'in-progress') {
@@ -9562,7 +9781,13 @@
                                 showToast(`Expedition still in progress (${formatCountdown(res.remainingMs || 0)}).`, '#FFA726');
                                 return;
                             }
-                            const confirmAbandon = window.confirm('End this expedition early? You will receive no loot.');
+                            const confirmAbandon = await showInGameConfirmOverlay({
+                                title: 'End Expedition?',
+                                message: 'End this expedition early? You will receive no loot.',
+                                confirmText: 'End Expedition',
+                                cancelText: 'Keep Exploring',
+                                danger: true
+                            });
                             if (!confirmAbandon) return;
                             const abandonRes = abandonExpedition(false);
                             if (!abandonRes || !abandonRes.ok) {
