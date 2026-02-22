@@ -4418,6 +4418,67 @@
         }
 
         let careDiminishResetTimer = null;
+        let stageCareFxCleanupTimer = null;
+
+        function triggerCareActionStageFx(action) {
+            const stage = document.querySelector('.pet-area');
+            const petContainer = document.getElementById('pet-container');
+            const sparklesLayer = document.getElementById('sparkles');
+            if (!stage || !petContainer) return;
+
+            const reducedMotion = (document.documentElement.getAttribute('data-reduced-motion') === 'true')
+                || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+            const actionClasses = [
+                'fx-care-feed', 'fx-care-wash', 'fx-care-play', 'fx-care-sleep',
+                'fx-care-medicine', 'fx-care-groom', 'fx-care-exercise', 'fx-care-treat', 'fx-care-cuddle'
+            ];
+            const stageClasses = ['fx-stage-input', 'fx-stage-impact', 'fx-stage-reward', 'fx-stage-settle', 'fx-glow', 'fx-sparkle', 'fx-confetti-lite'];
+            const petClasses = ['fx-pop', 'fx-glow'];
+
+            stage.classList.remove(...actionClasses, ...stageClasses);
+            petContainer.classList.remove(...petClasses);
+            if (sparklesLayer) sparklesLayer.classList.remove('fx-sparkle', 'fx-confetti-lite');
+
+            if (stageCareFxCleanupTimer) {
+                clearTimeout(stageCareFxCleanupTimer);
+                stageCareFxCleanupTimer = null;
+            }
+
+            const actionClass = `fx-care-${action}`;
+            stage.classList.add(actionClass, 'fx-stage-input');
+            petContainer.classList.add('fx-pop');
+
+            if (!reducedMotion) {
+                if (action === 'wash' || action === 'groom' || action === 'medicine') {
+                    stage.classList.add('fx-sparkle');
+                }
+                if (action === 'play' || action === 'treat' || action === 'cuddle') {
+                    stage.classList.add('fx-confetti-lite');
+                }
+                if (action === 'feed' || action === 'sleep') {
+                    petContainer.classList.add('fx-glow');
+                }
+            }
+
+            const raf = window.requestAnimationFrame || ((cb) => setTimeout(cb, 16));
+            raf(() => {
+                stage.classList.add('fx-stage-impact');
+                setTimeout(() => {
+                    stage.classList.add('fx-stage-reward', 'fx-glow');
+                }, reducedMotion ? 0 : 100);
+                setTimeout(() => {
+                    stage.classList.add('fx-stage-settle');
+                }, reducedMotion ? 0 : 220);
+            });
+
+            stageCareFxCleanupTimer = setTimeout(() => {
+                stage.classList.remove(...actionClasses, ...stageClasses);
+                petContainer.classList.remove(...petClasses);
+                if (sparklesLayer) sparklesLayer.classList.remove('fx-sparkle', 'fx-confetti-lite');
+                stageCareFxCleanupTimer = null;
+            }, reducedMotion ? 80 : 1100);
+        }
 
         function careAction(action) {
             // Prevent rapid clicking
@@ -4685,6 +4746,8 @@
             if (rewardHappyFlat > 0) {
                 pet.happiness = clamp(pet.happiness + rewardHappyFlat, 0, 100);
             }
+
+            triggerCareActionStageFx(action);
 
             // Spawn themed particles, emoji burst, and floating stat text
             if (petContainer) {

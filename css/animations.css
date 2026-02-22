@@ -815,3 +815,212 @@
     80% { transform: translateY(-3px) scale(1.01); }
 }
 
+/* ============================================================
+   Phase 2 Motion Language + Reusable FX Utilities
+   ============================================================ */
+
+/* System-level room ambience (subtle, premium, low-noise) */
+@keyframes phase2AmbientDrift {
+    0% { transform: translate3d(0, 0, 0); opacity: 0.16; }
+    100% { transform: translate3d(0, -3px, 0); opacity: 0.22; }
+}
+
+@keyframes phase2AmbientBreath {
+    0%, 100% { opacity: 0.14; transform: scale(1); }
+    50% { opacity: 0.22; transform: scale(1.01); }
+}
+
+@keyframes phase2ArcadeGlow {
+    0%, 100% { opacity: 0.18; filter: saturate(1); }
+    50% { opacity: 0.26; filter: saturate(1.1); }
+}
+
+@keyframes phase2StarfieldPulse {
+    0%, 100% { opacity: 0.18; }
+    50% { opacity: 0.24; }
+}
+
+@keyframes phase2GardenDrift {
+    0%, 100% { transform: translate3d(0, 0, 0); opacity: 0.16; }
+    50% { transform: translate3d(1px, -2px, 0); opacity: 0.22; }
+}
+
+/* Reusable FX utility classes */
+.fx-pop {
+    animation: fxPop var(--motion-base, 240ms) var(--ease-celebrate, cubic-bezier(0.22, 1.3, 0.36, 1)) both;
+}
+
+.fx-glow {
+    animation: fxGlow calc(var(--motion-base, 240ms) * 1.4) var(--ease-standard, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+
+.fx-sparkle {
+    animation: fxSparklePulse calc(var(--motion-base, 240ms) * 1.1) var(--ease-enter, cubic-bezier(0.16, 1, 0.3, 1)) both;
+}
+
+.fx-confetti-lite {
+    animation: fxNone 1ms linear both;
+}
+
+@keyframes fxNone {
+    from { opacity: 1; }
+    to { opacity: 1; }
+}
+
+@keyframes fxPop {
+    0% { transform: scale(1); }
+    38% { transform: scale(1.06); }
+    70% { transform: scale(0.985); }
+    100% { transform: scale(1); }
+}
+
+@keyframes fxGlow {
+    0% { filter: brightness(1); }
+    35% { filter: brightness(1.08); }
+    100% { filter: brightness(1); }
+}
+
+@keyframes fxSparklePulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.9; }
+    100% { opacity: 1; }
+}
+
+/* Input -> impact -> reward -> settle sequence classes (triggered by JS) */
+.pet-area.fx-stage-input > .pet-container {
+    animation: fxStageInput var(--motion-fast, 150ms) var(--ease-standard, ease) both;
+}
+
+.pet-area.fx-stage-impact > .pet-container {
+    animation: fxStageImpact var(--motion-base, 240ms) var(--ease-enter, ease) both;
+}
+
+.pet-area.fx-stage-impact > .pet-container::before {
+    transform: translateX(-50%) scale(0.92);
+    opacity: 0.8;
+}
+
+.pet-area.fx-stage-impact::before {
+    opacity: 1;
+    background:
+        radial-gradient(32% 20% at 50% 42%, rgba(255,255,255,0.2), transparent 75%),
+        radial-gradient(125% 100% at 50% 20%, transparent 38%, var(--room-vignette, rgba(32,25,16,0.14)) 100%);
+}
+
+.pet-area.fx-stage-reward {
+    animation: fxStageReward calc(var(--motion-base, 240ms) * 1.2) var(--ease-standard, ease) both;
+}
+
+.pet-area.fx-stage-settle > .pet-container {
+    animation: fxStageSettle calc(var(--motion-base, 240ms) * 1.1) var(--ease-standard, ease) both;
+}
+
+.pet-area.fx-glow::before {
+    animation: fxStageHalo calc(var(--motion-slow, 420ms) * 0.8) var(--ease-standard, ease) both;
+}
+
+.pet-area.fx-care-feed { --fx-care-flash: rgba(244, 183, 88, 0.2); }
+.pet-area.fx-care-wash { --fx-care-flash: rgba(122, 196, 221, 0.2); }
+.pet-area.fx-care-play { --fx-care-flash: rgba(121, 189, 130, 0.18); }
+.pet-area.fx-care-sleep { --fx-care-flash: rgba(163, 153, 231, 0.18); }
+.pet-area.fx-care-medicine { --fx-care-flash: rgba(119, 172, 208, 0.18); }
+.pet-area.fx-care-groom { --fx-care-flash: rgba(210, 160, 228, 0.18); }
+.pet-area.fx-care-exercise { --fx-care-flash: rgba(234, 151, 107, 0.18); }
+.pet-area.fx-care-treat { --fx-care-flash: rgba(228, 168, 109, 0.2); }
+.pet-area.fx-care-cuddle { --fx-care-flash: rgba(236, 145, 170, 0.2); }
+
+.pet-area[class*="fx-care-"]::before {
+    box-shadow: inset 0 0 0 999px var(--fx-care-flash, rgba(255,255,255,0));
+}
+
+/* Reward particles are rendered via the existing #sparkles layer */
+.pet-area > #sparkles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.pet-area > #sparkles::before,
+.pet-area > #sparkles::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.pet-area.fx-sparkle > #sparkles::before {
+    opacity: 1;
+    background:
+        radial-gradient(5px 5px at 26% 36%, rgba(255,255,255,0.75), transparent 70%),
+        radial-gradient(4px 4px at 62% 28%, rgba(255,255,255,0.68), transparent 70%),
+        radial-gradient(5px 5px at 72% 44%, rgba(255,255,255,0.72), transparent 70%),
+        radial-gradient(4px 4px at 41% 21%, rgba(255,255,255,0.6), transparent 70%);
+    animation: fxSparkleScatter calc(var(--motion-base, 240ms) * 1.8) var(--ease-enter, ease) both;
+}
+
+.pet-area.fx-confetti-lite > #sparkles::after {
+    opacity: 1;
+    background:
+        radial-gradient(4px 4px at 22% 40%, rgba(255, 212, 120, 0.85), transparent 70%),
+        radial-gradient(4px 4px at 38% 32%, rgba(255, 150, 170, 0.85), transparent 70%),
+        radial-gradient(4px 4px at 52% 35%, rgba(154, 203, 255, 0.85), transparent 70%),
+        radial-gradient(4px 4px at 68% 29%, rgba(160, 231, 184, 0.85), transparent 70%),
+        radial-gradient(4px 4px at 80% 38%, rgba(220, 175, 255, 0.85), transparent 70%);
+    animation: fxConfettiLite calc(var(--motion-slow, 420ms) * 1.1) var(--ease-enter, ease) both;
+}
+
+@keyframes fxStageInput {
+    0% { transform: translateY(0) scale(1); }
+    100% { transform: translateY(-1px) scale(1.01); }
+}
+
+@keyframes fxStageImpact {
+    0% { transform: translateY(0) scale(1); }
+    40% { transform: translateY(-5px) scale(1.035); }
+    100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes fxStageReward {
+    0% { filter: saturate(1); }
+    50% { filter: saturate(1.05); }
+    100% { filter: saturate(1); }
+}
+
+@keyframes fxStageSettle {
+    0% { transform: translateY(0) scale(1.006); }
+    100% { transform: translateY(0) scale(1); }
+}
+
+@keyframes fxStageHalo {
+    0% { opacity: 1; }
+    40% { opacity: 0.88; }
+    100% { opacity: 1; }
+}
+
+@keyframes fxSparkleScatter {
+    0% { opacity: 0; transform: scale(0.9); }
+    20% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0; transform: translateY(-10px) scale(1.04); }
+}
+
+@keyframes fxConfettiLite {
+    0% { opacity: 0; transform: translateY(-8px); }
+    18% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(18px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fx-pop,
+    .fx-glow,
+    .fx-sparkle,
+    .pet-area.fx-stage-input > .pet-container,
+    .pet-area.fx-stage-impact > .pet-container,
+    .pet-area.fx-stage-reward,
+    .pet-area.fx-stage-settle > .pet-container,
+    .pet-area.fx-glow::before,
+    .pet-area.fx-sparkle > #sparkles::before,
+    .pet-area.fx-confetti-lite > #sparkles::after {
+        animation: none !important;
+    }
+}
