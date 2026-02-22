@@ -18,7 +18,14 @@
                     obstacleBestScore: 0,
                     obstacleCompletions: 0,
                     rivalsDefeated: [],     // Array of defeated rival indices
-                    currentRivalIndex: 0    // Next rival to face
+                    currentRivalIndex: 0,   // Next rival to face
+                    rewardControl: {
+                        daily: { dayKey: '', earnedCoins: 0, lossConsolationCoins: 0, entryFeesPaid: 0, entriesUsed: 0 },
+                        perMode: {},
+                        bossFirstClearPaid: {},
+                        rivalFirstClearPaid: {},
+                        lastCapToastAt: 0
+                    }
                 };
             }
             const comp = gameState.competition;
@@ -45,7 +52,197 @@
             if (rivalCount > 0) {
                 comp.currentRivalIndex = Math.min(comp.currentRivalIndex, rivalCount);
             }
+            if (!comp.rewardControl || typeof comp.rewardControl !== 'object' || Array.isArray(comp.rewardControl)) {
+                comp.rewardControl = {
+                    daily: { dayKey: '', earnedCoins: 0, lossConsolationCoins: 0, entryFeesPaid: 0, entriesUsed: 0 },
+                    perMode: {},
+                    bossFirstClearPaid: {},
+                    rivalFirstClearPaid: {},
+                    lastCapToastAt: 0
+                };
+            }
+            if (!comp.rewardControl.daily || typeof comp.rewardControl.daily !== 'object') comp.rewardControl.daily = { dayKey: '', earnedCoins: 0, lossConsolationCoins: 0, entryFeesPaid: 0, entriesUsed: 0 };
+            if (typeof comp.rewardControl.daily.dayKey !== 'string') comp.rewardControl.daily.dayKey = '';
+            ['earnedCoins', 'lossConsolationCoins', 'entryFeesPaid', 'entriesUsed'].forEach((k) => {
+                if (!Number.isFinite(comp.rewardControl.daily[k])) comp.rewardControl.daily[k] = 0;
+                comp.rewardControl.daily[k] = Math.max(0, Math.floor(comp.rewardControl.daily[k]));
+            });
+            if (!comp.rewardControl.perMode || typeof comp.rewardControl.perMode !== 'object' || Array.isArray(comp.rewardControl.perMode)) comp.rewardControl.perMode = {};
+            Object.keys(comp.rewardControl.perMode).forEach((modeId) => {
+                const entry = comp.rewardControl.perMode[modeId];
+                if (!entry || typeof entry !== 'object') comp.rewardControl.perMode[modeId] = { lastAt: 0, repeatCount: 0 };
+                if (!Number.isFinite(comp.rewardControl.perMode[modeId].lastAt)) comp.rewardControl.perMode[modeId].lastAt = 0;
+                if (!Number.isFinite(comp.rewardControl.perMode[modeId].repeatCount)) comp.rewardControl.perMode[modeId].repeatCount = 0;
+            });
+            if (!comp.rewardControl.bossFirstClearPaid || typeof comp.rewardControl.bossFirstClearPaid !== 'object') comp.rewardControl.bossFirstClearPaid = {};
+            if (!comp.rewardControl.rivalFirstClearPaid || typeof comp.rewardControl.rivalFirstClearPaid !== 'object') comp.rewardControl.rivalFirstClearPaid = {};
+            if (!Number.isFinite(comp.rewardControl.lastCapToastAt)) comp.rewardControl.lastCapToastAt = 0;
             return comp;
+        }
+
+        function getCompetitionDayKey() {
+            return (typeof getTodayStringWithTimeHardening === 'function')
+                ? getTodayStringWithTimeHardening()
+                : ((typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().slice(0, 10));
+        }
+
+        function resetCompetitionDailyRewardControlIfNeeded(comp) {
+            const state = comp || initCompetitionState();
+            const rc = state.rewardControl;
+            const dayKey = getCompetitionDayKey();
+            if (rc.daily.dayKey !== dayKey) {
+                rc.daily.dayKey = dayKey;
+                rc.daily.earnedCoins = 0;
+                rc.daily.lossConsolationCoins = 0;
+                rc.daily.entryFeesPaid = 0;
+                rc.daily.entriesUsed = 0;
+                rc.perMode = {};
+                // Boss/rival first clear rewards remain persistent; repeats are still reduced after first claim.
+            }
+            return rc;
+        }
+
+        function maybeShowCompetitionDiminishingToast(comp, message) {
+            if (typeof showToast !== 'function') return;
+            const rc = (comp || initCompetitionState()).rewardControl;
+            const now = Date.now();
+            if ((now - (Number(rc.lastCapToastAt) || 0)) < 45000) return;
+            rc.lastCapToastAt = now;
+            showToast(message || 'Competition rewards are in diminishing returns mode.', '#90A4AE');
+        }
+
+        function chargeCompetitionEntryFee(modeId, options) {
+            const comp = initCompetitionState();
+            resetCompetitionDailyRewardControlIfNeeded(comp);
+            const rc = comp.rewardControl;
+            const rank = Number((options && options.rank) || getCompetitionProgressRank()) || 1;
+            const waiverRank = Math.max(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.earlyGameFeeWaiverRank) || 2));
+            if (rank <= waiverRank) return { ok: true, charged: 0, waived: true, reason: 'early-game-waiver' };
+
+            const freeEntriesPerDay = Math.max(0, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.freeEntriesPerDay) || 3));
+            const entryIndex = Math.max(0, Math.floor(rc.daily.entriesUsed || 0));
+            rc.daily.entriesUsed = entryIndex + 1;
+            if (entryIndex < freeEntriesPerDay) {
+                return { ok: true, charged: 0, freeEntry: true, remainingFree: Math.max(0, freeEntriesPerDay - rc.daily.entriesUsed) };
+            }
+
+            const modeMultTable = (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.entryFeeModeMultiplier) || {};
+            const modeMult = Number(modeMultTable[modeId]) || 1;
+            const baseFee = Math.max(0, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.entryFeeBase) || 6));
+            const rankStep = Math.max(0, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.entryFeeRankStep) || 2));
+            const fee = Math.max(1, Math.round((baseFee + Math.max(0, rank - waiverRank) * rankStep) * modeMult));
+            const spend = (typeof spendCoins === 'function') ? spendCoins(fee, 'Competition Entry Fee', true) : { ok: true, spent: 0 };
+            if (!spend.ok) {
+                rc.daily.entriesUsed = Math.max(0, rc.daily.entriesUsed - 1);
+                if (typeof showToast === 'function') showToast(`🎟️ Need ${fee} coins for competition entry.`, '#FFA726');
+                return { ok: false, reason: spend.reason || 'insufficient-funds', needed: fee, balance: spend.balance };
+            }
+            rc.daily.entryFeesPaid = Math.max(0, Math.floor(rc.daily.entryFeesPaid || 0)) + fee;
+            if (typeof showToast === 'function') showToast(`🎟️ Competition entry fee: ${fee} coins.`, '#90A4AE');
+            return { ok: true, charged: fee };
+        }
+
+        function awardCompetitionCoins(baseCoins, context) {
+            const comp = initCompetitionState();
+            resetCompetitionDailyRewardControlIfNeeded(comp);
+            const rc = comp.rewardControl;
+            const daily = rc.daily;
+            const ctx = context && typeof context === 'object' ? context : {};
+            const modeId = String(ctx.modeId || 'battle');
+            const outcome = ctx.outcome === 'loss' ? 'loss' : 'win';
+            const now = Date.now();
+            if (!rc.perMode[modeId] || typeof rc.perMode[modeId] !== 'object') rc.perMode[modeId] = { lastAt: 0, repeatCount: 0 };
+            const modeTrack = rc.perMode[modeId];
+
+            let coins = Math.max(0, Math.floor(Number(baseCoins) || 0));
+            if (coins <= 0) return { coins: 0, baseCoins: 0, credited: 0, multipliers: [], applied: false };
+
+            const appliedMultipliers = [];
+            const repeatWindowMs = Math.max(15000, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.repeatWindowMs) || (15 * 60 * 1000)));
+            const repeatResetMs = Math.max(repeatWindowMs, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.repeatCountResetMs) || (25 * 60 * 1000)));
+            const sinceLast = now - (Number(modeTrack.lastAt) || 0);
+            if (sinceLast <= repeatWindowMs) {
+                modeTrack.repeatCount = Math.max(0, Math.floor(modeTrack.repeatCount || 0)) + 1;
+            } else if (sinceLast > repeatResetMs) {
+                modeTrack.repeatCount = 0;
+            }
+            modeTrack.lastAt = now;
+
+            if (modeTrack.repeatCount > 0) {
+                const penaltyPer = Math.max(0, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.repeatPenaltyPerStack) || 0.18));
+                const repeatMin = Math.max(0.1, Math.min(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.repeatMinMultiplier) || 0.35)));
+                const repeatMult = Math.max(repeatMin, 1 - (modeTrack.repeatCount * penaltyPer));
+                coins = Math.max(1, Math.round(coins * repeatMult));
+                appliedMultipliers.push({ key: 'repeat', mult: repeatMult, repeatCount: modeTrack.repeatCount });
+            }
+
+            if (outcome === 'loss' && modeId === 'battle') {
+                const consolationCap = Math.max(0, Math.floor(Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.battleLossConsolationDailyCap) || 12)));
+                const remainingConsolation = Math.max(0, consolationCap - Math.max(0, Math.floor(daily.lossConsolationCoins || 0)));
+                if (remainingConsolation <= 0) {
+                    coins = 0;
+                    appliedMultipliers.push({ key: 'lossConsolationCap', mult: 0 });
+                } else if (coins > remainingConsolation) {
+                    const mult = remainingConsolation / coins;
+                    coins = remainingConsolation;
+                    appliedMultipliers.push({ key: 'lossConsolationCap', mult });
+                }
+                daily.lossConsolationCoins += coins;
+            }
+
+            if (outcome === 'win' && modeId === 'boss' && ctx.targetId) {
+                const key = String(ctx.targetId);
+                const firstPaid = !!rc.bossFirstClearPaid[key];
+                if (firstPaid) {
+                    const mult = Math.max(0, Math.min(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.bossRepeatCoinMultiplier) || 0.2)));
+                    coins = Math.max(0, Math.round(coins * mult));
+                    appliedMultipliers.push({ key: 'bossRepeat', mult });
+                } else {
+                    rc.bossFirstClearPaid[key] = true;
+                }
+            }
+
+            if (outcome === 'win' && modeId === 'rival' && Number.isFinite(ctx.targetId)) {
+                const key = String(ctx.targetId);
+                const firstPaid = !!rc.rivalFirstClearPaid[key];
+                if (firstPaid) {
+                    const mult = Math.max(0, Math.min(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.rivalRepeatCoinMultiplier) || 0.35)));
+                    coins = Math.max(0, Math.round(coins * mult));
+                    appliedMultipliers.push({ key: 'rivalRepeat', mult });
+                } else {
+                    rc.rivalFirstClearPaid[key] = true;
+                }
+            }
+
+            const dailySoftCap = Math.max(10, Math.floor(Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.dailySoftCapCoins) || 220)));
+            const overCap = Math.max(0, (daily.earnedCoins || 0) - dailySoftCap);
+            if (overCap > 0 && coins > 0) {
+                const falloff = Math.max(0.0001, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.dailySoftCapFalloffPerCoin) || 0.0075));
+                const minMult = Math.max(0.05, Math.min(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.dailySoftCapMinMultiplier) || 0.15)));
+                const capMult = Math.max(minMult, 1 / (1 + (overCap * falloff)));
+                coins = Math.max(1, Math.round(coins * capMult));
+                appliedMultipliers.push({ key: 'dailySoftCap', mult: capMult, overCap });
+            }
+
+            const credited = (coins > 0 && typeof addCoins === 'function')
+                ? addCoins(coins, ctx.reason || 'Competition Reward', true)
+                : 0;
+            daily.earnedCoins = Math.max(0, Math.floor(daily.earnedCoins || 0)) + Math.max(0, credited);
+
+            const reduced = credited < Math.max(0, Math.floor(Number(baseCoins) || 0));
+            if (reduced) {
+                maybeShowCompetitionDiminishingToast(comp, 'Competition rewards are reduced by diminishing returns right now.');
+            }
+
+            balanceDebugLog('CompetitionAwardCoins', {
+                modeId,
+                outcome,
+                baseCoins,
+                credited,
+                appliedMultipliers,
+                dailyEarned: daily.earnedCoins
+            });
+            return { coins: credited, baseCoins, credited, multipliers: appliedMultipliers, applied: true };
         }
 
         // ==================== BATTLE SYSTEM ====================
@@ -121,12 +318,15 @@
             const coins = Math.max(1, Math.round((Math.max(0, Number(baseCoins) || 0) + rankBonus) * diffBonus * ecoMult * prestigeCompMult));
 
             let loot = null;
-            const lootChance = Math.max(0, Math.min(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.victoryLootDropChance) || 0.18)));
+            const suspiciousLootPenalty = (typeof isSuspiciousEconomyState === 'function' && isSuspiciousEconomyState())
+                ? (typeof getSuspiciousRewardMultiplier === 'function' ? getSuspiciousRewardMultiplier() : 0.12)
+                : 1;
+            const lootChance = Math.max(0, Math.min(1, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.victoryLootDropChance) || 0.18) * suspiciousLootPenalty));
             if (typeof addLootToInventory === 'function' && Math.random() < lootChance) {
                 const pool = modeId === 'boss' ? ['runeFragment', 'mysteryMap', 'stardust'] : ['ancientCoin', 'forestCharm', 'windCompass'];
                 const lootId = pool[Math.floor(Math.random() * pool.length)];
                 if (lootId) {
-                    addLootToInventory(lootId, 1);
+                    addLootToInventory(lootId, 1, { source: 'competition', createdAt: Date.now() });
                     loot = EXPLORATION_LOOT[lootId] || null;
                 }
             }
@@ -206,6 +406,8 @@
             }
 
             const comp = initCompetitionState();
+            const battleEntry = chargeCompetitionEntryFee('battle');
+            if (!battleEntry.ok) return;
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay competition-overlay';
             overlay.setAttribute('role', 'dialog');
@@ -419,7 +621,11 @@
                     const happyGain = Math.max(8, Math.round(11 * rewardMult * (1 + masteryBattleBonus)));
                     // Report #5: Battle wins now pay economy rewards.
                     victoryRewards = buildCompetitionVictoryRewards('battle', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.battleWinBaseCoins) || 14, battleDifficulty, true);
-                    if (victoryRewards.coins > 0 && typeof addCoins === 'function') addCoins(victoryRewards.coins, 'Competition Victory', true);
+                    if (victoryRewards.coins > 0) {
+                        const award = awardCompetitionCoins(victoryRewards.coins, { modeId: 'battle', outcome: 'win', reason: 'Competition Victory' });
+                        victoryRewards.coins = award.coins || 0;
+                        victoryRewards.summary = [`🪙 ${victoryRewards.coins} coins`].concat(victoryRewards.loot ? [`${victoryRewards.loot.emoji} ${victoryRewards.loot.name}`] : []);
+                    }
                     pet.happiness = clamp(pet.happiness + happyGain, 0, 100);
                     pet.careActions = (pet.careActions || 0) + 1;
                     if (typeof addJournalEntry === 'function') {
@@ -435,9 +641,9 @@
                 } else {
                     comp.battlesLost++;
                     const consolationCoins = Math.max(0, Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.battleLoseConsolationCoins) || 0));
-                    if (consolationCoins > 0 && typeof addCoins === 'function') {
-                        addCoins(consolationCoins, 'Competition Consolation', true);
-                        victoryRewards = { coins: consolationCoins, summary: [`🪙 ${consolationCoins} consolation coins`] };
+                    if (consolationCoins > 0) {
+                        const award = awardCompetitionCoins(consolationCoins, { modeId: 'battle', outcome: 'loss', reason: 'Competition Consolation' });
+                        victoryRewards = { coins: award.coins || 0, summary: [`🪙 ${(award.coins || 0)} consolation coins`] };
                     }
                     setTimeout(() => {
                         showToast(consolationCoins > 0 ? `⚔️ Defeat. Consolation +${consolationCoins}🪙.` : '⚔️ Defeat. No rewards this time.', '#64B5F6');
@@ -575,6 +781,8 @@
             }
 
             function startBossFight(bossId) {
+                const bossEntry = chargeCompetitionEntryFee('boss');
+                if (!bossEntry.ok) return;
                 const boss = BOSS_ENCOUNTERS[bossId];
                 if (!boss) return;
 
@@ -747,7 +955,11 @@
                         comp.bossesDefeated[bossId] = { defeated: true, defeatedAt: Date.now() };
                         // Report #5: Boss wins now have an economy payout lane.
                         victoryRewards = buildCompetitionVictoryRewards('boss', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.bossWinBaseCoins) || 40, bossDifficulty, true);
-                        if (victoryRewards.coins > 0 && typeof addCoins === 'function') addCoins(victoryRewards.coins, 'Boss Victory', true);
+                        if (victoryRewards.coins > 0) {
+                            const award = awardCompetitionCoins(victoryRewards.coins, { modeId: 'boss', outcome: 'win', targetId: bossId, reason: 'Boss Victory' });
+                            victoryRewards.coins = award.coins || 0;
+                            victoryRewards.summary = [`🪙 ${victoryRewards.coins} coins`].concat(victoryRewards.loot ? [`${victoryRewards.loot.emoji} ${victoryRewards.loot.name}`] : []);
+                        }
                         // Apply rewards only to alive pets (skip fainted ones)
                         const rewards = boss.rewards;
                         allPets.forEach((p, idx) => {
@@ -905,6 +1117,8 @@
             }
 
             const comp = initCompetitionState();
+            const obstacleEntry = chargeCompetitionEntryFee('obstacle');
+            if (!obstacleEntry.ok) return;
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay competition-overlay';
             overlay.setAttribute('role', 'dialog');
@@ -922,6 +1136,8 @@
             const cooldownRemainingMinutes = Math.ceil(cooldownRemainingMs / 60000);
             let showRewards = { coins: 0, summary: [] };
             if (!onCooldown) {
+                const showEntry = chargeCompetitionEntryFee('show');
+                if (!showEntry.ok) return;
                 comp.showsEntered++;
                 if (result.totalScore > comp.bestShowScore) {
                     comp.bestShowScore = result.totalScore;
@@ -936,7 +1152,11 @@
                 const showGain = Math.max(6, Math.round(8 * showRewardMult));
                 // Report #5: Pet show now includes economy rewards.
                 showRewards = buildCompetitionVictoryRewards('show', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.showBaseCoins) || 18, showDifficulty, true);
-                if (showRewards.coins > 0 && typeof addCoins === 'function') addCoins(showRewards.coins, 'Pet Show Rewards', true);
+                if (showRewards.coins > 0) {
+                    const award = awardCompetitionCoins(showRewards.coins, { modeId: 'show', outcome: 'win', reason: 'Pet Show Rewards' });
+                    showRewards.coins = award.coins || 0;
+                    showRewards.summary = [`🪙 ${showRewards.coins} coins`].concat(showRewards.loot ? [`${showRewards.loot.emoji} ${showRewards.loot.name}`] : []);
+                }
                 pet.happiness = clamp(pet.happiness + showGain, 0, 100);
                 pet.careActions = (pet.careActions || 0) + 1;
                 comp.lastShowTime = now;
@@ -1158,7 +1378,11 @@
                 const obstacleGain = Math.max(6, Math.round(9 * obstacleRewardMult));
                 // Report #5: Obstacle completion now contributes to economy progression.
                 const obstacleRewards = buildCompetitionVictoryRewards('obstacle', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.obstacleBaseCoins) || 16, obstacleDifficulty, true);
-                if (obstacleRewards.coins > 0 && typeof addCoins === 'function') addCoins(obstacleRewards.coins, 'Obstacle Rewards', true);
+                if (obstacleRewards.coins > 0) {
+                    const award = awardCompetitionCoins(obstacleRewards.coins, { modeId: 'obstacle', outcome: 'win', reason: 'Obstacle Rewards' });
+                    obstacleRewards.coins = award.coins || 0;
+                    obstacleRewards.summary = [`🪙 ${obstacleRewards.coins} coins`].concat(obstacleRewards.loot ? [`${obstacleRewards.loot.emoji} ${obstacleRewards.loot.name}`] : []);
+                }
                 pet.happiness = clamp(pet.happiness + obstacleGain, 0, 100);
                 pet.careActions = (pet.careActions || 0) + 1;
                 if (typeof incrementDailyProgress === 'function') {
@@ -1286,6 +1510,8 @@
             }
 
             function startRivalBattle(rivalIdx) {
+                const rivalEntry = chargeCompetitionEntryFee('rival');
+                if (!rivalEntry.ok) return;
                 const trainer = RIVAL_TRAINERS[rivalIdx];
                 if (!trainer) return;
 
@@ -1446,7 +1672,11 @@
                         const happyGain = Math.max(8, Math.round((8 + trainer.difficulty * 1.8) * rewardMult));
                         // Report #5: Rival victories now award coins and possible tradable loot.
                         rivalRewards = buildCompetitionVictoryRewards('rival', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.rivalWinBaseCoins) || 22, rivalDifficulty, true);
-                        if (rivalRewards.coins > 0 && typeof addCoins === 'function') addCoins(rivalRewards.coins, 'Rival Victory', true);
+                        if (rivalRewards.coins > 0) {
+                            const award = awardCompetitionCoins(rivalRewards.coins, { modeId: 'rival', outcome: 'win', targetId: rivalIdx, reason: 'Rival Victory' });
+                            rivalRewards.coins = award.coins || 0;
+                            rivalRewards.summary = [`🪙 ${rivalRewards.coins} coins`].concat(rivalRewards.loot ? [`${rivalRewards.loot.emoji} ${rivalRewards.loot.name}`] : []);
+                        }
                         pet.happiness = clamp(pet.happiness + happyGain, 0, 100);
                         pet.careActions = (pet.careActions || 0) + 1;
                         setTimeout(() => {
@@ -1538,12 +1768,15 @@
             const totalBosses = Object.keys(BOSS_ENCOUNTERS).length;
             const mastery = typeof refreshMasteryTracks === 'function' ? refreshMasteryTracks() : (gameState.mastery || null);
             const compMastery = mastery && mastery.competitionSeason ? mastery.competitionSeason : { rank: 1, title: 'Bronze Circuit' };
+            const rc = (comp.rewardControl && comp.rewardControl.daily) ? comp.rewardControl.daily : { earnedCoins: 0, entriesUsed: 0 };
+            const compSoftCap = Math.max(10, Math.floor(Number((COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.dailySoftCapCoins) || 220)));
 
             overlay.innerHTML = `
                 <div class="modal-content competition-modal hub-modal">
                     <button class="competition-close-btn" id="hub-close" aria-label="Close">&times;</button>
                     <h2 class="competition-title"><span aria-hidden="true">🏟️</span> Competition Hub</h2>
                     <p class="competition-subtitle">${seasonData.icon} ${seasonData.name} Season · Rank ${compMastery.rank} ${compMastery.title}</p>
+                    <p class="competition-subtitle" style="font-size:0.82rem;opacity:0.9;">${Math.max(0, rc.entriesUsed || 0)} entries today · ${Math.max(0, rc.earnedCoins || 0)}/${compSoftCap} coin soft cap · Repeat runs pay less for a while.</p>
                     <div class="hub-menu">
                         <button class="hub-option" id="hub-battle">
                             <span class="hub-option-emoji">⚔️</span>
@@ -1608,3 +1841,47 @@
             trapFocus(overlay);
             announce('Competition hub opened!');
         }
+
+        (function installCompetitionEconomyDebugHook() {
+            if (typeof window === 'undefined') return;
+            if (!window.__debugEconomy || typeof window.__debugEconomy !== 'object') window.__debugEconomy = {};
+            window.__debugEconomy.testCompetitionCaps = function testCompetitionCaps() {
+                try {
+                    const comp = initCompetitionState();
+                    const eco = (typeof ensureEconomyState === 'function') ? ensureEconomyState() : (gameState.economy || {});
+                    const beforeCoins = Number(eco.coins || 0);
+                    const snapshot = JSON.parse(JSON.stringify(comp.rewardControl || {}));
+                    comp.rewardControl = {
+                        daily: { dayKey: getCompetitionDayKey(), earnedCoins: 0, lossConsolationCoins: 0, entryFeesPaid: 0, entriesUsed: 0 },
+                        perMode: {},
+                        bossFirstClearPaid: {},
+                        rivalFirstClearPaid: {},
+                        lastCapToastAt: 0
+                    };
+                    const runs = [];
+                    for (let i = 0; i < 8; i++) {
+                        const result = awardCompetitionCoins(30, { modeId: 'battle', outcome: 'win', reason: 'Debug Competition' });
+                        runs.push({ run: i + 1, coins: result.coins, multipliers: result.multipliers || [] });
+                    }
+                    const lossRuns = [];
+                    for (let i = 0; i < 6; i++) {
+                        const result = awardCompetitionCoins(4, { modeId: 'battle', outcome: 'loss', reason: 'Debug Consolation' });
+                        lossRuns.push({ run: i + 1, coins: result.coins, multipliers: result.multipliers || [] });
+                    }
+                    const afterCoins = Number(eco.coins || 0);
+                    eco.coins = beforeCoins; // restore test side effects
+                    if (comp.rewardControl) comp.rewardControl = snapshot;
+                    const output = {
+                        ok: true,
+                        battleRuns: runs,
+                        lossRuns: lossRuns,
+                        totalAwarded: Math.max(0, afterCoins - beforeCoins)
+                    };
+                    console.log('[DEBUG_ECONOMY] testCompetitionCaps', output);
+                    return output;
+                } catch (e) {
+                    console.error('[DEBUG_ECONOMY] testCompetitionCaps failed', e);
+                    return { ok: false, error: String(e && e.message || e) };
+                }
+            };
+        }());

@@ -86,7 +86,7 @@ function getStageBalance(stage) {
 // ==================== GAMEPLAY TUNING PROFILES ====================
 // Report #10: Runtime-selectable balance profile with player-safe default.
 const BALANCE_DEBUG = false;
-const BALANCE_PROFILE_STORAGE_KEY = (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.balanceProfile) ? STORAGE_KEYS.balanceProfile : 'petCareBuddy_balanceProfile';
+const BALANCE_PROFILE_STORAGE_KEY = (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.balanceProfile) ? STORAGE_KEYS.balanceProfile : 'myLittleFriend_balanceProfile';
 const ACTIVE_GAMEPLAY_TUNING_PROFILE = 'NORMAL';
 
 function balanceDebugLog(topic, payload) {
@@ -1437,6 +1437,7 @@ const EXPEDITION_BALANCE = {
 };
 
 const MINIGAME_BALANCE = {
+    // Active source of truth for mini-game rewards/caps. (ECONOMY_BALANCE minigame cap knobs are deprecated.)
     // Report #3/#4: Soft cap and skill/streak reward scaling.
     perRunCapBase: 94,
     perRunCapByStage: { baby: 90, child: 96, adult: 104, elder: 112 },
@@ -1463,7 +1464,70 @@ const COMPETITION_ECONOMY_BALANCE = {
     rankStepCoins: 4,
     difficultyCoinScale: 0.24,
     maxCoinMultiplier: 2.4,
-    victoryLootDropChance: 0.18
+    victoryLootDropChance: 0.18,
+    // Exploit hardening: competition reward controls (shared cap + repeat DR + repeat clear reductions).
+    dailySoftCapCoins: 220,
+    dailySoftCapFalloffPerCoin: 0.0075,
+    dailySoftCapMinMultiplier: 0.15,
+    repeatWindowMs: 15 * 60 * 1000,
+    repeatPenaltyPerStack: 0.18,
+    repeatMinMultiplier: 0.35,
+    repeatCountResetMs: 25 * 60 * 1000,
+    bossRepeatCoinMultiplier: 0.2,
+    rivalRepeatCoinMultiplier: 0.35,
+    battleLossConsolationDailyCap: 12,
+    earlyGameFeeWaiverRank: 2,
+    freeEntriesPerDay: 3,
+    entryFeeBase: 6,
+    entryFeeRankStep: 2,
+    entryFeeModeMultiplier: {
+        battle: 1.0,
+        show: 1.0,
+        obstacle: 1.1,
+        rival: 1.25,
+        boss: 1.8
+    }
+};
+
+// Active economy hardening knobs (source of truth for exploit controls / sinks / local integrity checks).
+// Tuning guidance:
+// - Raise minute/session caps slowly; lowering too far will make legitimate bursts feel bad.
+// - Time thresholds should tolerate device sleep/backgrounding but catch obvious clock edits.
+// - Wealth pressure should be small early and noticeable only for hoarded late-game value.
+const ECONOMY_HARDENING_BALANCE = {
+    saveSchemaVersion: 3,
+    tamperPenaltyMultiplier: 0.12,
+    suspiciousAuctionLock: true,
+    coinGainRateLimit: {
+        minuteSoftCap: 1400,
+        minuteFalloffPerCoin: 0.01,
+        minuteMinMultiplier: 0.08,
+        sessionSoftCap: 18000,
+        sessionFalloffPerCoin: 0.0015,
+        sessionMinMultiplier: 0.2
+    },
+    timeHardening: {
+        backwardJumpThresholdMs: 2 * 60 * 1000,
+        forwardJumpThresholdMs: 4 * 60 * 60 * 1000,
+        stabilizationWindowMs: 10 * 60 * 1000,
+        maxGardenOfflineAdvanceMs: 8 * 60 * 60 * 1000,
+        maxNeedsOfflineAdvanceMs: 12 * 60 * 60 * 1000,
+        maxExpeditionForwardGrantMs: 20 * 60 * 1000
+    },
+    wealthPressure: {
+        enabled: true,
+        protectedWealth: 1600,
+        tradableValueWeight: 0.35,
+        dailyRate: 0.0035,
+        minFee: 2,
+        debtResalePenaltyPer100Coins: 0.03,
+        debtResalePenaltyMax: 0.35
+    },
+    auction: {
+        relistWindowMs: 3 * 24 * 60 * 60 * 1000,
+        relistFeeStepRate: 0.02,
+        relistFeeMaxExtraRate: 0.12
+    }
 };
 
 const DUNGEON_ROOM_TYPES = [
@@ -1917,8 +1981,9 @@ const ECONOMY_BALANCE = {
     harvestRewardMultiplier: 0.82,
     competitionCoinRewardMultiplier: 0.9, // Report #5
     dailyCompletionReward: 70,
+    // Deprecated: mini-game caps now come from MINIGAME_BALANCE (soft cap system). Kept for save/backward compatibility.
     minigameRewardCap: 94,
-    // Rec 1: Daily minigame earning cap to prevent unlimited grinding
+    // Deprecated: live mini-game daily soft cap uses MINIGAME_BALANCE.dailySoftCap* knobs.
     dailyMinigameEarningsCap: 350,
     // Rec 3: Auction transaction tax (percentage taken from sale proceeds)
     auctionTransactionTaxRate: 0.08,
@@ -1941,6 +2006,13 @@ const ECONOMY_BALANCE = {
     coinDecayEngagedReduction: 0.65,
     coinDecayDailyCompleteReduction: 0.4,
     coinDecayMinTax: 1,
+    // Wealth pressure/storage fee (soft commodity tax; no item deletion)
+    wealthPressureThreshold: 1600,
+    wealthPressureTradableWeight: 0.35,
+    wealthPressureRate: 0.0035,
+    wealthPressureMinFee: 2,
+    wealthPressureDebtResalePenaltyPer100Coins: 0.03,
+    wealthPressureDebtResalePenaltyMax: 0.35,
     // Retention: Optional streak freeze token sink
     streakFreezeTokenCost: 120
 };
@@ -2965,7 +3037,7 @@ const BADGE_CATEGORIES = {
 // ==================== STICKER COLLECTION ====================
 
 const STICKERS = {
-    // Animal stickers - earned through pet care
+    // Animal stickers - earned through caring actions
     happyPup: { id: 'happyPup', name: 'Happy Pup', emoji: '🐶', category: 'animals', rarity: 'common', source: 'Feed a dog pet' },
     sleepyKitty: { id: 'sleepyKitty', name: 'Sleepy Kitty', emoji: '😸', category: 'animals', rarity: 'common', source: 'Pet a cat' },
     bouncyBunny: { id: 'bouncyBunny', name: 'Bouncy Bunny', emoji: '🐇', category: 'animals', rarity: 'common', source: 'Play with a bunny' },
@@ -4655,7 +4727,7 @@ const ROOM_MEMORY_THRESHOLDS = {
     bathroom: {
         stat: 'washCount',
         thresholds: [
-            { count: 8, emoji: '🧴', label: 'Bath Buddy', description: '{name}\'s favorite bath toy sits on the edge of the tub, always ready.' },
+            { count: 8, emoji: '🧴', label: 'Bath Friend', description: '{name}\'s favorite bath toy sits on the edge of the tub, always ready.' },
             { count: 20, emoji: '🫧', label: 'Splash Zone', description: 'Water marks on the wall from {name}\'s enthusiastic bath times. Memories in every splash.' }
         ]
     },
@@ -6146,7 +6218,7 @@ const PET_COMMENTARY = {
         energetic: [
             '{speaker} and {target} chase each other in joyful circles!',
             '{speaker} challenges {target} to a race! "Ready set GO!"',
-            '{speaker} bounces: "{target}! You\'re the BEST adventure buddy!"'
+            '{speaker} bounces: "{target}! You\'re the BEST adventure friend!"'
         ],
         curious: [
             '{speaker} and {target} investigate a sound together. Teamwork!',

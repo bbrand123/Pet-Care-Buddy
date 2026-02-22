@@ -9,6 +9,343 @@
             return 'pid_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
         }
 
+        const SAVE_SCHEMA_VERSION = (typeof ECONOMY_HARDENING_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_HARDENING_BALANCE.saveSchemaVersion))
+            ? Math.max(1, Math.floor(ECONOMY_HARDENING_BALANCE.saveSchemaVersion))
+            : 3;
+        const SAVE_INTEGRITY_PEPPER = 'mlf_local_econ_pepper_v1'; // TODO: Server authority required for real anti-cheat.
+        let _sessionCoinGainTotal = 0;
+        let _lastEconomyRateLimitToastAt = 0;
+        let _lastSuspiciousToastAt = 0;
+        let _lastTimeJumpToastAt = 0;
+        let _timeSessionPerfAnchor = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : null;
+        let _timeSessionWallAnchor = Date.now();
+
+        function getHardeningCfg(path, fallback) {
+            const root = (typeof ECONOMY_HARDENING_BALANCE !== 'undefined' && ECONOMY_HARDENING_BALANCE) || null;
+            if (!root || !path) return fallback;
+            const parts = String(path).split('.');
+            let cur = root;
+            for (let i = 0; i < parts.length; i++) {
+                if (!cur || typeof cur !== 'object') return fallback;
+                cur = cur[parts[i]];
+            }
+            return cur == null ? fallback : cur;
+        }
+
+        function createDefaultSecurityState() {
+            return {
+                suspicious: false,
+                suspiciousReason: '',
+                integrityMismatchCount: 0,
+                lastIntegrityCheckAt: 0,
+                lastIntegrityHash: '',
+                coinGainMinute: { windowStart: 0, earned: 0 },
+                coinGainSession: { earned: 0 },
+                lastWarningAt: 0
+            };
+        }
+
+        function ensureSecurityState(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            if (!state.security || typeof state.security !== 'object' || Array.isArray(state.security)) {
+                state.security = createDefaultSecurityState();
+            }
+            const sec = state.security;
+            if (typeof sec.suspicious !== 'boolean') sec.suspicious = false;
+            if (typeof sec.suspiciousReason !== 'string') sec.suspiciousReason = '';
+            if (!Number.isFinite(sec.integrityMismatchCount)) sec.integrityMismatchCount = 0;
+            if (!Number.isFinite(sec.lastIntegrityCheckAt)) sec.lastIntegrityCheckAt = 0;
+            if (typeof sec.lastIntegrityHash !== 'string') sec.lastIntegrityHash = '';
+            if (!sec.coinGainMinute || typeof sec.coinGainMinute !== 'object') sec.coinGainMinute = { windowStart: 0, earned: 0 };
+            if (!Number.isFinite(sec.coinGainMinute.windowStart)) sec.coinGainMinute.windowStart = 0;
+            if (!Number.isFinite(sec.coinGainMinute.earned)) sec.coinGainMinute.earned = 0;
+            if (!sec.coinGainSession || typeof sec.coinGainSession !== 'object') sec.coinGainSession = { earned: 0 };
+            if (!Number.isFinite(sec.coinGainSession.earned)) sec.coinGainSession.earned = 0;
+            if (!Number.isFinite(sec.lastWarningAt)) sec.lastWarningAt = 0;
+            return sec;
+        }
+
+        function createDefaultTimeHardeningState() {
+            return {
+                lastSeenWallClock: 0,
+                lastSeenPerf: 0,
+                lastSeenSessionWallClock: 0,
+                jumpDetectedAt: 0,
+                jumpWallDeltaMs: 0,
+                jumpPerfDriftMs: 0,
+                stabilizeUntil: 0,
+                lastNotifiedAt: 0,
+                suppressedDailyResetUntil: 0,
+                lastHandledJumpAt: 0
+            };
+        }
+
+        function ensureTimeHardeningState(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            if (!state.timeHardening || typeof state.timeHardening !== 'object' || Array.isArray(state.timeHardening)) {
+                state.timeHardening = createDefaultTimeHardeningState();
+            }
+            const t = state.timeHardening;
+            Object.keys(createDefaultTimeHardeningState()).forEach((key) => {
+                if (!Number.isFinite(t[key])) t[key] = 0;
+            });
+            return t;
+        }
+
+        function showHardeningToast(type, message, color) {
+            const now = Date.now();
+            if (type === 'time') {
+                if ((now - _lastTimeJumpToastAt) < 45000) return;
+                _lastTimeJumpToastAt = now;
+            } else if (type === 'suspicious') {
+                if ((now - _lastSuspiciousToastAt) < 45000) return;
+                _lastSuspiciousToastAt = now;
+            } else if (type === 'rate-limit') {
+                if ((now - _lastEconomyRateLimitToastAt) < 30000) return;
+                _lastEconomyRateLimitToastAt = now;
+            }
+            if (typeof showToast === 'function') showToast(message, color || '#FFA726');
+            if (typeof announce === 'function') announce(message, true);
+        }
+
+        function isTimeStabilizationActive(targetState, nowMs) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const timeState = ensureTimeHardeningState(state);
+            const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+            return Number.isFinite(timeState.stabilizeUntil) && timeState.stabilizeUntil > now;
+        }
+
+        function checkAndRecordTimeJump(targetState, label, opts) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const timeState = ensureTimeHardeningState(state);
+            const cfg = getHardeningCfg('timeHardening', {}) || {};
+            const now = Number.isFinite(opts && opts.now) ? opts.now : Date.now();
+            const perfNow = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : 0;
+            const backwardThreshold = Math.max(30000, Number(cfg.backwardJumpThresholdMs) || (2 * 60 * 1000));
+            const forwardThreshold = Math.max(30000, Number(cfg.forwardJumpThresholdMs) || (4 * 60 * 60 * 1000));
+            const stabilizationWindowMs = Math.max(60000, Number(cfg.stabilizationWindowMs) || (10 * 60 * 1000));
+
+            let detected = false;
+            let wallDelta = 0;
+            let perfDrift = 0;
+
+            if (Number.isFinite(timeState.lastSeenWallClock) && timeState.lastSeenWallClock > 0) {
+                wallDelta = now - timeState.lastSeenWallClock;
+                if (wallDelta < -backwardThreshold || wallDelta > forwardThreshold) {
+                    detected = true;
+                }
+            }
+
+            if (!detected && Number.isFinite(_timeSessionPerfAnchor) && Number.isFinite(_timeSessionWallAnchor) && perfNow > 0) {
+                const expectedWall = _timeSessionWallAnchor + (perfNow - _timeSessionPerfAnchor);
+                perfDrift = now - expectedWall;
+                const perfThreshold = Math.max(backwardThreshold, Math.min(forwardThreshold, 3 * 60 * 1000));
+                if (Math.abs(perfDrift) > perfThreshold) {
+                    detected = true;
+                }
+            }
+
+            if (detected) {
+                timeState.jumpDetectedAt = now;
+                timeState.jumpWallDeltaMs = wallDelta;
+                timeState.jumpPerfDriftMs = perfDrift;
+                timeState.stabilizeUntil = now + stabilizationWindowMs;
+                timeState.suppressedDailyResetUntil = Math.max(timeState.suppressedDailyResetUntil || 0, now + stabilizationWindowMs);
+                timeState.lastHandledJumpAt = now;
+                showHardeningToast('time', 'Time changed; progression is temporarily paused/clamped for fairness.', '#FFA726');
+                balanceDebugLog('TimeJumpDetected', { label: label || 'unknown', wallDelta, perfDrift, stabilizeUntil: timeState.stabilizeUntil });
+                // Reset session anchors after a detected jump so repeated checks do not re-fire.
+                _timeSessionPerfAnchor = perfNow > 0 ? perfNow : null;
+                _timeSessionWallAnchor = now;
+            } else if (perfNow > 0 && (!Number.isFinite(_timeSessionPerfAnchor) || _timeSessionPerfAnchor === null)) {
+                _timeSessionPerfAnchor = perfNow;
+                _timeSessionWallAnchor = now;
+            }
+
+            timeState.lastSeenWallClock = now;
+            if (perfNow > 0) timeState.lastSeenPerf = perfNow;
+            timeState.lastSeenSessionWallClock = now;
+            return { detected, wallDeltaMs: wallDelta, perfDriftMs: perfDrift, stabilizationActive: isTimeStabilizationActive(state, now) };
+        }
+
+        function clampElapsedForHardening(elapsedMs, channel) {
+            const cfg = getHardeningCfg('timeHardening', {}) || {};
+            const elapsed = Math.max(0, Number(elapsedMs) || 0);
+            if (channel === 'garden') {
+                const cap = Math.max(5 * 60 * 1000, Number(cfg.maxGardenOfflineAdvanceMs) || (8 * 60 * 60 * 1000));
+                return Math.min(elapsed, cap);
+            }
+            if (channel === 'needs') {
+                const cap = Math.max(10 * 60 * 1000, Number(cfg.maxNeedsOfflineAdvanceMs) || (12 * 60 * 60 * 1000));
+                return Math.min(elapsed, cap);
+            }
+            if (channel === 'expedition') {
+                const cap = Math.max(60 * 1000, Number(cfg.maxExpeditionForwardGrantMs) || (20 * 60 * 1000));
+                return Math.min(elapsed, cap);
+            }
+            return elapsed;
+        }
+
+        function getIntegrityCriticalSnapshot(stateObj) {
+            const state = (stateObj && typeof stateObj === 'object') ? stateObj : gameState;
+            const eco = (state.economy && typeof state.economy === 'object') ? state.economy : {};
+            const ex = (state.exploration && typeof state.exploration === 'object') ? state.exploration : {};
+            let auctionHash = '';
+            try {
+                auctionHash = String(hashStringToUint(JSON.stringify(loadAuctionHouseData())));
+            } catch (e) {}
+            return {
+                saveVersion: Math.max(1, Math.floor(Number(state.saveVersion) || 1)),
+                coins: Math.max(0, Math.floor(Number(eco.coins) || 0)),
+                inventory: eco.inventory || {},
+                explorationLootInventory: ex.lootInventory || {},
+                explorationLootStacks: ex.lootInventoryStacks || {},
+                expedition: ex.expedition || null,
+                competition: state.competition || {},
+                auction: {
+                    localSlot: eco.auction || {},
+                    auctionHash: auctionHash
+                },
+                dailyChecklist: state.dailyChecklist || null,
+                lastUpdate: Math.floor(Number(state.lastUpdate) || 0)
+            };
+        }
+
+        function computeIntegrityHashForState(stateObj) {
+            try {
+                const payload = JSON.stringify(getIntegrityCriticalSnapshot(stateObj));
+                return String(hashStringToUint(`${SAVE_INTEGRITY_PEPPER}|${payload}`));
+            } catch (e) {
+                return '';
+            }
+        }
+
+        function writeSaveIntegrity(stateObj) {
+            const state = (stateObj && typeof stateObj === 'object') ? stateObj : gameState;
+            const sec = ensureSecurityState(state);
+            const hash = computeIntegrityHashForState(state);
+            state.saveVersion = SAVE_SCHEMA_VERSION;
+            if (!state.saveIntegrity || typeof state.saveIntegrity !== 'object' || Array.isArray(state.saveIntegrity)) state.saveIntegrity = {};
+            state.saveIntegrity.hash = hash;
+            state.saveIntegrity.schemaVersion = SAVE_SCHEMA_VERSION;
+            state.saveIntegrity.checkedAt = Date.now();
+            sec.lastIntegrityHash = hash;
+            return hash;
+        }
+
+        function verifyLoadedSaveIntegrity(parsedState) {
+            const state = parsedState;
+            if (!state || typeof state !== 'object') return { ok: true, missing: true };
+            const sec = ensureSecurityState(state);
+            const expected = state.saveIntegrity && typeof state.saveIntegrity === 'object' ? String(state.saveIntegrity.hash || '') : '';
+            const actual = computeIntegrityHashForState(state);
+            sec.lastIntegrityCheckAt = Date.now();
+            sec.lastIntegrityHash = actual;
+            if (!expected) {
+                return { ok: true, missing: true, actual };
+            }
+            if (expected !== actual) {
+                sec.suspicious = true;
+                sec.suspiciousReason = 'save-integrity-mismatch';
+                sec.integrityMismatchCount = (sec.integrityMismatchCount || 0) + 1;
+                return { ok: false, expected, actual };
+            }
+            return { ok: true, actual };
+        }
+
+        function isSuspiciousEconomyState(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const sec = ensureSecurityState(state);
+            return !!sec.suspicious;
+        }
+
+        function isAuctionInteractionLocked() {
+            const lockEnabled = !!getHardeningCfg('suspiciousAuctionLock', true);
+            return lockEnabled && isSuspiciousEconomyState();
+        }
+
+        function getSuspiciousRewardMultiplier() {
+            return Math.max(0.02, Math.min(1, Number(getHardeningCfg('tamperPenaltyMultiplier', 0.12)) || 0.12));
+        }
+
+        function shouldApplySuspiciousRewardPenalty(reason) {
+            const text = String(reason || '').toLowerCase();
+            if (!text) return false;
+            return text.includes('competition')
+                || text.includes('auction payout')
+                || text.includes('harvest')
+                || text.includes('mini-game')
+                || text.includes('mystery egg bonus');
+        }
+
+        function applyCoinGainRateLimits(rawAmount, reason, targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const sec = ensureSecurityState(state);
+            const cfg = getHardeningCfg('coinGainRateLimit', {}) || {};
+            const amount = Math.max(0, Math.floor(Number(rawAmount) || 0));
+            if (amount <= 0) return { amount: 0, minuteMult: 1, sessionMult: 1, suspiciousMult: 1 };
+            const now = Date.now();
+            const minuteSoftCap = Math.max(100, Number(cfg.minuteSoftCap) || 1400);
+            const minuteFalloff = Math.max(0.0001, Number(cfg.minuteFalloffPerCoin) || 0.01);
+            const minuteMin = Math.max(0.02, Math.min(1, Number(cfg.minuteMinMultiplier) || 0.08));
+            const sessionSoftCap = Math.max(500, Number(cfg.sessionSoftCap) || 18000);
+            const sessionFalloff = Math.max(0.00001, Number(cfg.sessionFalloffPerCoin) || 0.0015);
+            const sessionMin = Math.max(0.05, Math.min(1, Number(cfg.sessionMinMultiplier) || 0.2));
+
+            if (!Number.isFinite(sec.coinGainMinute.windowStart) || (now - sec.coinGainMinute.windowStart) >= 60000 || sec.coinGainMinute.windowStart <= 0) {
+                sec.coinGainMinute.windowStart = now;
+                sec.coinGainMinute.earned = 0;
+            }
+            if (!Number.isFinite(sec.coinGainSession.earned)) sec.coinGainSession.earned = 0;
+
+            const minuteOver = Math.max(0, sec.coinGainMinute.earned - minuteSoftCap);
+            const sessionOver = Math.max(0, sec.coinGainSession.earned - sessionSoftCap);
+            const minuteMult = minuteOver > 0 ? Math.max(minuteMin, 1 / (1 + (minuteOver * minuteFalloff))) : 1;
+            const sessionMult = sessionOver > 0 ? Math.max(sessionMin, 1 / (1 + (sessionOver * sessionFalloff))) : 1;
+            const suspiciousMult = (isSuspiciousEconomyState(state) && shouldApplySuspiciousRewardPenalty(reason)) ? getSuspiciousRewardMultiplier() : 1;
+            let finalAmount = Math.max(0, Math.floor(amount * minuteMult * sessionMult * suspiciousMult));
+            if (amount > 0 && finalAmount <= 0 && (minuteMult < 1 || sessionMult < 1 || suspiciousMult < 1)) finalAmount = 1;
+
+            sec.coinGainMinute.earned += finalAmount;
+            sec.coinGainSession.earned += finalAmount;
+            _sessionCoinGainTotal += finalAmount;
+
+            if ((minuteMult < 0.999 || sessionMult < 0.999) && typeof showToast === 'function') {
+                showHardeningToast('rate-limit', 'High coin gain rate detected: rewards are in diminishing mode.', '#90A4AE');
+            }
+            if (suspiciousMult < 1) {
+                showHardeningToast('suspicious', 'Save integrity warning: some rewards and auction features are limited.', '#EF5350');
+            }
+            return { amount: finalAmount, minuteMult, sessionMult, suspiciousMult };
+        }
+
+        function getTodayStringWithTimeHardening(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const today = typeof getTodayString === 'function'
+                ? getTodayString()
+                : new Date().toISOString().slice(0, 10);
+            const timeState = ensureTimeHardeningState(state);
+            if (!isTimeStabilizationActive(state)) return today;
+            const currentChecklistDate = state.dailyChecklist && state.dailyChecklist.date ? state.dailyChecklist.date : '';
+            if (currentChecklistDate && currentChecklistDate !== today && (timeState.suppressedDailyResetUntil || 0) > Date.now()) {
+                showHardeningToast('time', 'Time changed; daily reset is temporarily delayed until time stabilizes.', '#FFA726');
+                return currentChecklistDate;
+            }
+            return today;
+        }
+
+        function getWealthPressureDebtPenaltyMultiplier(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const eco = ensureEconomyState(state);
+            if (!eco.wealthPressure || typeof eco.wealthPressure !== 'object') return 1;
+            const debt = Math.max(0, Number(eco.wealthPressure.unpaidFeeDebt) || 0);
+            if (debt <= 0) return 1;
+            const per100 = Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureDebtResalePenaltyPer100Coins) || getHardeningCfg('wealthPressure.debtResalePenaltyPer100Coins', 0.03)) || 0.03;
+            const maxPenalty = Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureDebtResalePenaltyMax) || getHardeningCfg('wealthPressure.debtResalePenaltyMax', 0.35)) || 0.35;
+            const penalty = Math.min(Math.max(0, maxPenalty), Math.max(0, (debt / 100) * per100));
+            return Math.max(0.5, 1 - penalty);
+        }
+
         function createDefaultEconomyState() {
             return {
                 coins: GAME_BALANCE.economy.startingCoins,
@@ -26,10 +363,16 @@
                 },
                 market: { dayKey: '', stock: [] },
                 mysteryEggsOpened: 0,
-                auction: { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0 },
+                auction: { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0, relistTracker: {} },
                 totalEarned: 0,
                 totalSpent: 0,
-                auctionIdentityMigrationDone: false
+                auctionIdentityMigrationDone: false,
+                wealthPressure: {
+                    lastAppliedDate: '',
+                    lastFee: 0,
+                    lastBreakdown: null,
+                    unpaidFeeDebt: 0
+                }
             };
         }
 
@@ -165,18 +508,22 @@
         }
 
         let gameState = {
+            saveVersion: SAVE_SCHEMA_VERSION,
             phase: 'egg', // 'egg', 'hatching', 'pet'
             pet: null,
             eggTaps: 0,
             eggType: null, // Type of egg (furry, feathery, scaly, magical)
             pendingPetType: null, // Pre-determined pet type for the egg
             lastUpdate: Date.now(),
+            security: createDefaultSecurityState(),
+            timeHardening: createDefaultTimeHardeningState(),
             timeOfDay: 'day', // 'day', 'sunset', 'night', 'sunrise'
             currentRoom: 'bedroom', // 'bedroom', 'kitchen', 'bathroom', 'backyard', 'park', 'garden'
             exploration: {
                 biomeUnlocks: { forest: true, beach: false, mountain: false, cave: false, skyIsland: false, underwater: false, skyZone: false },
                 discoveredBiomes: { forest: true },
                 lootInventory: {},
+                lootInventoryStacks: {},
                 expedition: null,
                 expeditionHistory: [],
                 roomTreasureCooldowns: {},
@@ -249,12 +596,7 @@
             meta: createDefaultRetentionMetaState(),
             goalLadder: null,
             // Competition system
-            competition: {
-                battlesWon: 0, battlesLost: 0, bossesDefeated: {},
-                showsEntered: 0, bestShowRank: '', bestShowScore: 0,
-                obstacleBestScore: 0, obstacleCompletions: 0,
-                rivalsDefeated: [], currentRivalIndex: 0
-            },
+            competition: createDefaultCompetitionState(),
             // Breeding system
             breedingEggs: [],           // Array of incubating breeding eggs
             lastBreedingIncubationTick: Date.now(), // Timestamp of last incubation minute tick
@@ -293,6 +635,8 @@
             return {
                 battlesWon: 0,
                 battlesLost: 0,
+                rivalBattlesWon: 0,
+                rivalBattlesLost: 0,
                 bossesDefeated: {},
                 showsEntered: 0,
                 bestShowRank: '',
@@ -300,7 +644,14 @@
                 obstacleBestScore: 0,
                 obstacleCompletions: 0,
                 rivalsDefeated: [],
-                currentRivalIndex: 0
+                currentRivalIndex: 0,
+                rewardControl: {
+                    daily: { dayKey: '', earnedCoins: 0, lossConsolationCoins: 0, entryFeesPaid: 0, entriesUsed: 0 },
+                    perMode: {},
+                    bossFirstClearPaid: {},
+                    rivalFirstClearPaid: {},
+                    lastCapToastAt: 0
+                }
             };
         }
 
@@ -310,6 +661,8 @@
                 : createDefaultCompetitionState();
             if (typeof state.battlesWon !== 'number' || !Number.isFinite(state.battlesWon)) state.battlesWon = 0;
             if (typeof state.battlesLost !== 'number' || !Number.isFinite(state.battlesLost)) state.battlesLost = 0;
+            if (typeof state.rivalBattlesWon !== 'number' || !Number.isFinite(state.rivalBattlesWon)) state.rivalBattlesWon = 0;
+            if (typeof state.rivalBattlesLost !== 'number' || !Number.isFinite(state.rivalBattlesLost)) state.rivalBattlesLost = 0;
             if (!state.bossesDefeated || typeof state.bossesDefeated !== 'object' || Array.isArray(state.bossesDefeated)) state.bossesDefeated = {};
             if (typeof state.showsEntered !== 'number' || !Number.isFinite(state.showsEntered)) state.showsEntered = 0;
             if (typeof state.bestShowRank !== 'string') state.bestShowRank = '';
@@ -329,6 +682,30 @@
             if (rivalCount > 0) {
                 state.currentRivalIndex = Math.min(state.currentRivalIndex, rivalCount);
             }
+            if (!state.rewardControl || typeof state.rewardControl !== 'object' || Array.isArray(state.rewardControl)) {
+                state.rewardControl = createDefaultCompetitionState().rewardControl;
+            }
+            if (!state.rewardControl.daily || typeof state.rewardControl.daily !== 'object') {
+                state.rewardControl.daily = { dayKey: '', earnedCoins: 0, lossConsolationCoins: 0, entryFeesPaid: 0, entriesUsed: 0 };
+            }
+            if (typeof state.rewardControl.daily.dayKey !== 'string') state.rewardControl.daily.dayKey = '';
+            ['earnedCoins', 'lossConsolationCoins', 'entryFeesPaid', 'entriesUsed'].forEach((k) => {
+                if (!Number.isFinite(state.rewardControl.daily[k])) state.rewardControl.daily[k] = 0;
+                state.rewardControl.daily[k] = Math.max(0, Math.floor(state.rewardControl.daily[k]));
+            });
+            if (!state.rewardControl.perMode || typeof state.rewardControl.perMode !== 'object' || Array.isArray(state.rewardControl.perMode)) state.rewardControl.perMode = {};
+            Object.keys(state.rewardControl.perMode).forEach((modeId) => {
+                const entry = state.rewardControl.perMode[modeId];
+                if (!entry || typeof entry !== 'object') {
+                    state.rewardControl.perMode[modeId] = { lastAt: 0, repeatCount: 0 };
+                    return;
+                }
+                if (!Number.isFinite(entry.lastAt)) entry.lastAt = 0;
+                if (!Number.isFinite(entry.repeatCount)) entry.repeatCount = 0;
+            });
+            if (!state.rewardControl.bossFirstClearPaid || typeof state.rewardControl.bossFirstClearPaid !== 'object' || Array.isArray(state.rewardControl.bossFirstClearPaid)) state.rewardControl.bossFirstClearPaid = {};
+            if (!state.rewardControl.rivalFirstClearPaid || typeof state.rewardControl.rivalFirstClearPaid !== 'object' || Array.isArray(state.rewardControl.rivalFirstClearPaid)) state.rewardControl.rivalFirstClearPaid = {};
+            if (!Number.isFinite(state.rewardControl.lastCapToastAt)) state.rewardControl.lastCapToastAt = 0;
             return state;
         }
 
@@ -1337,6 +1714,7 @@
                 biomeUnlocks: Object.assign({}, EXPLORATION_DEFAULT_UNLOCKS),
                 discoveredBiomes: { forest: true },
                 lootInventory: {},
+                lootInventoryStacks: {},
                 expedition: null,
                 expeditionHistory: [],
                 roomTreasureCooldowns: {},
@@ -1382,6 +1760,7 @@
             if (!ex.discoveredBiomes || typeof ex.discoveredBiomes !== 'object') ex.discoveredBiomes = { forest: true };
             if (typeof ex.discoveredBiomes.forest !== 'boolean') ex.discoveredBiomes.forest = true;
             if (!ex.lootInventory || typeof ex.lootInventory !== 'object') ex.lootInventory = {};
+            if (!ex.lootInventoryStacks || typeof ex.lootInventoryStacks !== 'object' || Array.isArray(ex.lootInventoryStacks)) ex.lootInventoryStacks = {};
             if (!Array.isArray(ex.expeditionHistory)) ex.expeditionHistory = [];
             if (!ex.roomTreasureCooldowns || typeof ex.roomTreasureCooldowns !== 'object') ex.roomTreasureCooldowns = {};
             if (!ex.treasureHunt || typeof ex.treasureHunt !== 'object') {
@@ -1419,7 +1798,65 @@
                 if (!ex.expedition.durationId) ex.expedition.durationId = 'scout';
             }
 
+            ensureLootInventoryStacks(ex);
+
             return ex;
+        }
+
+        function normalizeLootStackMeta(meta) {
+            const input = (meta && typeof meta === 'object') ? meta : {};
+            return {
+                source: typeof input.source === 'string' ? input.source : 'generic',
+                createdAt: Number.isFinite(input.createdAt) ? Math.floor(input.createdAt) : Date.now(),
+                biomeId: typeof input.biomeId === 'string' ? input.biomeId : null
+            };
+        }
+
+        function ensureLootInventoryStacks(explorationState) {
+            const ex = explorationState || ensureExplorationState();
+            if (!ex || typeof ex !== 'object') return;
+            if (!ex.lootInventory || typeof ex.lootInventory !== 'object') ex.lootInventory = {};
+            if (!ex.lootInventoryStacks || typeof ex.lootInventoryStacks !== 'object' || Array.isArray(ex.lootInventoryStacks)) ex.lootInventoryStacks = {};
+
+            Object.keys(ex.lootInventory).forEach((lootId) => {
+                const totalQty = Math.max(0, Math.floor(Number(ex.lootInventory[lootId]) || 0));
+                if (totalQty <= 0) {
+                    delete ex.lootInventory[lootId];
+                    delete ex.lootInventoryStacks[lootId];
+                    return;
+                }
+                const rawStacks = Array.isArray(ex.lootInventoryStacks[lootId]) ? ex.lootInventoryStacks[lootId] : [];
+                const cleanStacks = [];
+                let runningQty = 0;
+                rawStacks.forEach((stack) => {
+                    if (!stack || typeof stack !== 'object') return;
+                    const qty = Math.max(0, Math.floor(Number(stack.qty) || 0));
+                    if (qty <= 0) return;
+                    const nextQty = Math.min(qty, Math.max(0, totalQty - runningQty));
+                    if (nextQty <= 0) return;
+                    cleanStacks.push({ qty: nextQty, meta: normalizeLootStackMeta(stack.meta) });
+                    runningQty += nextQty;
+                });
+                if (runningQty < totalQty) {
+                    cleanStacks.push({ qty: totalQty - runningQty, meta: normalizeLootStackMeta({ source: 'generic' }) });
+                    runningQty = totalQty;
+                }
+                if (runningQty > totalQty) {
+                    let overflow = runningQty - totalQty;
+                    while (overflow > 0 && cleanStacks.length > 0) {
+                        const last = cleanStacks[cleanStacks.length - 1];
+                        const take = Math.min(overflow, last.qty);
+                        last.qty -= take;
+                        overflow -= take;
+                        if (last.qty <= 0) cleanStacks.pop();
+                    }
+                }
+                ex.lootInventoryStacks[lootId] = cleanStacks;
+            });
+
+            Object.keys(ex.lootInventoryStacks).forEach((lootId) => {
+                if (!ex.lootInventory[lootId] || ex.lootInventory[lootId] <= 0) delete ex.lootInventoryStacks[lootId];
+            });
         }
 
         function isFishTypePetType(type) {
@@ -1498,11 +1935,22 @@
             return BIOME_LOOT_POOLS[biomeId] || BIOME_LOOT_POOLS.forest || ['ancientCoin'];
         }
 
-        function addLootToInventory(lootId, count) {
+        function addLootToInventory(lootId, count, meta) {
             const ex = ensureExplorationState();
             if (!EXPLORATION_LOOT[lootId]) return;
             const safeCount = Math.max(1, Math.floor(Number(count) || 1));
             ex.lootInventory[lootId] = (ex.lootInventory[lootId] || 0) + safeCount;
+            ensureLootInventoryStacks(ex);
+            const normalizedMeta = normalizeLootStackMeta(meta);
+            if (!Array.isArray(ex.lootInventoryStacks[lootId])) ex.lootInventoryStacks[lootId] = [];
+            const stacks = ex.lootInventoryStacks[lootId];
+            const last = stacks.length > 0 ? stacks[stacks.length - 1] : null;
+            if (last && last.meta && last.meta.source === normalizedMeta.source && last.meta.biomeId === normalizedMeta.biomeId) {
+                last.qty = Math.max(0, Math.floor(Number(last.qty) || 0)) + safeCount;
+                if (!Number.isFinite(last.meta.createdAt)) last.meta.createdAt = normalizedMeta.createdAt;
+            } else {
+                stacks.push({ qty: safeCount, meta: normalizedMeta });
+            }
         }
 
         function getLootDropWeight(lootId, options) {
@@ -1562,7 +2010,10 @@
                 count,
                 data: EXPLORATION_LOOT[id]
             }));
-            rewards.forEach((reward) => addLootToInventory(reward.id, reward.count));
+            const rewardMeta = (options && typeof options === 'object')
+                ? { source: options.source || 'generic', biomeId: options.biomeId || null, createdAt: Date.now() }
+                : { source: 'generic', createdAt: Date.now() };
+            rewards.forEach((reward) => addLootToInventory(reward.id, reward.count, rewardMeta));
             return rewards;
         }
 
@@ -1654,7 +2105,7 @@
 
             const petData = (typeof getAllPetTypeData === 'function' ? getAllPetTypeData(resolvedType) : null) || PET_TYPES[resolvedType];
             const prefixes = ['Curious', 'Gentle', 'Brave', 'Swift', 'Misty', 'Sunny', 'Starry'];
-            const suffixes = ['Scout', 'Pal', 'Wanderer', 'Paws', 'Fluff', 'Buddy', 'Friend'];
+            const suffixes = ['Scout', 'Pal', 'Wanderer', 'Paws', 'Fluff', 'Companion', 'Friend'];
             const npcName = `${randomFromArray(prefixes)} ${randomFromArray(suffixes)}`;
             const npc = {
                 id: `npc_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
@@ -1775,8 +2226,29 @@
             if (!ex.expedition) return { ok: false, reason: 'no-expedition' };
             const expedition = ex.expedition;
             const now = Date.now();
-            if (now < expedition.endAt) {
-                return { ok: false, reason: 'in-progress', remainingMs: expedition.endAt - now };
+            const priorWallClock = Math.max(0, Number((gameState.timeHardening && gameState.timeHardening.lastSeenWallClock) || 0));
+            const jumpInfo = checkAndRecordTimeJump(gameState, 'expedition-resolve', { now });
+            let effectiveNow = now;
+            if (jumpInfo && jumpInfo.detected) {
+                const elapsedSinceStart = Math.max(0, now - (Number(expedition.startedAt) || now));
+                const clampedAdvance = clampElapsedForHardening(elapsedSinceStart, 'expedition');
+                effectiveNow = Math.max(priorWallClock || 0, (Number(expedition.startedAt) || now) + clampedAdvance);
+            }
+            const wasAlreadyDueBeforeJump = priorWallClock > 0 && priorWallClock >= (expedition.endAt || 0);
+            if ((jumpInfo && jumpInfo.detected) && !wasAlreadyDueBeforeJump && isTimeStabilizationActive(gameState) && !forceResolve) {
+                if (!silent && typeof showToast === 'function') {
+                    showToast('⏱️ Time changed; expedition rewards are paused until time stabilizes.', '#FFA726');
+                }
+                return { ok: false, reason: 'time-paused', remainingMs: Math.max(0, (expedition.endAt || 0) - Math.min(effectiveNow, now)) };
+            }
+            if (isTimeStabilizationActive(gameState) && effectiveNow < (expedition.endAt || 0) && !forceResolve) {
+                if (!silent && typeof showToast === 'function') {
+                    showToast('⏱️ Time changed; expedition rewards are paused until time stabilizes.', '#FFA726');
+                }
+                return { ok: false, reason: 'time-paused', remainingMs: Math.max(0, (expedition.endAt || 0) - effectiveNow) };
+            }
+            if (effectiveNow < expedition.endAt) {
+                return { ok: false, reason: 'in-progress', remainingMs: expedition.endAt - effectiveNow };
             }
 
             const biome = EXPLORATION_BIOMES[expedition.biomeId] || EXPLORATION_BIOMES.forest;
@@ -2224,7 +2696,9 @@
                         quantity: Math.max(1, Math.floor(Number(listing.quantity) || 1)),
                         price: Math.max(1, Math.floor(Number(listing.price) || 1)),
                         createdAt: Number(listing.createdAt) || Date.now(),
-                        legacyOwnerSlot: listing.legacyOwnerSlot ? String(listing.legacyOwnerSlot) : null
+                        legacyOwnerSlot: listing.legacyOwnerSlot ? String(listing.legacyOwnerSlot) : null,
+                        relistKey: listing.relistKey ? String(listing.relistKey) : '',
+                        relistCount: Math.max(0, Math.floor(Number(listing.relistCount) || 0))
                     }))
                     .filter((l) => l.id && l.itemType && l.itemId);
                 return parsed;
@@ -2292,6 +2766,9 @@
                 state.economy = createDefaultEconomyState();
             }
             const eco = state.economy;
+            if (!Number.isFinite(state.saveVersion)) state.saveVersion = 1;
+            ensureSecurityState(state);
+            ensureTimeHardeningState(state);
             if (typeof eco.coins !== 'number' || !Number.isFinite(eco.coins)) eco.coins = 240;
             eco.coins = Math.max(0, Math.floor(eco.coins));
             if (!eco.inventory || typeof eco.inventory !== 'object') eco.inventory = createDefaultEconomyInventory();
@@ -2303,14 +2780,22 @@
             if (!eco.market || typeof eco.market !== 'object') eco.market = { dayKey: '', stock: [] };
             if (typeof eco.market.dayKey !== 'string') eco.market.dayKey = '';
             if (!Array.isArray(eco.market.stock)) eco.market.stock = [];
-            if (!eco.auction || typeof eco.auction !== 'object') eco.auction = { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0 };
+            if (!eco.auction || typeof eco.auction !== 'object') eco.auction = { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0, relistTracker: {} };
             if (!ECONOMY_AUCTION_SLOTS.includes(eco.auction.slotId)) eco.auction.slotId = 'slotA';
             if (typeof eco.auction.soldCount !== 'number') eco.auction.soldCount = 0;
             if (typeof eco.auction.boughtCount !== 'number') eco.auction.boughtCount = 0;
             if (typeof eco.auction.postedCount !== 'number') eco.auction.postedCount = 0;
+            if (!eco.auction.relistTracker || typeof eco.auction.relistTracker !== 'object' || Array.isArray(eco.auction.relistTracker)) eco.auction.relistTracker = {};
             if (typeof eco.totalEarned !== 'number') eco.totalEarned = 0;
             if (typeof eco.totalSpent !== 'number') eco.totalSpent = 0;
             if (typeof eco.mysteryEggsOpened !== 'number') eco.mysteryEggsOpened = 0;
+            if (!eco.wealthPressure || typeof eco.wealthPressure !== 'object' || Array.isArray(eco.wealthPressure)) {
+                eco.wealthPressure = createDefaultEconomyState().wealthPressure;
+            }
+            if (typeof eco.wealthPressure.lastAppliedDate !== 'string') eco.wealthPressure.lastAppliedDate = '';
+            if (!Number.isFinite(eco.wealthPressure.lastFee)) eco.wealthPressure.lastFee = 0;
+            if (!Number.isFinite(eco.wealthPressure.unpaidFeeDebt)) eco.wealthPressure.unpaidFeeDebt = 0;
+            if (eco.wealthPressure.lastBreakdown !== null && typeof eco.wealthPressure.lastBreakdown !== 'object') eco.wealthPressure.lastBreakdown = null;
             // Rec 2: Ensure persistent playerId exists for auction self-trade prevention
             if (!eco.playerId || typeof eco.playerId !== 'string') eco.playerId = generatePlayerId();
             if (typeof eco.auctionIdentityMigrationDone !== 'boolean') eco.auctionIdentityMigrationDone = false;
@@ -2343,14 +2828,70 @@
             return Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString();
         }
 
+        function estimateTradableInventoryValue(targetState) {
+            const state = targetState || gameState;
+            ensureExplorationState(state);
+            ensureEconomyState(state);
+            const ex = state.exploration || {};
+            const eco = state.economy || {};
+            let total = 0;
+
+            Object.entries(ex.lootInventory || {}).forEach(([lootId, qty]) => {
+                const count = Math.max(0, Math.floor(Number(qty) || 0));
+                if (count <= 0) return;
+                total += getLootSellPrice(lootId, { skipSecurityPenalty: true }) * count;
+            });
+
+            const gardenInv = (((state.garden || {}).inventory) || {});
+            Object.entries(gardenInv).forEach(([itemId, qty]) => {
+                const count = Math.max(0, Math.floor(Number(qty) || 0));
+                if (count <= 0) return;
+                const crop = GARDEN_CROPS[itemId] || FLOWER_GARDEN_PLANTS[itemId] || MUSHROOM_CAVE_PLANTS[itemId];
+                if (!crop) return;
+                const base = 3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6);
+                total += Math.max(1, base) * count;
+            });
+
+            ['crafted', 'accessories', 'decorations'].forEach((bucket) => {
+                Object.entries(((eco.inventory || {})[bucket]) || {}).forEach(([itemId, qty]) => {
+                    const count = Math.max(0, Math.floor(Number(qty) || 0));
+                    if (count <= 0) return;
+                    const shopBucket = bucket === 'crafted' ? null : (bucket === 'decorations' ? 'decorations' : 'accessories');
+                    const shopDef = (shopBucket && ECONOMY_SHOP_ITEMS && ECONOMY_SHOP_ITEMS[shopBucket]) ? ECONOMY_SHOP_ITEMS[shopBucket][itemId] : null;
+                    const baseValue = shopDef ? Math.max(1, Math.floor(Number(shopDef.price) || 1)) : 10;
+                    total += Math.max(1, Math.round(baseValue * 0.55)) * count;
+                });
+            });
+
+            return Math.max(0, Math.floor(total));
+        }
+
+        function applyWealthPressureDebtRepayment(earnedCoins, targetState) {
+            const state = targetState || gameState;
+            const eco = ensureEconomyState(state);
+            const debt = Math.max(0, Number((((eco || {}).wealthPressure) || {}).unpaidFeeDebt) || 0);
+            if (debt <= 0 || earnedCoins <= 0) return { credited: earnedCoins, repaid: 0 };
+            const repay = Math.min(debt, Math.max(1, Math.floor(earnedCoins * 0.25)));
+            eco.wealthPressure.unpaidFeeDebt = Math.max(0, Math.ceil(debt - repay));
+            return { credited: Math.max(0, earnedCoins - repay), repaid: repay };
+        }
+
         function addCoins(amount, reason, silent) {
             const eco = ensureEconomyState();
-            const add = Math.max(0, Math.floor(Number(amount) || 0));
-            if (add <= 0) return 0;
-            eco.coins += add;
+            const rawAdd = Math.max(0, Math.floor(Number(amount) || 0));
+            if (rawAdd <= 0) return 0;
+            const limited = applyCoinGainRateLimits(rawAdd, reason, gameState);
+            let add = Math.max(0, Math.floor(Number(limited.amount) || 0));
+            const repayment = applyWealthPressureDebtRepayment(add, gameState);
+            add = repayment.credited;
+            if (add > 0) eco.coins += add;
             eco.totalEarned = (eco.totalEarned || 0) + add;
             if (!silent && typeof showToast === 'function') {
-                showToast(`🪙 +${add} coins${reason ? ` (${reason})` : ''}`, '#FFD700');
+                let msg = `🪙 +${add} coins${reason ? ` (${reason})` : ''}`;
+                if (repayment.repaid > 0) msg += ` • ${repayment.repaid} paid toward storage fee debt`;
+                showToast(msg, '#FFD700');
+            } else if (repayment.repaid > 0 && typeof showToast === 'function') {
+                showToast(`🧾 ${repayment.repaid} coins auto-paid toward storage fee debt.`, '#90A4AE');
             }
             return add;
         }
@@ -2766,6 +3307,66 @@
             return { ok: true, item, balance: getCoinBalance() };
         }
 
+        function computeWealthPressureFeeBreakdown(targetState) {
+            const state = targetState || gameState;
+            const eco = ensureEconomyState(state);
+            const hpCfg = getHardeningCfg('wealthPressure', {}) || {};
+            const enabled = hpCfg.enabled !== false;
+            if (!enabled) return { enabled: false, fee: 0, debt: 0, weightedWealth: 0, tradableValue: 0 };
+            const tradableValue = estimateTradableInventoryValue(state);
+            const protectedWealth = Math.max(0, Math.floor(
+                Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureThreshold) || hpCfg.protectedWealth || 1600)
+            ));
+            const tradableWeight = Math.max(0, Math.min(1, Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureTradableWeight) || hpCfg.tradableValueWeight || 0.35)));
+            const rate = Math.max(0, Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureRate) || hpCfg.dailyRate || 0.0035));
+            const minFee = Math.max(0, Math.floor(Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureMinFee) || hpCfg.minFee || 2)));
+            const weightedWealth = Math.floor(Math.max(0, eco.coins) + (tradableValue * tradableWeight));
+            const taxableWealth = Math.max(0, weightedWealth - protectedWealth);
+            if (taxableWealth <= 0) {
+                return { enabled: true, fee: 0, debt: Math.max(0, Number((eco.wealthPressure || {}).unpaidFeeDebt) || 0), weightedWealth, tradableValue, tradableWeight, protectedWealth };
+            }
+            const fee = Math.max(minFee, Math.floor(taxableWealth * rate));
+            return {
+                enabled: true,
+                fee,
+                debt: Math.max(0, Number((eco.wealthPressure || {}).unpaidFeeDebt) || 0),
+                weightedWealth,
+                tradableValue,
+                tradableWeight,
+                protectedWealth
+            };
+        }
+
+        function applyWealthPressureFee(targetState) {
+            const state = targetState || gameState;
+            const eco = ensureEconomyState(state);
+            const today = typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().slice(0, 10);
+            if (!eco.wealthPressure || typeof eco.wealthPressure !== 'object') eco.wealthPressure = createDefaultEconomyState().wealthPressure;
+            if (eco.wealthPressure.lastAppliedDate === today) {
+                return { applied: false, feePaid: 0, debtAdded: 0, repeated: true, breakdown: eco.wealthPressure.lastBreakdown || null };
+            }
+            const breakdown = computeWealthPressureFeeBreakdown(state);
+            let feePaid = 0;
+            let debtAdded = 0;
+            if (breakdown.enabled && breakdown.fee > 0) {
+                feePaid = Math.min(Math.max(0, eco.coins), breakdown.fee);
+                eco.coins = Math.max(0, eco.coins - feePaid);
+                eco.totalSpent = (eco.totalSpent || 0) + feePaid;
+                debtAdded = Math.max(0, breakdown.fee - feePaid);
+                if (debtAdded > 0) {
+                    eco.wealthPressure.unpaidFeeDebt = Math.max(0, Number(eco.wealthPressure.unpaidFeeDebt) || 0) + debtAdded;
+                }
+            }
+            eco.wealthPressure.lastAppliedDate = today;
+            eco.wealthPressure.lastFee = feePaid + debtAdded;
+            eco.wealthPressure.lastBreakdown = Object.assign({}, breakdown, { feePaid, debtAdded, appliedAt: Date.now() });
+            if ((feePaid + debtAdded) > 0 && typeof showToast === 'function') {
+                const debtMsg = debtAdded > 0 ? ` ${debtAdded} added as resale-penalty debt.` : '';
+                showToast(`📦 Storage fee: ${feePaid + debtAdded} coins (coins + stored goods value).${debtMsg}`, '#90A4AE');
+            }
+            return { applied: true, feePaid, debtAdded, breakdown: eco.wealthPressure.lastBreakdown };
+        }
+
 	        // Rec 11: Coin decay system — daily tax on hoarded coins above threshold
 	        function applyCoinDecay() {
 	            const eco = ensureEconomyState();
@@ -2777,7 +3378,10 @@
 	                ? Math.max(0, Math.floor(ECONOMY_BALANCE.coinDecayProtectedWallet))
 	                : Math.floor(threshold * 0.45);
 	            const decayFloor = Math.max(threshold, protectedWallet);
-	            if (eco.coins <= decayFloor) return 0;
+	            if (eco.coins <= decayFloor) {
+                    applyWealthPressureFee();
+                    return 0;
+                }
 	            const previousChecklist = gameState.dailyChecklist || null;
 	            const progress = previousChecklist && previousChecklist.progress ? previousChecklist.progress : {};
 	            const engagedActions = Math.max(0,
@@ -2821,6 +3425,7 @@
 	                    : (engagedActions >= 8 ? 'Active-care discount active.' : 'Hoarding maintenance applied.');
 	                showToast(`🏦 Coin maintenance: -${tax} coins. ${modeCopy}`, '#90A4AE');
 	            }
+                applyWealthPressureFee();
 	            return tax;
 	        }
 
@@ -2846,13 +3451,22 @@
             return 10;
         }
 
-        function getLootSellPrice(lootId, options) {
+        function getLootSellPrice(lootIdOrStack, options) {
+            let lootId = lootIdOrStack;
+            let opts = options && typeof options === 'object' ? Object.assign({}, options) : null;
+            if (lootIdOrStack && typeof lootIdOrStack === 'object') {
+                if (lootIdOrStack.id) lootId = lootIdOrStack.id;
+                else if (lootIdOrStack.lootId) lootId = lootIdOrStack.lootId;
+                if (!opts) opts = {};
+                if (lootIdOrStack.meta && typeof lootIdOrStack.meta === 'object') {
+                    opts = Object.assign({}, lootIdOrStack.meta, opts);
+                }
+            }
             const base = getLootSellBasePrice(lootId);
             if (!base) return 0;
             const sellMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.sellPriceMultiplier === 'number')
                 ? ECONOMY_BALANCE.sellPriceMultiplier
                 : 0.8;
-            const opts = options && typeof options === 'object' ? options : null;
             const expeditionSellMult = (opts && opts.source === 'expedition')
                 ? ((typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.expeditionSellPriceMultiplier === 'number')
                     ? ECONOMY_BALANCE.expeditionSellPriceMultiplier
@@ -2868,22 +3482,65 @@
                     }
                 }
             }
-            return Math.max(1, Math.round(getDynamicEconomyPrice(base, 'loot', `loot:${lootId}`) * sellMult * expeditionSellMult * (1 + biomeSellBonus)));
+            const wealthDebtPenaltyMult = getWealthPressureDebtPenaltyMultiplier();
+            const suspiciousPenaltyMult = (isSuspiciousEconomyState() && !(opts && opts.skipSecurityPenalty))
+                ? getSuspiciousRewardMultiplier()
+                : 1;
+            return Math.max(1, Math.round(getDynamicEconomyPrice(base, 'loot', `loot:${lootId}`) * sellMult * expeditionSellMult * (1 + biomeSellBonus) * wealthDebtPenaltyMult * suspiciousPenaltyMult));
         }
 
         function sellExplorationLoot(lootId, count) {
             const ex = ensureExplorationState();
+            ensureLootInventoryStacks(ex);
             const current = Math.max(0, Math.floor((ex.lootInventory && ex.lootInventory[lootId]) || 0));
             const qty = Math.max(1, Math.floor(Number(count) || 1));
             if (current < qty) return { ok: false, reason: 'not-enough-loot' };
-            const priceEach = getLootSellPrice(lootId);
-            if (priceEach <= 0) return { ok: false, reason: 'invalid-loot' };
+            const stacks = Array.isArray(ex.lootInventoryStacks[lootId]) ? ex.lootInventoryStacks[lootId] : [];
+            let remaining = qty;
+            let grossTotal = 0;
+            let weightedPriceSum = 0;
+            const soldBreakdown = [];
+            while (remaining > 0 && stacks.length > 0) {
+                const stack = stacks[0];
+                const stackQty = Math.max(0, Math.floor(Number(stack.qty) || 0));
+                if (stackQty <= 0) {
+                    stacks.shift();
+                    continue;
+                }
+                const take = Math.min(remaining, stackQty);
+                const priceEach = getLootSellPrice({ id: lootId, meta: stack.meta || {} });
+                if (priceEach <= 0) return { ok: false, reason: 'invalid-loot' };
+                grossTotal += priceEach * take;
+                weightedPriceSum += priceEach * take;
+                soldBreakdown.push({ qty: take, priceEach, source: ((stack.meta || {}).source || 'generic') });
+                stack.qty = stackQty - take;
+                if (stack.qty <= 0) stacks.shift();
+                remaining -= take;
+            }
+            if (remaining > 0) {
+                // Repair stack metadata if a legacy save drifted out of sync.
+                ensureLootInventoryStacks(ex);
+                return { ok: false, reason: 'loot-stack-sync-error' };
+            }
             ex.lootInventory[lootId] = current - qty;
-            if (ex.lootInventory[lootId] <= 0) delete ex.lootInventory[lootId];
-            const total = priceEach * qty;
-            addCoins(total, 'Loot Sold', true);
+            if (ex.lootInventory[lootId] <= 0) {
+                delete ex.lootInventory[lootId];
+                delete ex.lootInventoryStacks[lootId];
+            }
+            const credited = addCoins(grossTotal, 'Loot Sold', true);
+            if (credited < grossTotal && typeof showToast === 'function') {
+                showToast('Loot sale payout was reduced by economy safeguards.', '#90A4AE');
+            }
             saveGame();
-            return { ok: true, loot: EXPLORATION_LOOT[lootId], quantity: qty, total, priceEach };
+            return {
+                ok: true,
+                loot: EXPLORATION_LOOT[lootId],
+                quantity: qty,
+                total: credited,
+                grossTotal,
+                priceEach: qty > 0 ? Math.round(weightedPriceSum / qty) : 0,
+                breakdown: soldBreakdown
+            };
         }
 
         function getOwnedEconomySnapshot() {
@@ -2903,7 +3560,9 @@
                     crafted: Object.assign({}, eco.inventory.crafted || {})
                 },
                 loot: Object.assign({}, ex.lootInventory || {}),
-                crops: Object.assign({}, (gameState.garden && gameState.garden.inventory) || {})
+                crops: Object.assign({}, (gameState.garden && gameState.garden.inventory) || {}),
+                wealthPressure: (eco.wealthPressure && typeof eco.wealthPressure === 'object') ? Object.assign({}, eco.wealthPressure) : null,
+                suspiciousEconomy: isSuspiciousEconomyState()
             };
         }
 
@@ -2974,7 +3633,7 @@
             let itemLabel = '';
             let itemEmoji = '🎁';
             if (offer.kind === 'loot') {
-                addLootToInventory(offer.itemId, offer.quantity || 1);
+                addLootToInventory(offer.itemId, offer.quantity || 1, { source: 'rareMarket', createdAt: Date.now() });
                 const loot = EXPLORATION_LOOT[offer.itemId];
                 itemLabel = loot ? loot.name : offer.itemId;
                 itemEmoji = loot ? loot.emoji : itemEmoji;
@@ -3263,7 +3922,7 @@
                 reward = { type: 'medicine', itemId, label: item.name, emoji: item.emoji };
             } else if (roll < 0.93) {
                 const lootId = randomFromArray(Object.keys(EXPLORATION_LOOT));
-                addLootToInventory(lootId, 1);
+                addLootToInventory(lootId, 1, { source: 'mysteryEgg', createdAt: Date.now() });
                 const loot = EXPLORATION_LOOT[lootId];
                 reward = { type: 'loot', itemId: lootId, label: loot.name, emoji: loot.emoji };
             } else {
@@ -3297,7 +3956,9 @@
                 slotLabel: getAuctionSlotLabel(slotId),
                 wallets: Object.assign({}, data.wallets || {}),
                 myWallet,
-                listings
+                listings,
+                locked: isAuctionInteractionLocked(),
+                lockReason: isAuctionInteractionLocked() ? 'save-integrity-warning' : null
             };
         }
 
@@ -3361,10 +4022,27 @@
         function consumeAuctionItem(itemType, itemId, qty) {
             const count = Math.max(1, Math.floor(Number(qty) || 1));
             if (itemType === 'loot') {
-                const inv = gameState.exploration.lootInventory;
+                const ex = ensureExplorationState();
+                ensureLootInventoryStacks(ex);
+                const inv = ex.lootInventory;
                 if ((inv[itemId] || 0) < count) return false;
+                let remaining = count;
+                const stacks = Array.isArray(ex.lootInventoryStacks[itemId]) ? ex.lootInventoryStacks[itemId] : [];
+                while (remaining > 0 && stacks.length > 0) {
+                    const stack = stacks[0];
+                    const stackQty = Math.max(0, Math.floor(Number(stack.qty) || 0));
+                    if (stackQty <= 0) { stacks.shift(); continue; }
+                    const take = Math.min(remaining, stackQty);
+                    stack.qty = stackQty - take;
+                    if (stack.qty <= 0) stacks.shift();
+                    remaining -= take;
+                }
+                if (remaining > 0) return false;
                 inv[itemId] -= count;
-                if (inv[itemId] <= 0) delete inv[itemId];
+                if (inv[itemId] <= 0) {
+                    delete inv[itemId];
+                    delete ex.lootInventoryStacks[itemId];
+                }
                 return true;
             }
             if (itemType === 'crop') {
@@ -3385,7 +4063,7 @@
         function addAuctionItem(itemType, itemId, qty) {
             const count = Math.max(1, Math.floor(Number(qty) || 1));
             if (itemType === 'loot') {
-                addLootToInventory(itemId, count);
+                addLootToInventory(itemId, count, { source: 'auction', createdAt: Date.now() });
                 return;
             }
             if (itemType === 'crop') {
@@ -3416,6 +4094,10 @@
 
         function createAuctionListing(itemType, itemId, quantity, price) {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showHardeningToast('suspicious', 'Save integrity warning: auction interactions are temporarily locked.', '#EF5350');
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const qty = Math.max(1, Math.floor(Number(quantity) || 1));
             const ask = Math.max(1, Math.floor(Number(price) || 1));
             const owned = getAuctionOwnedCount(itemType, itemId);
@@ -3433,7 +4115,17 @@
             // Rec 4: Charge non-refundable listing fee upfront
             const feeRate = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.auctionListingFeeRate === 'number')
                 ? ECONOMY_BALANCE.auctionListingFeeRate : 0.03;
-            const listingFee = Math.max(1, Math.floor(ask * feeRate));
+            const relistKey = `${itemType}:${itemId}`;
+            const relistCfg = getHardeningCfg('auction', {}) || {};
+            const relistWindowMs = Math.max(60000, Number(relistCfg.relistWindowMs) || (3 * 24 * 60 * 60 * 1000));
+            const relistStepRate = Math.max(0, Number(relistCfg.relistFeeStepRate) || 0.02);
+            const relistMaxExtraRate = Math.max(0, Number(relistCfg.relistFeeMaxExtraRate) || 0.12);
+            const tracker = eco.auction.relistTracker || (eco.auction.relistTracker = {});
+            const trackerEntry = (tracker[relistKey] && typeof tracker[relistKey] === 'object') ? tracker[relistKey] : { lastAt: 0, count: 0 };
+            const withinRelistWindow = trackerEntry.lastAt > 0 && (Date.now() - trackerEntry.lastAt) <= relistWindowMs;
+            const relistCount = withinRelistWindow ? Math.max(0, Math.floor(Number(trackerEntry.count) || 0)) : 0;
+            const relistExtraRate = Math.min(relistMaxExtraRate, relistCount * relistStepRate);
+            const listingFee = Math.max(1, Math.floor(ask * (feeRate + relistExtraRate)));
             const feeSpend = spendCoins(listingFee, 'Listing Fee', true);
             if (!feeSpend.ok) return { ok: false, reason: 'insufficient-funds-fee', needed: listingFee, balance: feeSpend.balance };
 
@@ -3455,18 +4147,28 @@
                 quantity: qty,
                 price: ask,
                 listingFee: listingFee,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                relistKey: relistKey,
+                relistCount: relistCount
             };
             data.listings.unshift(listing);
             if (data.listings.length > 80) data.listings = data.listings.slice(0, 80);
             saveAuctionHouseData(data);
             eco.auction.postedCount = (eco.auction.postedCount || 0) + 1;
+            tracker[relistKey] = { lastAt: Date.now(), count: relistCount + 1 };
+            if (relistExtraRate > 0 && typeof showToast === 'function') {
+                showToast(`📈 Relist fee escalation applied (+${Math.round(relistExtraRate * 100)}%).`, '#90A4AE');
+            }
             saveGame();
             return { ok: true, listing: Object.assign({}, listing, getAuctionItemLabel(itemType, itemId)), listingFee };
         }
 
         function cancelAuctionListing(listingId) {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showHardeningToast('suspicious', 'Save integrity warning: auction interactions are temporarily locked.', '#EF5350');
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const data = loadAuctionHouseData();
             const idx = data.listings.findIndex((l) => l && l.id === listingId);
             if (idx === -1) return { ok: false, reason: 'listing-not-found' };
@@ -3482,6 +4184,10 @@
 
         function buyAuctionListing(listingId) {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showHardeningToast('suspicious', 'Save integrity warning: auction interactions are temporarily locked.', '#EF5350');
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const data = loadAuctionHouseData();
             const idx = data.listings.findIndex((l) => l && l.id === listingId);
             if (idx === -1) return { ok: false, reason: 'listing-not-found' };
@@ -3516,6 +4222,10 @@
 
         function claimAuctionEarnings() {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showHardeningToast('suspicious', 'Save integrity warning: auction interactions are temporarily locked.', '#EF5350');
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const data = loadAuctionHouseData();
             // Report #6: Claim path is tied to immutable profile identity.
             const profileId = eco.playerId;
@@ -4683,7 +5393,8 @@
         }
 
 	        function initDailyChecklist() {
-	            const today = getTodayString();
+                checkAndRecordTimeJump(gameState, 'daily-checklist');
+	            const today = getTodayStringWithTimeHardening();
 	            let resetToday = false;
 	            if (!gameState.dailyChecklist || gameState.dailyChecklist.date !== today) {
 	                resetToday = true;
@@ -5768,9 +6479,12 @@
                 ensureMiniGameExpansionState();
                 ensureGardenSystemsState();
                 ensureRetentionMetaState();
+                checkAndRecordTimeJump(gameState, 'save');
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
                 gameState.lastUpdate = Date.now();
+                gameState.saveVersion = SAVE_SCHEMA_VERSION;
+                writeSaveIntegrity(gameState);
                 // Strip transient data that shouldn't persist
                 const offlineChanges = gameState._offlineChanges;
                 const hadOfflineChanges = Object.prototype.hasOwnProperty.call(gameState, '_offlineChanges');
@@ -5815,8 +6529,43 @@
             }, 1500);
         }
 
+        function migrateSaveSchema(parsed) {
+            if (!parsed || typeof parsed !== 'object') return { migrated: false, from: 0, to: SAVE_SCHEMA_VERSION };
+            const fromVersion = Math.max(1, Math.floor(Number(parsed.saveVersion) || 1));
+            let migrated = false;
+
+            if (!Number.isFinite(parsed.saveVersion)) {
+                parsed.saveVersion = fromVersion;
+                migrated = true;
+            }
+
+            ensureExplorationState(parsed);
+            ensureEconomyState(parsed);
+            ensureSecurityState(parsed);
+            ensureTimeHardeningState(parsed);
+
+            // v3: provenance-aware loot stacks + economy hardening state + competition reward control state.
+            if (fromVersion < 3) {
+                ensureLootInventoryStacks(parsed.exploration);
+                parsed.competition = normalizeCompetitionState(parsed.competition);
+                parsed.saveVersion = 3;
+                migrated = true;
+            }
+
+            parsed.saveVersion = SAVE_SCHEMA_VERSION;
+            return { migrated, from: fromVersion, to: SAVE_SCHEMA_VERSION };
+        }
+
+        function markSuspiciousSaveState(reason) {
+            const sec = ensureSecurityState();
+            sec.suspicious = true;
+            if (typeof reason === 'string' && reason) sec.suspiciousReason = reason;
+            showHardeningToast('suspicious', 'Save integrity warning: some features are limited to protect balance.', '#EF5350');
+        }
+
         function loadGame() {
             let _needsSaveAfterLoad = false;
+            let _integrityCheck = null;
             try {
                 const saved = localStorage.getItem(STORAGE_KEYS.gameSave);
                 if (saved) {
@@ -5826,6 +6575,11 @@
                     if (!parsed || typeof parsed !== 'object') {
                         return null;
                     }
+
+                    if (!Number.isFinite(parsed.saveVersion)) parsed.saveVersion = 1;
+                    ensureSecurityState(parsed);
+                    ensureTimeHardeningState(parsed);
+                    _integrityCheck = verifyLoadedSaveIntegrity(parsed);
 
                     // Handle stuck 'hatching' phase - reset to egg
                     if (parsed.phase === 'hatching') {
@@ -6086,7 +6840,11 @@
                     ensureReminderState(parsed);
                     ensureMasteryState(parsed);
                     ensureRetentionMetaState(parsed);
+                    const schemaMigration = migrateSaveSchema(parsed);
+                    if (schemaMigration.migrated) _needsSaveAfterLoad = true;
                     updateExplorationUnlocks(true, parsed);
+                    const loadTimeJump = checkAndRecordTimeJump(parsed, 'load');
+                    if (loadTimeJump && loadTimeJump.detected) _needsSaveAfterLoad = true;
 
                     // Strip transient _neglectTickCounter from pet objects (old saves)
                     // and migrate personality to existing pets
@@ -6108,7 +6866,12 @@
                     // Apply timestamp-based garden progression for elapsed time.
                     if (typeof advanceGardenSystems === 'function') {
                         try {
-                            advanceGardenSystems(parsed, { now: Date.now(), silent: true, skipRandom: true });
+                            const gardenNow = (() => {
+                                const rawNow = Date.now();
+                                const lastGrow = Math.max(0, Number((((parsed || {}).garden) || {}).lastGrowTick) || rawNow);
+                                return lastGrow + clampElapsedForHardening(Math.max(0, rawNow - lastGrow), 'garden');
+                            })();
+                            advanceGardenSystems(parsed, { now: gardenNow, silent: true, skipRandom: true });
                         } catch (e) {
                             gardenDebugLog('Failed to advance migrated garden state', e);
                         }
@@ -6120,7 +6883,8 @@
                     // Apply time-based changes for needs (offline time simulation)
                     // Apply to ALL pets, not just the active one
                     if (parsed.lastUpdate) {
-                        const timePassed = Date.now() - parsed.lastUpdate;
+                        const rawTimePassed = Date.now() - parsed.lastUpdate;
+                        const timePassed = clampElapsedForHardening(rawTimePassed, 'needs');
                         const minutesPassed = Math.max(0, timePassed / 60000);
                         const profileCfg = (typeof getBalanceProfileConfig === 'function') ? getBalanceProfileConfig() : { offlineDecayMultiplier: 1, offlineNeglectMultiplier: 1 };
                         const offlineDecayScale = Math.max(0, Number(profileCfg.offlineDecayMultiplier) || 1);
@@ -6230,6 +6994,7 @@
                     }
                     if (_needsSaveAfterLoad) {
                         try {
+                            writeSaveIntegrity(parsed);
                             const migrated = JSON.stringify(parsed);
                             localStorage.setItem(STORAGE_KEYS.gameSave, migrated);
                             _lastSavedStorageSnapshot = migrated;
@@ -6237,9 +7002,25 @@
                     } else {
                         _lastSavedStorageSnapshot = saved;
                     }
+                    const integrity = _integrityCheck || { ok: true, missing: true };
+                    if (!integrity.ok) {
+                        ensureSecurityState(parsed).suspicious = true;
+                        ensureSecurityState(parsed).suspiciousReason = 'save-integrity-mismatch';
+                        showHardeningToast('suspicious', 'Save integrity warning: some rewards and auction features are limited.', '#EF5350');
+                    } else if (integrity.missing && parsed.saveVersion < SAVE_SCHEMA_VERSION) {
+                        // Legacy saves are allowed; checksum will be written on next save.
+                    }
+                    if (isSuspiciousEconomyState(parsed)) {
+                        showHardeningToast('suspicious', 'Save integrity warning: some rewards and auction features are limited.', '#EF5350');
+                    }
                     // Reset session-local transient state (Recommendations #1, #2)
                     parsed._sessionMinigameCount = 0;
                     parsed._careActionTimestamps = [];
+                    if (parsed.security && parsed.security.coinGainSession) parsed.security.coinGainSession.earned = 0;
+                    if (parsed.security && parsed.security.coinGainMinute) {
+                        parsed.security.coinGainMinute.windowStart = 0;
+                        parsed.security.coinGainMinute.earned = 0;
+                    }
 
                     return parsed;
                 }
@@ -6297,7 +7078,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `pet-care-buddy-save-${new Date().toISOString().slice(0,10)}.json`;
+                a.download = `my-little-friend-save-${new Date().toISOString().slice(0,10)}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -8094,8 +8875,18 @@
             const opts = options || {};
             const silent = !!opts.silent;
             const skipRandom = !!opts.skipRandom;
-            const now = Number.isFinite(opts.now) ? opts.now : Date.now();
+            let now = Number.isFinite(opts.now) ? opts.now : Date.now();
             const garden = ensureGardenSystemsState(state);
+            checkAndRecordTimeJump(state, 'garden-advance', { now });
+            const lastGrow = Number.isFinite(garden.lastGrowTick) ? garden.lastGrowTick : now;
+            const rawElapsed = Math.max(0, now - lastGrow);
+            const clampedElapsed = clampElapsedForHardening(rawElapsed, 'garden');
+            if (clampedElapsed < rawElapsed) {
+                now = lastGrow + clampedElapsed;
+                if (!silent && typeof showToast === 'function') {
+                    showToast('⏱️ Time changed; garden offline growth was capped for fairness.', '#FFA726');
+                }
+            }
             const core = getGardenCore();
             const season = state.season || getCurrentSeason();
             const seasonMultiplier = getSeasonGrowthMultiplier(season);
@@ -10577,7 +11368,7 @@
                 gameState.phase = 'egg';
                 gameState.eggTaps = gameState.eggTaps || 0;
                 renderEggPhase();
-                announce('Welcome to Pet Care Buddy! Tap the egg to hatch your new pet!');
+                announce('Welcome to My Little Friend! Tap the egg to hatch your new pet!');
 
                 // Show tutorial on first visit
                 try {
@@ -10811,6 +11602,68 @@
             saveGame();
             return true;
         }
+
+        function installEconomyDebugHooks() {
+            if (typeof window === 'undefined') return;
+            if (!window.__debugEconomy || typeof window.__debugEconomy !== 'object') window.__debugEconomy = {};
+            window.__debugEconomy.enabled = !!(typeof BALANCE_DEBUG !== 'undefined' ? BALANCE_DEBUG : true);
+            window.__debugEconomy.testExpeditionSale = function testExpeditionSale() {
+                try {
+                    const lootId = Object.keys(EXPLORATION_LOOT || {}).find((id) => (EXPLORATION_LOOT[id] || {}).rarity === 'common') || Object.keys(EXPLORATION_LOOT || {})[0];
+                    if (!lootId) return { ok: false, reason: 'no-loot-definitions' };
+                    const genericPrice = getLootSellPrice(lootId, { source: 'generic', skipSecurityPenalty: true });
+                    const expeditionPrice = getLootSellPrice(lootId, { source: 'expedition', skipSecurityPenalty: true });
+                    const nerfApplied = expeditionPrice < genericPrice;
+                    const sampleStacks = [
+                        { id: lootId, qty: 1, meta: { source: 'generic' } },
+                        { id: lootId, qty: 1, meta: { source: 'expedition' } }
+                    ];
+                    const breakdown = sampleStacks.map((stack) => ({
+                        source: stack.meta.source,
+                        qty: stack.qty,
+                        priceEach: getLootSellPrice(stack, { skipSecurityPenalty: true })
+                    }));
+                    const total = breakdown.reduce((sum, row) => sum + (row.qty * row.priceEach), 0);
+                    const result = { ok: true, lootId, genericPrice, expeditionPrice, nerfApplied, breakdown, total };
+                    console.log('[DEBUG_ECONOMY] testExpeditionSale', result);
+                    return result;
+                } catch (e) {
+                    console.error('[DEBUG_ECONOMY] testExpeditionSale failed', e);
+                    return { ok: false, error: String(e && e.message || e) };
+                }
+            };
+            window.__debugEconomy.testTimeJump = function testTimeJump() {
+                try {
+                    ensureTimeHardeningState();
+                    const state = gameState.timeHardening;
+                    const now = Date.now();
+                    state.lastSeenWallClock = now - (10 * 60 * 60 * 1000); // simulate large forward jump on next check
+                    const jump = checkAndRecordTimeJump(gameState, 'debug-time-jump', { now });
+                    const gardenClamp = clampElapsedForHardening(48 * 60 * 60 * 1000, 'garden');
+                    const needsClamp = clampElapsedForHardening(72 * 60 * 60 * 1000, 'needs');
+                    const result = {
+                        ok: true,
+                        jumpDetected: !!(jump && jump.detected),
+                        stabilizationActive: isTimeStabilizationActive(),
+                        gardenClampMs: gardenClamp,
+                        needsClampMs: needsClamp,
+                        stabilizeUntil: state.stabilizeUntil || 0
+                    };
+                    console.log('[DEBUG_ECONOMY] testTimeJump', result);
+                    return result;
+                } catch (e) {
+                    console.error('[DEBUG_ECONOMY] testTimeJump failed', e);
+                    return { ok: false, error: String(e && e.message || e) };
+                }
+            };
+            if (typeof window.__debugEconomy.testCompetitionCaps !== 'function') {
+                window.__debugEconomy.testCompetitionCaps = function pendingCompetitionDebugHook() {
+                    return { ok: false, reason: 'competition-debug-hook-not-installed-yet' };
+                };
+            }
+        }
+
+        installEconomyDebugHooks();
 
         // Save and cleanup on page unload
         window.addEventListener('beforeunload', () => {
