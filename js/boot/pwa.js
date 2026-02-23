@@ -1,3 +1,19 @@
+export function resolvePwaBootPolicy(config, runtimeGlobal = globalThis) {
+  const cfg = config || {};
+  const enabled = cfg.enabled === true;
+  const protocols = Array.isArray(cfg.enabledProtocols) ? cfg.enabledProtocols : ['http:', 'https:'];
+  const protocol = runtimeGlobal && runtimeGlobal.location ? runtimeGlobal.location.protocol : null;
+  const protocolOk = !!protocol && protocols.includes(protocol);
+  const allowOfflineBanners = enabled && cfg.offlineBanner !== false;
+
+  return {
+    enabled,
+    protocol,
+    protocolOk,
+    allowOfflineBanners
+  };
+}
+
 function removeBanner(selector) {
   const existing = document.querySelector(selector);
   if (existing) existing.remove();
@@ -16,10 +32,9 @@ function buildUpdateBanner(config) {
 
 export function initializePwa(config) {
   const cfg = config || {};
-  const protocols = Array.isArray(cfg.enabledProtocols) ? cfg.enabledProtocols : ['http:', 'https:'];
-  const protocolOk = typeof window !== 'undefined' && protocols.includes(window.location.protocol);
+  const policy = resolvePwaBootPolicy(cfg, typeof window !== 'undefined' ? window : globalThis);
 
-  if (typeof window !== 'undefined') {
+  if (policy.allowOfflineBanners && typeof window !== 'undefined') {
     window.addEventListener('offline', () => {
       removeBanner('.offline-update-banner');
       const banner = document.createElement('div');
@@ -38,7 +53,11 @@ export function initializePwa(config) {
     });
   }
 
-  if (!('serviceWorker' in navigator) || !protocolOk) {
+  if (!policy.enabled) {
+    return { skipped: true, reason: 'legacy-pwa-disabled' };
+  }
+
+  if (!('serviceWorker' in navigator) || !policy.protocolOk) {
     return null;
   }
 

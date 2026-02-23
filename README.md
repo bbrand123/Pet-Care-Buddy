@@ -66,6 +66,8 @@ python3 -m http.server 4173
 
 No bundler is required.
 
+Legacy PWA/service-worker behavior is now opt-in for local debugging only. To enable it, set `window.__MLF_ENABLE_LEGACY_WEB_PWA__ = true` before `js/main.js` loads (for example in a temporary local test page).
+
 ### Legacy Web Demo (Optional / Secondary)
 If you maintain a web demo build, GitHub Pages can still be used (`https://[your-username].github.io/My-Little-Friend/`), but it is not the primary shipping target.
 

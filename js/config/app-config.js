@@ -1,9 +1,13 @@
+const LEGACY_WEB_PWA_OPT_IN = typeof globalThis !== 'undefined'
+  && globalThis.__MLF_ENABLE_LEGACY_WEB_PWA__ === true;
+
 export const APP_BOOT_CONFIG = Object.freeze({
   runtime: {
     scriptLoadTimeoutMs: 15000,
     assertManifestParity: true
   },
   pwa: {
+    enabled: LEGACY_WEB_PWA_OPT_IN,
     serviceWorkerUrl: './sw.js',
     enabledProtocols: ['http:', 'https:'],
     updateBanner: {
