@@ -1,6 +1,7 @@
 export const APP_BOOT_CONFIG = Object.freeze({
   runtime: {
-    scriptLoadTimeoutMs: 15000
+    scriptLoadTimeoutMs: 15000,
+    assertManifestParity: true
   },
   pwa: {
     serviceWorkerUrl: './sw.js',

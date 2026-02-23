@@ -2,8 +2,6 @@
     'use strict';
 
     if (global.__MLF_RUNTIME_BOOTSTRAPPED__) return;
-    global.__MLF_RUNTIME_BOOTSTRAPPED__ = true;
-    global.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ = false;
 
     function loadScript(url) {
         return new Promise(function(resolve, reject) {
@@ -43,17 +41,47 @@
         return chain;
     }
 
-    loadScript('js/config/runtime-manifest.classic.generated.js')
-        .then(function() {
+    function ensureSharedBootModulesLoaded() {
+        return loadScript('js/boot/runtime-manifest-shared.js')
+            .then(function() { return loadScript('js/boot/runtime-bootstrap-shared.js'); });
+    }
+
+    function loadClassicManifestAndRuntime(options) {
+        var opts = options || {};
+        return loadScript('js/config/runtime-manifest.classic.generated.js').then(function() {
             var manifest = global.MLFRuntimeManifest || {};
+            var manifestHelpers = global.MLFRuntimeManifestShared;
+            var parityReport = null;
+            if (opts.assertRuntimeManifestParity !== false && manifestHelpers && typeof manifestHelpers.assertRuntimeManifestParity === 'function') {
+                parityReport = manifestHelpers.assertRuntimeManifestParity(manifest, {
+                    mode: 'file',
+                    expectedRuntimeOrder: manifestHelpers.flattenRuntimeFiles(manifest)
+                });
+            }
             var files = manifest.RUNTIME_SCRIPT_FILES || [];
-            return loadSequential(files);
-        })
+            return loadSequential(files).then(function() {
+                return {
+                    manifest: manifest,
+                    runtimeScriptFiles: files.slice ? files.slice() : Array.prototype.slice.call(files),
+                    manifestParityReport: parityReport
+                };
+            });
+        });
+    }
+
+    ensureSharedBootModulesLoaded()
         .then(function() {
-            global.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ = true;
-            global.dispatchEvent(new Event('mlf:runtime-scripts-loaded'));
-            global.__MLF_RUNTIME_READY__ = true;
-            global.dispatchEvent(new Event('mlf:runtime-ready'));
+            var shared = global.MLFRuntimeBootstrapShared;
+            if (!shared || typeof shared.runRuntimeBoot !== 'function') {
+                throw new Error('MLFRuntimeBootstrapShared is unavailable for file bootstrap.');
+            }
+            return shared.runRuntimeBoot({
+                global: global,
+                bootPath: 'file',
+                loadRuntimeScripts: function(ctx) {
+                    return loadClassicManifestAndRuntime(ctx || {});
+                }
+            });
         })
         .catch(function(err) {
             console.error('[MLF] File-protocol bootstrap failed:', err);

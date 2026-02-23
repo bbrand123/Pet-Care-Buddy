@@ -79,6 +79,8 @@ const COMPETITION_RUNTIME_FILES = ['./competition.js'];
 const RUNTIME_BOOT_FILES = [
   './js/main.js',
   './js/boot/runtime-loader.js',
+  './js/boot/runtime-manifest-shared.js',
+  './js/boot/runtime-bootstrap-shared.js',
   './js/boot/runtime-orchestrators.js',
   './js/boot/file-runtime-bootstrap.js',
   './js/boot/pwa.js',
