@@ -1132,11 +1132,12 @@
             return true;
         }
 
-	        function saveGame() {
+	        function saveGame(options) {
 	            try {
+	                const saveOptions = (options && typeof options === 'object') ? options : null;
 	                ensureExplorationState();
-                ensureEconomyState();
-                ensureMiniGameExpansionState();
+	                ensureEconomyState();
+	                ensureMiniGameExpansionState();
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
                 gameState.lastUpdate = Date.now();
@@ -1153,20 +1154,59 @@
 	                    const serialized = JSON.stringify(gameState);
 	                    localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
 	                    _lastSavedStorageSnapshot = serialized;
-                } finally {
-                    if (hadOfflineChanges) gameState._offlineChanges = offlineChanges;
-                }
-                // Show save indicator (Item 22)
-                showSaveIndicator();
-            } catch (e) {
-                console.log('Could not save game:', e);
-                if (e.name === 'QuotaExceededError' || e.code === 22) {
-                    showToast('Storage full! Progress may not be saved.', '#EF5350');
-                    announce('Warning: Storage full. Your progress may not be saved.', true);
-                    showSaveIndicator(true);
-                }
-            }
-        }
+	                    if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function' && saveOptions && saveOptions.source === 'lifecycle') {
+	                        MLFDiagnostics.log('SAVE', 'Lifecycle save wrote local storage.', {
+	                            reason: saveOptions.reason || 'native-lifecycle',
+	                            bytes: serialized.length
+	                        });
+	                    }
+	                } finally {
+	                    if (hadOfflineChanges) gameState._offlineChanges = offlineChanges;
+	                }
+	                // Show save indicator (Item 22)
+	                if (!saveOptions || !saveOptions.silentIndicator) {
+	                    showSaveIndicator();
+	                }
+	                return {
+	                    ok: true,
+	                    savedAt: gameState.lastUpdate,
+	                    schemaVersion: gameState.saveSchemaVersion,
+	                    source: saveOptions && saveOptions.source ? saveOptions.source : 'runtime'
+	                };
+	            } catch (e) {
+	                console.log('Could not save game:', e);
+	                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.error === 'function') {
+	                    MLFDiagnostics.error('SAVE', 'Could not save game.', {
+	                        error: String(e && e.message ? e.message : e),
+	                        reason: options && options.reason ? options.reason : null,
+	                        source: options && options.source ? options.source : 'runtime'
+	                    });
+	                }
+	                if (e.name === 'QuotaExceededError' || e.code === 22) {
+	                    showToast('Storage full! Progress may not be saved.', '#EF5350');
+	                    announce('Warning: Storage full. Your progress may not be saved.', true);
+	                    showSaveIndicator(true);
+	                }
+	                return {
+	                    ok: false,
+	                    error: {
+	                        code: e && e.code ? String(e.code) : (e && e.name ? String(e.name) : 'SAVE_ERROR'),
+	                        message: e && e.message ? String(e.message) : String(e)
+	                    },
+	                    source: options && options.source ? options.source : 'runtime'
+	                };
+	            }
+	        }
+
+	        if (typeof MLFSaveLifecycleBridge !== 'undefined' && MLFSaveLifecycleBridge && typeof MLFSaveLifecycleBridge.setSaveHandler === 'function') {
+	            MLFSaveLifecycleBridge.setSaveHandler(function lifecycleSaveHandler(meta) {
+	                return saveGame({
+	                    source: (meta && meta.source) || 'lifecycle',
+	                    reason: (meta && meta.reason) || 'native-lifecycle',
+	                    silentIndicator: true
+	                });
+	            });
+	        }
 
         // Visual save indicator (Item 22)
         let _saveIndicatorTimer = null;
