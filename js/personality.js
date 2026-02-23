@@ -163,25 +163,3 @@
             }
             return entries;
         }
-
-        let _lastSavedStorageSnapshot = null;
-        let _suppressUnloadAutosave = false;
-
-        function suppressUnloadAutosaveForReload() {
-            _suppressUnloadAutosave = true;
-        }
-
-        function hasExternalSaveChangeSinceLastSave() {
-            try {
-                const current = localStorage.getItem(STORAGE_KEYS.gameSave);
-                return current !== _lastSavedStorageSnapshot;
-            } catch (e) {
-                return false;
-            }
-        }
-
-        function shouldRunUnloadAutosave() {
-            if (_suppressUnloadAutosave) return false;
-            if (hasExternalSaveChangeSinceLastSave()) return false;
-            return true;
-        }

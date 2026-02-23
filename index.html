@@ -108,66 +108,6 @@
         <div id="toast-container"></div>
     </main>
 
-    <!-- Load JavaScript modules -->
-    <script src="js/version.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/balance.js"></script>
-    <script src="js/eventbus.js"></script>
-    <script src="js/state.js"></script>
-    <script src="js/constants.js"></script>
-    <script src="js/content-packs.js"></script>
-    <script src="js/data/packs/starter-packs.js"></script>
-    <script src="js/garden-features-core.js"></script>
-    <script src="js/modal-manager.js"></script>
-    <script src="js/svg.js"></script>
-    <script src="js/audio/audio-manager.js"></script>
-    <script src="js/ui/phase2-preload.js"></script>
-    <script src="js/game.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/ui/phase2-managers.js"></script>
-    <script src="js/minigames.js"></script>
-    <script src="js/competition.js"></script>
-    <script>
-        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-            navigator.serviceWorker.register('./sw.js').then(function(reg) {
-                // F40: Update detection
-                reg.addEventListener('updatefound', function() {
-                    var newWorker = reg.installing;
-                    if (newWorker) {
-                        newWorker.addEventListener('statechange', function() {
-                            if (newWorker.state === 'activated' && navigator.serviceWorker.controller) {
-                                var banner = document.createElement('div');
-                                banner.className = 'offline-update-banner';
-                                banner.setAttribute('role', 'status');
-                                banner.setAttribute('aria-live', 'polite');
-                                banner.innerHTML = '<span class="offline-banner-message">A new version is available.</span><span class="offline-banner-actions"><button type="button" class="offline-banner-action" data-banner-action="refresh">Refresh</button><button type="button" class="offline-banner-dismiss" data-banner-action="dismiss" aria-label="Dismiss update banner">Close</button></span>';
-                                var refreshBtn = banner.querySelector('[data-banner-action="refresh"]');
-                                if (refreshBtn) refreshBtn.addEventListener('click', function() { location.reload(); });
-                                var dismissBtn = banner.querySelector('[data-banner-action="dismiss"]');
-                                if (dismissBtn) dismissBtn.addEventListener('click', function() { banner.remove(); });
-                                document.body.appendChild(banner);
-                            }
-                        });
-                    }
-                });
-            }).catch(function() {});
-        }
-        // F40: Online/offline status
-        window.addEventListener('offline', function() {
-            var existing = document.querySelector('.offline-update-banner');
-            if (existing) existing.remove();
-            var banner = document.createElement('div');
-            banner.className = 'offline-update-banner offline-banner';
-            banner.setAttribute('role', 'status');
-            banner.setAttribute('aria-live', 'polite');
-            banner.textContent = "You're playing offline. Progress will sync when you reconnect.";
-            document.body.appendChild(banner);
-        });
-        window.addEventListener('online', function() {
-            var banner = document.querySelector('.offline-banner');
-            if (banner) banner.remove();
-            if (typeof showToast === 'function') showToast('Back online!', '#66BB6A');
-        });
-    </script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
