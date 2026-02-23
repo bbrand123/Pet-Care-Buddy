@@ -1815,3 +1815,89 @@
                 </svg>
             `;
         }
+
+        const PET_MICRO_REACTION_CONFIG = Object.freeze({
+            feed: { durationMs: 360, classes: ['pet-react-yum', 'pet-react-blink'], overlay: 'yum-sparkle' },
+            treat: { durationMs: 420, classes: ['pet-react-yum', 'pet-react-blink'], overlay: 'yum-sparkle' },
+            cuddle: { durationMs: 520, classes: ['pet-react-lean'], overlay: 'heart-pulse' },
+            groom: { durationMs: 420, classes: ['pet-react-fresh-shake', 'pet-react-blink'], overlay: 'sparkle-fresh' },
+            sleep: { durationMs: 600, classes: ['pet-react-sleepy-curl', 'pet-react-slow-blink'], overlay: 'sleepy-zzz' },
+            exercise: { durationMs: 440, classes: ['pet-react-bounce', 'pet-react-blink-fast'], overlay: 'energy-bolt' }
+        });
+        let _petMicroReactionCleanupTimer = null;
+
+        function isPetMicroReactionReducedMotion() {
+            try {
+                if (document.documentElement.getAttribute('data-reduced-motion') === 'true') return true;
+                return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function getPetMicroReactionOverlayHTML(kind) {
+            switch (kind) {
+                case 'heart-pulse':
+                    return '<span class="pet-micro-burst pet-micro-heart" aria-hidden="true">💗</span><span class="pet-micro-burst pet-micro-heart alt" aria-hidden="true">💕</span>';
+                case 'sparkle-fresh':
+                    return '<span class="pet-micro-burst pet-micro-sparkle" aria-hidden="true">✨</span><span class="pet-micro-burst pet-micro-sparkle alt" aria-hidden="true">✦</span>';
+                case 'sleepy-zzz':
+                    return '<span class="pet-micro-burst pet-micro-zzz" aria-hidden="true">z</span><span class="pet-micro-burst pet-micro-zzz alt" aria-hidden="true">Z</span>';
+                case 'energy-bolt':
+                    return '<span class="pet-micro-burst pet-micro-bolt" aria-hidden="true">⚡</span><span class="pet-micro-burst pet-micro-bolt alt" aria-hidden="true">✨</span>';
+                case 'yum-sparkle':
+                default:
+                    return '<span class="pet-micro-burst pet-micro-yum" aria-hidden="true">😋</span><span class="pet-micro-burst pet-micro-sparkle" aria-hidden="true">✨</span>';
+            }
+        }
+
+        function triggerPetMicroReaction(action, options) {
+            const config = PET_MICRO_REACTION_CONFIG[action];
+            if (!config || typeof document === 'undefined') return false;
+            const opts = options || {};
+            const petContainer = opts.container || document.getElementById('pet-container');
+            if (!petContainer) return false;
+            const petSvg = petContainer.querySelector('.pet-svg');
+            if (!petSvg) return false;
+
+            const reduced = isPetMicroReactionReducedMotion();
+            const reactionLayerClass = 'pet-micro-reaction-layer';
+            const existingLayer = petContainer.querySelector('.' + reactionLayerClass);
+            if (existingLayer) existingLayer.remove();
+            petContainer.classList.remove(
+                'pet-react-yum',
+                'pet-react-blink',
+                'pet-react-lean',
+                'pet-react-fresh-shake',
+                'pet-react-sleepy-curl',
+                'pet-react-slow-blink',
+                'pet-react-bounce',
+                'pet-react-blink-fast'
+            );
+            // Force reflow so repeated taps retrigger the animation.
+            void petSvg.getBoundingClientRect();
+            config.classes.forEach((cls) => petContainer.classList.add(cls));
+
+            const layer = document.createElement('div');
+            layer.className = reactionLayerClass + (reduced ? ' reduced' : '');
+            layer.setAttribute('aria-hidden', 'true');
+            layer.innerHTML = getPetMicroReactionOverlayHTML(config.overlay);
+            petContainer.appendChild(layer);
+
+            if (_petMicroReactionCleanupTimer) clearTimeout(_petMicroReactionCleanupTimer);
+            _petMicroReactionCleanupTimer = setTimeout(() => {
+                petContainer.classList.remove(
+                    'pet-react-yum',
+                    'pet-react-blink',
+                    'pet-react-lean',
+                    'pet-react-fresh-shake',
+                    'pet-react-sleepy-curl',
+                    'pet-react-slow-blink',
+                    'pet-react-bounce',
+                    'pet-react-blink-fast'
+                );
+                const liveLayer = petContainer.querySelector('.' + reactionLayerClass);
+                if (liveLayer) liveLayer.remove();
+            }, reduced ? 120 : Math.max(200, Number(config.durationMs) || 360));
+            return true;
+        }

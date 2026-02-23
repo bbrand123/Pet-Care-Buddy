@@ -132,7 +132,7 @@
             cuddle: ['❤️', '💕', '💗', '🥰', '💖']
         };
 
-        const UI_ICON_ASSETS = {
+	        const UI_ICON_ASSETS = {
             coin: 'assets/icons/ui/coin.svg',
             hunger: 'assets/icons/ui/hunger.svg',
             clean: 'assets/icons/ui/clean.svg',
@@ -155,10 +155,16 @@
             cuddle: 'assets/icons/ui/cuddle.svg',
             garden: 'assets/icons/ui/garden.svg',
             explore: 'assets/icons/ui/explore.svg',
-            settings: 'assets/icons/ui/settings.svg'
-        };
+	            settings: 'assets/icons/ui/settings.svg'
+	        };
+            const ROOM_PROP_TAP_EFFECTS = Object.freeze({
+                lampGlow: { announce: 'Lantern glow toggled', sfx: 'ui-toggle' },
+                bubbleBurst: { announce: 'Bubbles popped', sfx: 'bubble-pop' },
+                butterflyFlutter: { announce: 'Butterfly flutters by', sfx: 'ui-focus' },
+                plantShake: { announce: 'Plant rustles softly', sfx: 'ui-tap-2' }
+            });
 
-        function renderUiIcon(assetId, fallbackEmoji, label) {
+	        function renderUiIcon(assetId, fallbackEmoji, label) {
             const src = UI_ICON_ASSETS[assetId];
             if (!src) return `<span class="ui-emoji-fallback" aria-hidden="true">${fallbackEmoji}</span>`;
             const safeLabel = escapeHTML(label || '');
@@ -236,6 +242,59 @@
 	            `;
 	        }
 
+            function spawnRoomPropParticles(layer, effect) {
+                if (!layer) return;
+                const reduced = (typeof isReducedMotionEnabled === 'function') ? isReducedMotionEnabled() : false;
+                layer.innerHTML = '';
+                const particlesByEffect = {
+                    lampGlow: ['✨', '💡'],
+                    bubbleBurst: ['🫧', '🫧', '✨'],
+                    butterflyFlutter: ['🦋', '✨'],
+                    plantShake: ['🍃', '🌿', '✨']
+                };
+                const items = particlesByEffect[effect] || ['✨'];
+                items.slice(0, reduced ? 1 : items.length).forEach((glyph, idx) => {
+                    const span = document.createElement('span');
+                    span.className = 'room-prop-particle';
+                    span.textContent = glyph;
+                    span.style.left = `${20 + Math.random() * 60}%`;
+                    span.style.top = `${15 + Math.random() * 55}%`;
+                    span.style.animationDelay = `${idx * 0.03}s`;
+                    layer.appendChild(span);
+                });
+                setTimeout(() => { if (layer) layer.innerHTML = ''; }, reduced ? 300 : 900);
+            }
+
+            function bindInteractiveRoomPropTaps() {
+                document.querySelectorAll('.room-prop-hit').forEach((btn) => {
+                    if (btn.dataset.boundRoomPropTap === 'true') return;
+                    btn.dataset.boundRoomPropTap = 'true';
+                    btn.addEventListener('click', () => {
+                        const wrapper = btn.closest('.interactive-room-prop');
+                        if (!wrapper) return;
+                        const effect = wrapper.getAttribute('data-prop-effect') || 'lampGlow';
+                        const effectMeta = ROOM_PROP_TAP_EFFECTS[effect] || ROOM_PROP_TAP_EFFECTS.lampGlow;
+                        const particleLayer = wrapper.querySelector('.room-prop-particle-layer');
+                        if (effect === 'lampGlow') {
+                            const nextLit = wrapper.getAttribute('data-prop-lit') !== 'true';
+                            wrapper.setAttribute('data-prop-lit', nextLit ? 'true' : 'false');
+                            wrapper.classList.toggle('is-lit', nextLit);
+                        } else {
+                            wrapper.classList.remove('prop-tapped');
+                            void wrapper.offsetWidth;
+                            wrapper.classList.add('prop-tapped');
+                            setTimeout(() => wrapper.classList.remove('prop-tapped'), 450);
+                        }
+                        spawnRoomPropParticles(particleLayer, effect);
+                        if (typeof triggerUiHaptic === 'function') triggerUiHaptic('propTap');
+                        if (typeof GameAudio !== 'undefined' && typeof GameAudio.playSFXByName === 'function') {
+                            GameAudio.playSFXByName(effectMeta.sfx, GameAudio.sfx.buttonTap, { gain: 0.65 });
+                        }
+                        if (typeof announce === 'function' && effectMeta.announce) announce(effectMeta.announce);
+                    });
+                });
+            }
+
 	        function generateJourneyStatusPanelHTML() {
 	            if (typeof getJourneyStatus !== 'function') return '';
 	            const status = getJourneyStatus();
@@ -276,7 +335,7 @@
 	            `;
 	        }
 
-	        function generateOnboardingNextPanelHTML() {
+		        function generateOnboardingNextPanelHTML() {
 	            if (typeof ensureRetentionMetaState !== 'function') return '';
 	            const meta = ensureRetentionMetaState();
 	            if (!meta || !meta.onboarding || meta.onboarding.sessionGuideSkipped) return '';
@@ -295,9 +354,74 @@
 	                    </ul>
 	                </aside>
 	            `;
-	        }
+		        }
 
-	        function generateReminderCenterBannerHTML() {
+                const ADVANCED_EMPTY_STATE_CARD_META = Object.freeze({
+                    gardenEmpty: { icon: '🌱', title: 'Garden is empty', body: 'Plant a first crop to start a steady snack loop for feeding and treats.', ctaLabel: 'Open Garden', ctaId: 'empty-next-garden' },
+                    exploreUnavailable: { icon: '🧭', title: 'Exploration not ready', body: 'A few more care actions unlock a smoother first expedition run.', ctaLabel: 'Open Explore', ctaId: 'empty-next-explore' },
+                    noFavorites: { icon: '⭐', title: 'No quick favorites yet', body: 'Save your most-used care actions for one-tap access in the favorites bar.', ctaLabel: 'Set Quick Actions', ctaId: 'empty-next-favorites' },
+                    noBreedingPair: { icon: '💕', title: 'No breeding pair yet', body: 'You need two compatible adult pets before breeding can begin.', ctaLabel: 'Open Breeding', ctaId: 'empty-next-breeding' }
+                });
+
+                function generateAdvancedEmptyStateCardsHTML() {
+                    if (!gameState || !gameState.pet) return '';
+                    const cards = [];
+                    const garden = gameState.garden || {};
+                    const plots = Array.isArray(garden.plots) ? garden.plots : [];
+                    const inventory = (garden && garden.inventory && typeof garden.inventory === 'object') ? garden.inventory : {};
+                    const plantedCount = plots.filter((plot) => plot && ((plot.seedId && plot.stage >= 0) || (plot.cropId && plot.stage >= 0) || (plot.stage > 0))).length;
+                    const inventoryCount = Object.values(inventory).reduce((sum, value) => sum + (Number(value) || 0), 0);
+                    if (plantedCount === 0 && inventoryCount === 0) cards.push(ADVANCED_EMPTY_STATE_CARD_META.gardenEmpty);
+
+                    const careActions = Number((gameState.pet && gameState.pet.careActions) || 0);
+                    if (careActions < 5) cards.push(ADVANCED_EMPTY_STATE_CARD_META.exploreUnavailable);
+
+                    if (typeof getFavorites === 'function') {
+                        const favs = (getFavorites() || []).filter(Boolean);
+                        if (favs.length === 0) cards.push(ADVANCED_EMPTY_STATE_CARD_META.noFavorites);
+                    }
+
+                    const pets = Array.isArray(gameState.pets) ? gameState.pets.filter(Boolean) : (gameState.pet ? [gameState.pet] : []);
+                    let breedingEligibleCount = pets.length;
+                    if (typeof canBreed === 'function') {
+                        breedingEligibleCount = pets.filter((pet) => {
+                            try {
+                                const res = canBreed(pet);
+                                return !!(res && res.eligible);
+                            } catch (e) {
+                                return false;
+                            }
+                        }).length;
+                    } else {
+                        breedingEligibleCount = pets.filter((pet) => ['adult', 'elder'].includes(String(pet && pet.growthStage || ''))).length;
+                    }
+                    if (breedingEligibleCount < 2) cards.push(ADVANCED_EMPTY_STATE_CARD_META.noBreedingPair);
+
+                    if (cards.length === 0) return '';
+                    return `
+                        <section class="advanced-empty-states" id="advanced-empty-states" role="region" aria-label="What to do next for advanced systems">
+                            <div class="advanced-empty-states-head">
+                                <h3>What to try next</h3>
+                                <p>Small setup steps unlock smoother rewards later.</p>
+                            </div>
+                            <div class="advanced-empty-states-grid">
+                                ${cards.slice(0, 4).map((card) => `
+                                    <article class="advanced-empty-card" aria-label="${escapeHTML(card.title)}. ${escapeHTML(card.body)}">
+                                        <div class="advanced-empty-illustration" aria-hidden="true">
+                                            <span>${card.icon}</span>
+                                            <span class="advanced-empty-spark">✦</span>
+                                        </div>
+                                        <h4>${escapeHTML(card.title)}</h4>
+                                        <p>${escapeHTML(card.body)}</p>
+                                        <button type="button" class="advanced-empty-cta" id="${card.ctaId}" aria-label="${escapeHTML(card.ctaLabel)} for ${escapeHTML(card.title)}">${escapeHTML(card.ctaLabel)}</button>
+                                    </article>
+                                `).join('')}
+                            </div>
+                        </section>
+                    `;
+                }
+
+		        function generateReminderCenterBannerHTML() {
 	            if (typeof getReminderCenterItems !== 'function') return '';
 	            const items = getReminderCenterItems();
 	            const prompt = (typeof shouldShowReminderPrompt === 'function') ? shouldShowReminderPrompt() : false;
@@ -1389,8 +1513,9 @@
 	                ${generateStreakStatusPanelHTML()}
 	                ${generateJourneyStatusPanelHTML()}
 	                ${generateReminderCenterBannerHTML()}
-	                ${generateOnboardingNextPanelHTML()}
-	                ${generateRetentionDebugPanelHTML()}
+		                ${generateOnboardingNextPanelHTML()}
+                        ${generateAdvancedEmptyStateCardsHTML()}
+		                ${generateRetentionDebugPanelHTML()}
 
 	                ${(() => {
                     const careQuality = pet.careQuality || 'average';
@@ -1596,8 +1721,9 @@
                     🥚 ${canAdoptMore() ? 'Adopt New Pet' : 'Start Over'}
                 </button>
             `;
-            setCareActionsSkipLinkVisible(true);
-            applyProgressiveOnboardingUI();
+	            setCareActionsSkipLinkVisible(true);
+	            applyProgressiveOnboardingUI();
+                bindInteractiveRoomPropTaps();
 
             // Add event listeners
             // Emergency care button
@@ -1648,10 +1774,27 @@
 	                if (typeof showPetCodex === 'function') showPetCodex();
 	                if (typeof markCoachChecklistProgress === 'function') markCoachChecklistProgress('open_codex');
 	            });
-	            safeAddClick('next-step-expedition', () => {
-	                if (typeof showExplorationModal === 'function') showExplorationModal();
-	            });
-	            safeAddClick('next-steps-skip', () => {
+		            safeAddClick('next-step-expedition', () => {
+		                if (typeof showExplorationModal === 'function') showExplorationModal();
+		            });
+                    safeAddClick('empty-next-garden', () => {
+                        if (typeof switchRoom === 'function') switchRoom('garden');
+                    });
+                    safeAddClick('empty-next-explore', () => {
+                        if (typeof showExplorationModal === 'function') showExplorationModal();
+                    });
+                    safeAddClick('empty-next-favorites', () => {
+                        const firstEmpty = document.querySelector('.favorite-slot.favorite-slot-empty');
+                        if (firstEmpty && typeof firstEmpty.click === 'function') {
+                            firstEmpty.click();
+                            return;
+                        }
+                        if (typeof showToast === 'function') showToast('Quick action slots are already filled.', '#90A4AE');
+                    });
+                    safeAddClick('empty-next-breeding', () => {
+                        if (typeof showBreedingModal === 'function') showBreedingModal();
+                    });
+		            safeAddClick('next-steps-skip', () => {
 	                if (typeof ensureRetentionMetaState === 'function') {
 	                    const meta = ensureRetentionMetaState();
 	                    if (meta && meta.onboarding) meta.onboarding.sessionGuideSkipped = true;

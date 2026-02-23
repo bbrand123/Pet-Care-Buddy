@@ -363,9 +363,119 @@
             highscore: [40, 20, 40, 20, 40, 20, 100] // big celebration
         };
 
+        const HAPTIC_DESIGN_MAP = Object.freeze({
+            roomSwitch: { type: 'confirm', strength: 'light', throttleMs: 140, vibrate: [24] },
+            modalOpen: { type: 'confirm', strength: 'light', throttleMs: 110, vibrate: [16] },
+            modalClose: { type: 'confirm', strength: 'light', throttleMs: 110, vibrate: [12] },
+            dailyComplete: { type: 'success', strength: 'medium', throttleMs: 800, vibrate: [24, 18, 46] },
+            rewardClaim: { type: 'reward', strength: 'medium', throttleMs: 300, vibrate: [18, 12, 36] },
+            confirmPrimary: { type: 'confirm', strength: 'medium', throttleMs: 150, vibrate: [22] },
+            propTap: { type: 'confirm', strength: 'light', throttleMs: 120, vibrate: [12] }
+        });
+        const _hapticEventLastAt = {};
+        let _hapticGlobalLastAt = 0;
+        let _globalUiHapticsBound = false;
+        let _modalHapticObserver = null;
+
+        function postNativeHaptic(payload) {
+            try {
+                if (!isHapticsEnabled()) return false;
+                const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.haptics;
+                if (!bridge || typeof bridge.postMessage !== 'function') return false;
+                bridge.postMessage(payload || { type: 'confirm', strength: 'light' });
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function getHapticDesign(eventId) {
+            return HAPTIC_DESIGN_MAP[eventId] || null;
+        }
+
+        function triggerUiHaptic(eventId, overrides) {
+            try {
+                if (!isHapticsEnabled()) return false;
+                const base = getHapticDesign(eventId);
+                if (!base && !overrides) return false;
+                const cfg = Object.assign({}, base || {}, overrides || {});
+                const now = Date.now();
+                const eventThrottle = Math.max(0, Number(cfg.throttleMs) || 0);
+                const lastEventAt = _hapticEventLastAt[eventId] || 0;
+                if (eventThrottle && now - lastEventAt < eventThrottle) return false;
+                if (now - _hapticGlobalLastAt < 55) return false; // anti-spam floor
+                _hapticEventLastAt[eventId] = now;
+                _hapticGlobalLastAt = now;
+                postNativeHaptic({
+                    type: String(cfg.type || 'confirm'),
+                    strength: cfg.strength ? String(cfg.strength) : undefined
+                });
+                if (navigator.vibrate && cfg.vibrate && Array.isArray(cfg.vibrate)) {
+                    navigator.vibrate(cfg.vibrate);
+                }
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function countOpenModalLikeOverlays() {
+            try {
+                return document.querySelectorAll(
+                    '[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"], .settings-overlay, .daily-overlay, .rewards-hub-overlay, .minigame-menu-overlay'
+                ).length;
+            } catch (e) {
+                return 0;
+            }
+        }
+
+        function setupGlobalUiHapticCoverage() {
+            if (_globalUiHapticsBound || typeof document === 'undefined') return;
+            _globalUiHapticsBound = true;
+
+            document.addEventListener('click', function (event) {
+                const target = event && event.target && event.target.closest ? event.target.closest('button, [role="button"]') : null;
+                if (!target) return;
+
+                if (target.matches('[aria-haspopup="dialog"], #minigames-btn, #settings-btn, #daily-btn, #rewards-btn, #explore-btn, #journey-btn')) {
+                    triggerUiHaptic('modalOpen');
+                    return;
+                }
+                if (target.matches('.settings-close, .daily-close, .rewards-hub-close, .minigame-close-btn, [data-summary-close], [id$=\"-close\"], [aria-label^=\"Close \"]')) {
+                    triggerUiHaptic('modalClose');
+                    return;
+                }
+                if (target.matches('.streak-claim-btn, [data-journey-redeem], #expedition-collect-btn, [id*=\"claim\"]')) {
+                    triggerUiHaptic('rewardClaim');
+                    return;
+                }
+                if (target.matches('.modal-btn.confirm, .confirm-danger-btn, #exit-confirm, .minigame-summary-btn.primary')) {
+                    triggerUiHaptic('confirmPrimary');
+                }
+            }, true);
+
+            if (typeof MutationObserver === 'function' && document.body) {
+                let lastCount = countOpenModalLikeOverlays();
+                _modalHapticObserver = new MutationObserver(function () {
+                    const nextCount = countOpenModalLikeOverlays();
+                    if (nextCount > lastCount) triggerUiHaptic('modalOpen');
+                    else if (nextCount < lastCount) triggerUiHaptic('modalClose');
+                    lastCount = nextCount;
+                });
+                _modalHapticObserver.observe(document.body, { childList: true, subtree: true });
+            }
+        }
+
         function hapticPattern(action) {
             try {
                 if (!isHapticsEnabled()) return;
+                if (action === 'achievement' || action === 'highscore') {
+                    postNativeHaptic({ type: 'success', strength: 'medium' });
+                } else if (action === 'critical') {
+                    postNativeHaptic({ type: 'warning', strength: 'heavy' });
+                } else if (HAPTIC_PATTERNS[action]) {
+                    postNativeHaptic({ type: 'confirm', strength: action === 'exercise' ? 'medium' : 'light' });
+                }
                 if (navigator.vibrate && HAPTIC_PATTERNS[action]) {
                     navigator.vibrate(HAPTIC_PATTERNS[action]);
                 }
@@ -2194,6 +2304,7 @@
             if (typeof window !== 'undefined' && window.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ === false) return;
             _coreBootStarted = true;
             init();
+            setupGlobalUiHapticCoverage();
             dismissSplash();
         }
         if (typeof window !== 'undefined') {

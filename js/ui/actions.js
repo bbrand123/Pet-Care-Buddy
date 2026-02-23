@@ -1815,10 +1815,11 @@
                 } else if (action === 'groom') {
                     reactionEmoji = '💇';
                 }
-                if (reactionEmoji && petContainer) {
-                    showPetReaction(petContainer, reactionEmoji);
-                }
-            }
+	                if (reactionEmoji && petContainer) {
+	                    showPetReaction(petContainer, reactionEmoji);
+	                }
+                    if (typeof triggerPetMicroReaction === 'function' && petContainer) triggerPetMicroReaction(action, { container: petContainer });
+	            }
 
             // Track daily checklist progress
             if (typeof incrementDailyProgress === 'function') {

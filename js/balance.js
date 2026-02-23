@@ -168,6 +168,8 @@ const STORAGE_KEYS = Object.freeze({
     samplePackEnabled: 'myLittleFriend_samplePackEnabled',
     /** UI theme (light/dark) */
     theme: 'myLittleFriend_theme',
+    /** Cosmetic theme pack (default/cozy/seasonal) */
+    cosmeticTheme: 'myLittleFriend_cosmeticTheme',
     /** Tutorial completed flag */
     tutorialDone: 'myLittleFriend_tutorialDone',
     /** Haptic feedback disabled flag */

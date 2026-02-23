@@ -71,6 +71,50 @@
     const lastPlayedAt = new Map();
     const channelLoopPlayers = new Map();
     const captionChannelState = { lastCue: null, category: null, text: '', timestamp: 0 };
+    const sfxVariantBags = new Map();
+    const sfxVariantLastPick = new Map();
+
+    const SFX_VARIANT_GROUPS = Object.freeze({
+        uiTap: Object.freeze([
+            { name: 'ui-tap-1', gain: 1 },
+            { name: 'ui-tap-2', gain: 0.95 },
+            { name: 'ui-toggle', gain: 0.78 }
+        ]),
+        confirm: Object.freeze([
+            { name: 'ui-confirm', gain: 1 },
+            { name: 'match-success', gain: 0.72 },
+            { name: 'ui-focus', gain: 0.82 }
+        ]),
+        feed: Object.freeze([
+            { name: 'feed', gain: 1 },
+            { name: 'pet-eating', gain: 0.9 },
+            { name: 'happy-chirp', gain: 0.48 }
+        ]),
+        groom: Object.freeze([
+            { name: 'groom', gain: 1 },
+            { name: 'groom-soft', gain: 0.92 },
+            { name: 'ui-focus', gain: 0.7 }
+        ]),
+        cuddle: Object.freeze([
+            { name: 'cuddle', gain: 1 },
+            { name: 'affection-heart', gain: 0.86 },
+            { name: 'pet-affection-heart', gain: 0.84 }
+        ])
+    });
+    const SFX_VARIANT_NAME_TO_GROUP = Object.freeze({
+        'button-tap': 'uiTap',
+        'ui-tap-1': 'uiTap',
+        'ui-tap-2': 'uiTap',
+        tap: 'uiTap',
+        'tap-1': 'uiTap',
+        'tap-2': 'uiTap',
+        'ui-confirm': 'confirm',
+        confirm: 'confirm',
+        success: 'confirm',
+        feed: 'feed',
+        groom: 'groom',
+        cuddle: 'cuddle'
+    });
 
     const state = {
         volumes: Object.assign({}, DEFAULT_VOLUMES),
@@ -533,6 +577,48 @@
         return null;
     }
 
+    function shuffleVariants(list) {
+        const arr = list.slice();
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = tmp;
+        }
+        return arr;
+    }
+
+    function pickVariantGroupEntry(groupId) {
+        const group = SFX_VARIANT_GROUPS[groupId];
+        if (!Array.isArray(group) || group.length === 0) return null;
+        let bag = sfxVariantBags.get(groupId);
+        if (!Array.isArray(bag) || bag.length === 0) {
+            bag = shuffleVariants(group);
+            const lastPick = sfxVariantLastPick.get(groupId);
+            if (bag.length > 1 && lastPick && bag[0] && bag[0].name === lastPick.name) {
+                bag.push(bag.shift());
+            }
+        }
+        const next = bag.shift() || group[0];
+        sfxVariantBags.set(groupId, bag);
+        sfxVariantLastPick.set(groupId, next);
+        return next;
+    }
+
+    function resolveVariantPlayback(name, opts) {
+        const soundName = String(name || '');
+        const options = Object.assign({}, opts || {});
+        if (options.disableVariants) return { soundName, options };
+        const groupId = SFX_VARIANT_NAME_TO_GROUP[soundName];
+        if (!groupId) return { soundName, options };
+        const pick = pickVariantGroupEntry(groupId);
+        if (!pick || !pick.name) return { soundName, options };
+        const baseGain = Number.isFinite(options.gain) ? Number(options.gain) : 1;
+        options.gain = Math.max(0, Math.min(1, baseGain * (Number(pick.gain) || 1)));
+        options.variantGroup = groupId;
+        return { soundName: pick.name, options };
+    }
+
     function canPlayChannel(channel, opts) {
         if (destroyed) return false;
         if (!state.samplePackEnabled && (channel === 'sfx' || channel === 'ui')) return false;
@@ -845,12 +931,14 @@
 
     function playSFX(nameOrToken, opts) {
         const soundName = extractSoundName(nameOrToken);
-        return playOneShot(soundName, opts || {});
+        const request = resolveVariantPlayback(soundName, opts || {});
+        return playOneShot(request.soundName, request.options);
     }
 
     function playUI(nameOrAlias, opts) {
         const name = extractSoundName(nameOrAlias) || 'ui-tap-1';
-        return playOneShot(name, Object.assign({ ui: true }, opts || {}));
+        const request = resolveVariantPlayback(name, Object.assign({ ui: true }, opts || {}));
+        return playOneShot(request.soundName, request.options);
     }
 
     function playMusic(trackName, opts) {
@@ -865,9 +953,13 @@
 
     function playSFXByName(name, fallback, opts) {
         const resolved = resolveSound(name);
-        if (resolved) return playOneShot(name, opts || {});
+        if (resolved) {
+            const request = resolveVariantPlayback(name, opts || {});
+            return playOneShot(request.soundName, request.options);
+        }
         const fromFallback = extractSoundName(fallback);
-        return playOneShot(fromFallback, opts || {});
+        const request = resolveVariantPlayback(fromFallback, opts || {});
+        return playOneShot(request.soundName, request.options);
     }
 
     function toggle() {
@@ -977,7 +1069,8 @@
             focus: 'ui-focus',
             toggle: 'ui-toggle'
         };
-        return playOneShot(map[kind] || 'ui-tap-1', options || {});
+        const request = resolveVariantPlayback(map[kind] || 'ui-tap-1', options || {});
+        return playOneShot(request.soundName, request.options);
     }
 
     function playRewardCue(tier, options) {

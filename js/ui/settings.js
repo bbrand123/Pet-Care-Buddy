@@ -8,15 +8,21 @@
 // ============================================================
 
 	        // ==================== SETTINGS MODAL ====================
-        let _settingsModalUiRestore = null;
+	        let _settingsModalUiRestore = null;
+            const COSMETIC_THEME_DEFINITIONS = Object.freeze({
+                default: { id: 'default', label: 'Default', emoji: '🎨' },
+                cozy: { id: 'cozy', label: 'Cozy', emoji: '🧣' },
+                seasonal: { id: 'seasonal', label: 'Seasonal', emoji: '🍂' }
+            });
 
         function captureSettingsPreferenceSnapshot() {
             const getStorage = (key) => {
                 try { return localStorage.getItem(key); } catch (e) { return null; }
             };
-            return {
-                theme: document.documentElement.getAttribute('data-theme') || '',
-                textSize: document.documentElement.getAttribute('data-text-size') || '',
+	            return {
+	                theme: document.documentElement.getAttribute('data-theme') || '',
+                    cosmeticTheme: document.documentElement.getAttribute('data-cosmetic-theme') || 'default',
+	                textSize: document.documentElement.getAttribute('data-text-size') || '',
                 reducedMotion: document.documentElement.getAttribute('data-reduced-motion') === 'true',
                 calmMode: document.documentElement.getAttribute('data-calm-mode') === 'true' || (document.body && document.body.classList.contains('calm-mode')),
                 highContrast: document.documentElement.getAttribute('data-high-contrast') === 'true',
@@ -35,18 +41,22 @@
         function applySettingsPreferenceSnapshot(snapshot) {
             if (!snapshot || typeof snapshot !== 'object') return false;
             const html = document.documentElement;
-            if (snapshot.theme) html.setAttribute('data-theme', snapshot.theme);
-            else html.removeAttribute('data-theme');
-            if (snapshot.textSize === 'large') html.setAttribute('data-text-size', 'large');
+	            if (snapshot.theme) html.setAttribute('data-theme', snapshot.theme);
+	            else html.removeAttribute('data-theme');
+                if (snapshot.cosmeticTheme && snapshot.cosmeticTheme !== 'default') html.setAttribute('data-cosmetic-theme', snapshot.cosmeticTheme);
+                else html.removeAttribute('data-cosmetic-theme');
+	            if (snapshot.textSize === 'large') html.setAttribute('data-text-size', 'large');
             else html.removeAttribute('data-text-size');
             html.setAttribute('data-reduced-motion', snapshot.reducedMotion ? 'true' : 'false');
             html.setAttribute('data-calm-mode', snapshot.calmMode ? 'true' : 'false');
             html.setAttribute('data-high-contrast', snapshot.highContrast ? 'true' : 'false');
             if (document.body) document.body.classList.toggle('calm-mode', !!snapshot.calmMode);
             try {
-                if (snapshot.theme) localStorage.setItem(STORAGE_KEYS.theme, snapshot.theme);
-                else localStorage.removeItem(STORAGE_KEYS.theme);
-                if (snapshot.textSize) localStorage.setItem(STORAGE_KEYS.textSize, snapshot.textSize);
+	                if (snapshot.theme) localStorage.setItem(STORAGE_KEYS.theme, snapshot.theme);
+	                else localStorage.removeItem(STORAGE_KEYS.theme);
+                    if (snapshot.cosmeticTheme && snapshot.cosmeticTheme !== 'default') localStorage.setItem(STORAGE_KEYS.cosmeticTheme, snapshot.cosmeticTheme);
+                    else localStorage.removeItem(STORAGE_KEYS.cosmeticTheme);
+	                if (snapshot.textSize) localStorage.setItem(STORAGE_KEYS.textSize, snapshot.textSize);
                 else localStorage.removeItem(STORAGE_KEYS.textSize);
                 localStorage.setItem(STORAGE_KEYS.reducedMotion, snapshot.reducedMotion ? 'true' : 'false');
                 localStorage.setItem(STORAGE_KEYS.calmMode, snapshot.calmMode ? 'true' : 'false');
@@ -117,8 +127,12 @@
             const musicVolumeSetting = typeof GameAudio !== 'undefined' && typeof GameAudio.getMusicVolumeSetting === 'function'
                 ? GameAudio.getMusicVolumeSetting()
                 : 1;
-            const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
-                (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+	            const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+	                (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                const cosmeticTheme = (() => {
+                    const raw = document.documentElement.getAttribute('data-cosmetic-theme') || 'default';
+                    return COSMETIC_THEME_DEFINITIONS[raw] ? raw : 'default';
+                })();
             const hapticEnabled = !(localStorage.getItem(STORAGE_KEYS.hapticOff) === 'true');
             const ttsEnabled = !(localStorage.getItem(STORAGE_KEYS.ttsOff) === 'true');
             const reducedMotionEnabled = document.documentElement.getAttribute('data-reduced-motion') === 'true';
@@ -223,14 +237,21 @@
                             </button>
                             <span class="settings-toggle-state" id="state-setting-darkmode">${isDark ? 'On' : 'Off'}</span>
                         </div>
-                        <div class="settings-row">
-                            <span class="settings-row-label">🔤 Large Text</span>
-                            <button class="settings-toggle ${document.documentElement.getAttribute('data-text-size') === 'large' ? 'on' : ''}" id="setting-textsize" role="switch" aria-checked="${document.documentElement.getAttribute('data-text-size') === 'large'}" aria-label="Large Text">
-                                <span class="settings-toggle-knob"></span>
-                            </button>
-                            <span class="settings-toggle-state" id="state-setting-textsize">${document.documentElement.getAttribute('data-text-size') === 'large' ? 'On' : 'Off'}</span>
-                        </div>
-                        </fieldset>
+	                        <div class="settings-row">
+	                            <span class="settings-row-label">🔤 Large Text</span>
+	                            <button class="settings-toggle ${document.documentElement.getAttribute('data-text-size') === 'large' ? 'on' : ''}" id="setting-textsize" role="switch" aria-checked="${document.documentElement.getAttribute('data-text-size') === 'large'}" aria-label="Large Text">
+	                                <span class="settings-toggle-knob"></span>
+	                            </button>
+	                            <span class="settings-toggle-state" id="state-setting-textsize">${document.documentElement.getAttribute('data-text-size') === 'large' ? 'On' : 'Off'}</span>
+	                        </div>
+                            <div class="settings-row settings-row-theme-pack">
+                                <span class="settings-row-label">🪄 Theme Pack</span>
+                                <button class="settings-choice ${cosmeticTheme === 'default' ? 'active' : ''}" id="setting-cosmetic-default" type="button" aria-pressed="${cosmeticTheme === 'default' ? 'true' : 'false'}">Default</button>
+                                <button class="settings-choice ${cosmeticTheme === 'cozy' ? 'active' : ''}" id="setting-cosmetic-cozy" type="button" aria-pressed="${cosmeticTheme === 'cozy' ? 'true' : 'false'}">Cozy</button>
+                                <button class="settings-choice ${cosmeticTheme === 'seasonal' ? 'active' : ''}" id="setting-cosmetic-seasonal" type="button" aria-pressed="${cosmeticTheme === 'seasonal' ? 'true' : 'false'}">Seasonal</button>
+                                <small class="settings-verbosity-desc" style="display:block;width:100%;font-size:0.78rem;color:var(--color-text-secondary);margin-top:4px;">Cosmetic-only skins for buttons, room accents, and reward art polish.</small>
+                            </div>
+	                        </fieldset>
 
                         <fieldset class="settings-group"><legend class="settings-group-heading">Accessibility</legend>
                         <div class="settings-row">
@@ -330,9 +351,12 @@
                     'setting-music': 'Background music only.',
                     'setting-sample-pack': 'Uses the alternate sample audio set.',
                     'setting-sound-captions': 'Shows short captions when sound cues play.',
-                    'setting-darkmode': 'Switches between light and dark color themes.',
-                    'setting-textsize': 'Increases text size across the game UI.',
-                    'setting-high-contrast': 'Boosts contrast for text, controls, and badges.',
+	                    'setting-darkmode': 'Switches between light and dark color themes.',
+	                    'setting-textsize': 'Increases text size across the game UI.',
+                        'setting-cosmetic-default': 'Uses the default cosmetic art pack.',
+                        'setting-cosmetic-cozy': 'Warm cozy cosmetics for buttons and room accents.',
+                        'setting-cosmetic-seasonal': 'Seasonal cosmetic accents and badge styling.',
+	                    'setting-high-contrast': 'Boosts contrast for text, controls, and badges.',
                     'setting-reduced-motion': 'Reduces animations and screen movement.',
                     'setting-calm-mode': 'Uses a calmer, lower-stimulation presentation.',
                     'setting-sr-brief': 'Shorter spoken announcements.',
@@ -665,19 +689,43 @@
 
             const srBrief = document.getElementById('setting-sr-brief');
             const srDetailed = document.getElementById('setting-sr-detailed');
-            if (srBrief && srDetailed) {
-                const setSrVerbosity = (mode) => {
+	            if (srBrief && srDetailed) {
+	                const setSrVerbosity = (mode) => {
                     srBrief.classList.toggle('active', mode === 'brief');
                     srDetailed.classList.toggle('active', mode === 'detailed');
                     srBrief.setAttribute('aria-pressed', mode === 'brief' ? 'true' : 'false');
                     srDetailed.setAttribute('aria-pressed', mode === 'detailed' ? 'true' : 'false');
                     try { localStorage.setItem(STORAGE_KEYS.srVerbosity, mode); } catch (e) {}
                 };
-                srBrief.addEventListener('click', () => setSrVerbosity('brief'));
-                srDetailed.addEventListener('click', () => setSrVerbosity('detailed'));
-            }
+	                srBrief.addEventListener('click', () => setSrVerbosity('brief'));
+	                srDetailed.addEventListener('click', () => setSrVerbosity('detailed'));
+	            }
 
-	            const lowStim = document.getElementById('setting-low-stim');
+                const cosmeticThemeButtons = ['default', 'cozy', 'seasonal']
+                    .map((id) => document.getElementById(`setting-cosmetic-${id}`))
+                    .filter(Boolean);
+                if (cosmeticThemeButtons.length > 0) {
+                    const setCosmeticTheme = (themeId) => {
+                        const safeTheme = COSMETIC_THEME_DEFINITIONS[themeId] ? themeId : 'default';
+                        cosmeticThemeButtons.forEach((btn) => {
+                            const active = btn.id === `setting-cosmetic-${safeTheme}`;
+                            btn.classList.toggle('active', active);
+                            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                        });
+                        if (safeTheme === 'default') document.documentElement.removeAttribute('data-cosmetic-theme');
+                        else document.documentElement.setAttribute('data-cosmetic-theme', safeTheme);
+                        try {
+                            if (safeTheme === 'default') localStorage.removeItem(STORAGE_KEYS.cosmeticTheme);
+                            else localStorage.setItem(STORAGE_KEYS.cosmeticTheme, safeTheme);
+                        } catch (e) {}
+                        notifyPreview(`Preview: ${COSMETIC_THEME_DEFINITIONS[safeTheme].label} theme pack.`);
+                    };
+                    cosmeticThemeButtons.forEach((btn) => {
+                        btn.addEventListener('click', () => setCosmeticTheme((btn.id || '').replace('setting-cosmetic-', '')));
+                    });
+                }
+
+		            const lowStim = document.getElementById('setting-low-stim');
 	            if (lowStim) {
 	                lowStim.addEventListener('click', () => {
                         const previousSettings = captureSettingsPreferenceSnapshot();
@@ -725,6 +773,7 @@
 	                    if (!window.confirm('Reset all settings to defaults? You can undo from the next toast for a few seconds.')) return;
                     // Reset theme
                     document.documentElement.removeAttribute('data-theme');
+                    document.documentElement.removeAttribute('data-cosmetic-theme');
                     document.documentElement.removeAttribute('data-text-size');
                     document.documentElement.setAttribute('data-reduced-motion', 'false');
                     document.documentElement.setAttribute('data-calm-mode', 'false');
@@ -732,6 +781,7 @@
                     if (document.body) document.body.classList.remove('calm-mode');
                     try {
                         localStorage.removeItem(STORAGE_KEYS.theme);
+                        localStorage.removeItem(STORAGE_KEYS.cosmeticTheme);
                         localStorage.removeItem(STORAGE_KEYS.reducedMotion);
                         localStorage.removeItem(STORAGE_KEYS.srVerbosity);
                         localStorage.removeItem(STORAGE_KEYS.hapticOff);
@@ -930,9 +980,13 @@
                     if (localStorage.getItem(STORAGE_KEYS.coachChecklistMinimized) === null) localStorage.setItem(STORAGE_KEYS.coachChecklistMinimized, 'true');
                     localStorage.setItem(firstRunDefaultsKey, 'true');
                 }
-                const size = localStorage.getItem(STORAGE_KEYS.textSize);
-                if (size === 'large') document.documentElement.setAttribute('data-text-size', 'large');
-                const reducedMotion = localStorage.getItem(STORAGE_KEYS.reducedMotion);
+	                const size = localStorage.getItem(STORAGE_KEYS.textSize);
+	                if (size === 'large') document.documentElement.setAttribute('data-text-size', 'large');
+                    const cosmeticTheme = localStorage.getItem(STORAGE_KEYS.cosmeticTheme);
+                    if (cosmeticTheme === 'cozy' || cosmeticTheme === 'seasonal') {
+                        document.documentElement.setAttribute('data-cosmetic-theme', cosmeticTheme);
+                    }
+	                const reducedMotion = localStorage.getItem(STORAGE_KEYS.reducedMotion);
                 if (reducedMotion === 'true') document.documentElement.setAttribute('data-reduced-motion', 'true');
                 const calmMode = localStorage.getItem(STORAGE_KEYS.calmMode) === 'true';
                 document.documentElement.setAttribute('data-calm-mode', calmMode ? 'true' : 'false');

@@ -20,11 +20,13 @@
                 var reducedMotion = localStorage.getItem('myLittleFriend_reducedMotion');
                 var calmMode = localStorage.getItem('myLittleFriend_calmMode');
                 var highContrast = localStorage.getItem('petcare_highContrast');
+                var cosmeticTheme = localStorage.getItem('myLittleFriend_cosmeticTheme');
                 if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
                 if (textSize === 'large') root.setAttribute('data-text-size', 'large');
                 if (reducedMotion === 'true') root.setAttribute('data-reduced-motion', 'true');
                 if (calmMode === 'true') root.setAttribute('data-calm-mode', 'true');
                 if (highContrast === 'true') root.setAttribute('data-high-contrast', 'true');
+                if (cosmeticTheme === 'cozy' || cosmeticTheme === 'seasonal') root.setAttribute('data-cosmetic-theme', cosmeticTheme);
             } catch (e) {}
         })();
     </script>

@@ -10,7 +10,7 @@
         }
 
         // SVG thumbnail previews for mini-game menu cards
-        const MINI_GAME_THUMBNAILS = {
+	        const MINI_GAME_THUMBNAILS = {
             fetch: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="20" cy="16" r="9" fill="#8BC34A" stroke="#558B2F" stroke-width="1.5"/><path d="M14 16h12M20 10v12" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M20 28q-3 4 0 6q3-2 0-6" fill="#A5D6A7" opacity="0.6"/></svg>',
             hideseek: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><rect x="5" y="18" width="30" height="18" rx="4" fill="#8D6E63"/><circle cx="15" cy="14" r="7" fill="#FFCC80" stroke="#F57C00" stroke-width="1.5"/><circle cx="12" cy="13" r="1.5" fill="#5D4037"/><circle cx="18" cy="13" r="1.5" fill="#5D4037"/></svg>',
             bubblepop: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="13" cy="15" r="7" fill="none" stroke="#64B5F6" stroke-width="1.5" opacity="0.8"/><circle cx="27" cy="12" r="5" fill="none" stroke="#90CAF9" stroke-width="1.5" opacity="0.7"/><circle cx="20" cy="28" r="6" fill="none" stroke="#42A5F5" stroke-width="1.5" opacity="0.9"/><circle cx="10" cy="14" r="2" fill="#fff" opacity="0.5"/></svg>',
@@ -25,8 +25,30 @@
             trivia: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="20" cy="18" r="12" fill="#FFF9C4" stroke="#F9A825" stroke-width="1.5"/><path d="M17 14q0-4 3-4t3 4q0 2-3 4v2h0" stroke="#F57F17" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="20" cy="24" r="1" fill="#F57F17"/><rect x="16" y="32" width="8" height="3" rx="1" fill="#F9A825"/></svg>',
             runner: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="20" cy="8" r="4" fill="#FFAB91"/><path d="M20 12v10M16 16l4 4 4-4M16 28l4-6 4 6" stroke="#FF7043" stroke-width="2" fill="none" stroke-linecap="round"/><line x1="2" y1="34" x2="38" y2="34" stroke="#A5D6A7" stroke-width="2"/></svg>',
             tournament: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><path d="M14 10h12l-2 14h-8z" fill="#FFD54F" stroke="#F9A825" stroke-width="1"/><path d="M14 10q-6 0-4 6t4 2" fill="none" stroke="#F9A825" stroke-width="1.5"/><path d="M26 10q6 0 4 6t-4 2" fill="none" stroke="#F9A825" stroke-width="1.5"/><rect x="16" y="24" width="8" height="3" rx="1" fill="#F9A825"/><rect x="13" y="27" width="14" height="3" rx="1" fill="#FFE082"/><text x="20" y="20" text-anchor="middle" font-size="8" fill="#F57F17">1</text></svg>',
-            coop: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="13" cy="14" r="6" fill="#FFCCBC"/><circle cx="27" cy="14" r="6" fill="#B2DFDB"/><path d="M13 20v8M10 24h6" stroke="#FF8A65" stroke-width="2" stroke-linecap="round"/><path d="M27 20v8M24 24h6" stroke="#4DB6AC" stroke-width="2" stroke-linecap="round"/><path d="M17 18q3 4 6 0" stroke="#BDBDBD" stroke-width="1" fill="none"/></svg>'
-        };
+	            coop: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="13" cy="14" r="6" fill="#FFCCBC"/><circle cx="27" cy="14" r="6" fill="#B2DFDB"/><path d="M13 20v8M10 24h6" stroke="#FF8A65" stroke-width="2" stroke-linecap="round"/><path d="M27 20v8M24 24h6" stroke="#4DB6AC" stroke-width="2" stroke-linecap="round"/><path d="M17 18q3 4 6 0" stroke="#BDBDBD" stroke-width="1" fill="none"/></svg>'
+	        };
+
+            const MINIGAME_CARD_ART = Object.freeze({
+                fetch: { badge: 'Speed', mood: 'Skill', c1: '#FCE38A', c2: '#F38181', pattern: 'ball' },
+                hideseek: { badge: 'Focus', mood: 'Memory', c1: '#C7CEEA', c2: '#8EC5FC', pattern: 'mask' },
+                bubblepop: { badge: 'Tap', mood: 'Speed', c1: '#89F7FE', c2: '#66A6FF', pattern: 'bubbles' },
+                matching: { badge: 'Memory', mood: 'Skill', c1: '#E3D5FF', c2: '#CDB4DB', pattern: 'tiles' },
+                simonsays: { badge: 'Rhythm', mood: 'Memory', c1: '#F6D365', c2: '#FDA085', pattern: 'pads' },
+                coloring: { badge: 'Calm', mood: 'Creative', c1: '#A1FFCE', c2: '#FAFFD1', pattern: 'dots' },
+                racing: { badge: 'Speed', mood: 'Reflex', c1: '#DCE35B', c2: '#45B649', pattern: 'track' },
+                cooking: { badge: 'Timing', mood: 'Skill', c1: '#FFD3A5', c2: '#FD6585', pattern: 'steam' },
+                fishing: { badge: 'Patience', mood: 'Timing', c1: '#9CECFB', c2: '#65C7F7', pattern: 'waves' },
+                rhythm: { badge: 'Rhythm', mood: 'Speed', c1: '#FBD786', c2: '#C6FFDD', pattern: 'beats' },
+                slider: { badge: 'Logic', mood: 'Puzzle', c1: '#FBC2EB', c2: '#A6C1EE', pattern: 'grid' },
+                trivia: { badge: 'Brain', mood: 'Quiz', c1: '#FFF1A6', c2: '#FFB88C', pattern: 'spark' },
+                runner: { badge: 'Speed', mood: 'Reflex', c1: '#84FAB0', c2: '#8FD3F4', pattern: 'lane' },
+                tournament: { badge: 'Skill', mood: 'Challenge', c1: '#F6D365', c2: '#FDA085', pattern: 'laurel' },
+                coop: { badge: 'Team', mood: 'Coordination', c1: '#C2FFD8', c2: '#7DE2FC', pattern: 'hearts' }
+            });
+
+            function getMiniGameCardArt(gameId) {
+                return MINIGAME_CARD_ART[gameId] || { badge: 'Play', mood: 'Fun', c1: '#DDE8FF', c2: '#BBD1FF', pattern: 'dots' };
+            }
 
         function getMiniGameDescriptors() {
             if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.getAll === 'function') {
@@ -202,13 +224,19 @@
                 }
                 const a11yNoteHTML = game.a11yNote ? `<div class="minigame-a11y-note"><span class="a11y-icon" aria-hidden="true">⌨️</span> ${game.a11yNote}</div>` : '';
                 const shortDescription = String(game.description || '').split(/[.!?]/)[0] || game.description || '';
-                const thumbSVG = MINI_GAME_THUMBNAILS[game.id] || '';
-                const cardHTML = `
-                    <button class="minigame-card" data-game="${game.id}" aria-label="Play ${game.name}${best ? ', best: ' + best : ''}${plays > 0 ? ', difficulty ' + diffLevel + ' of 10' : ''}"${plays > 0 ? ` aria-describedby="diff-${game.id}"` : ''}>
-                        <div class="minigame-card-visual" aria-hidden="true">
-                            ${thumbSVG}
-                            <span class="minigame-card-icon">${game.icon}</span>
-                        </div>
+	                const thumbSVG = MINI_GAME_THUMBNAILS[game.id] || '';
+                    const cardArt = getMiniGameCardArt(game.id);
+	                const cardHTML = `
+	                    <button class="minigame-card" data-game="${game.id}" data-art-pattern="${cardArt.pattern}" style="--minigame-card-c1:${cardArt.c1};--minigame-card-c2:${cardArt.c2};" aria-label="Play ${game.name}${best ? ', best: ' + best : ''}${plays > 0 ? ', difficulty ' + diffLevel + ' of 10' : ''}"${plays > 0 ? ` aria-describedby="diff-${game.id}"` : ''}>
+	                        <div class="minigame-card-visual" aria-hidden="true">
+                                <div class="minigame-card-badges">
+                                    <span class="minigame-card-badge">${escapeHTML(cardArt.badge)}</span>
+                                    <span class="minigame-card-badge soft">${escapeHTML(cardArt.mood)}</span>
+                                </div>
+                                <div class="minigame-card-pattern"></div>
+	                            ${thumbSVG}
+	                            <span class="minigame-card-icon">${game.icon}</span>
+	                        </div>
                         <span class="minigame-card-name">${game.name}</span>
                         <span class="minigame-card-desc">${shortDescription}</span>
                         ${a11yNoteHTML}
@@ -329,13 +357,22 @@
                     </div>
                 </div>
             `;
-            document.body.appendChild(overlay);
-            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+	            document.body.appendChild(overlay);
+	            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
                 GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
                 if (coinReward > 0) {
                     GameAudio.playSFXByName('coin-jingle', GameAudio.sfx.celebration);
+	                }
+	            }
+                if (typeof showRewardBurstFX === 'function') {
+                    const burstCoinCount = Math.max(0, Math.min(12, Math.ceil(coinReward / 12)));
+                    const badgeText = medal ? `${medal.icon} ${medal.label} Medal` : (isNewBest ? '⭐ New Best!' : '');
+                    showRewardBurstFX(overlay.querySelector('.minigame-summary-card') || overlay, {
+                        coinCount: burstCoinCount,
+                        badgeText,
+                        badgeTone: medal ? medal.tier : (isNewBest ? 'gold' : 'soft')
+                    });
                 }
-            }
 
             function close() {
                 popModalEscape(close);

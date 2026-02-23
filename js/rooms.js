@@ -109,6 +109,18 @@
             observatory: ['assets/props/garden-lantern.svg', 'assets/props/bench-plaque.svg'],
             workshop: ['assets/props/watering-can.svg', 'assets/props/wall-plant.svg']
         };
+        const ROOM_PROP_TAP_DEFS = Object.freeze({
+            'garden:1': { id: 'garden-lantern', effect: 'lampGlow', label: 'Toggle lantern glow' },
+            'bathroom:0': { id: 'bath-bubbles', effect: 'bubbleBurst', label: 'Pop bubble burst' },
+            'spa:0': { id: 'spa-bubbles', effect: 'bubbleBurst', label: 'Pop spa bubbles' },
+            'backyard:1': { id: 'backyard-butterfly', effect: 'butterflyFlutter', label: 'Flutter butterfly' },
+            'kitchen:0': { id: 'kitchen-plant', effect: 'plantShake', label: 'Shake hanging plant' },
+            'workshop:1': { id: 'workshop-plant', effect: 'plantShake', label: 'Shake workshop plant' }
+        });
+
+        function getRoomPropTapDef(roomId, index) {
+            return ROOM_PROP_TAP_DEFS[`${roomId}:${index}`] || null;
+        }
 
         function getRoomPropTier() {
             const pet = gameState.pet;
@@ -136,6 +148,18 @@
             const maxProps = Math.min(tier, assets.length);
             const props = [];
             for (let i = 0; i < maxProps; i++) {
+                const tapDef = getRoomPropTapDef(roomId, i);
+                if (tapDef) {
+                    const safeLabel = (typeof escapeHTML === 'function') ? escapeHTML(tapDef.label) : String(tapDef.label || 'Interact with room prop');
+                    props.push(`
+                        <span class="room-prop room-prop-tier-${i + 1} interactive-room-prop" data-prop-tap="${tapDef.id}" data-prop-effect="${tapDef.effect}">
+                            <span class="room-prop-art" aria-hidden="true"><img src="${assets[i]}" alt="" loading="lazy" decoding="async"></span>
+                            <button class="room-prop-hit" type="button" aria-label="${safeLabel}"></button>
+                            <span class="room-prop-particle-layer" aria-hidden="true"></span>
+                        </span>
+                    `);
+                    continue;
+                }
                 props.push(`<span class="room-prop room-prop-tier-${i + 1}" aria-hidden="true"><img src="${assets[i]}" alt="" loading="lazy" decoding="async"></span>`);
             }
             return `<span class="room-decor-inline">${emojiDecor}</span>${themeDecor}${slotDecor}${props.join('')}`;
@@ -238,6 +262,11 @@
             return text ? ` • ${text}` : '';
         }
 
+        const ROOM_SWITCH_TRANSITION = Object.freeze({
+            outMs: 100,
+            inMs: 130
+        });
+
         function switchRoom(roomId) {
             if (!ROOMS[roomId] || roomId === gameState.currentRoom) return;
             ensureRoomSystemsState();
@@ -267,6 +296,9 @@
             const targetRoom = ROOMS[roomId];
             if (typeof announce === 'function' && targetRoom) {
                 announce(`Moved to ${targetRoom.name}`);
+            }
+            if (typeof triggerUiHaptic === 'function') {
+                triggerUiHaptic('roomSwitch');
             }
 
             // Track room visit for achievements and daily checklist
@@ -298,8 +330,15 @@
                 const petArea = document.querySelector('.pet-area');
 
                 if (petArea) {
-                    // Enhanced slide transition (Feature 6)
-                    petArea.classList.add('room-slide-out');
+                    const reducedMotion = document.documentElement.getAttribute('data-reduced-motion') === 'true' ||
+                        (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+                    const transitionOutMs = reducedMotion ? 0 : ROOM_SWITCH_TRANSITION.outMs;
+                    const transitionInMs = reducedMotion ? 0 : ROOM_SWITCH_TRANSITION.inMs;
+                    const currentIdx = ROOM_IDS.indexOf(previousRoom);
+                    const targetIdx = ROOM_IDS.indexOf(roomId);
+                    const direction = (currentIdx !== -1 && targetIdx !== -1 && targetIdx < currentIdx) ? -1 : 1;
+                    petArea.style.setProperty('--room-transition-dir', String(direction));
+                    petArea.classList.add('room-transitioning', 'room-slide-out');
                     setTimeout(() => {
                         petArea.classList.remove('room-slide-out');
 
@@ -362,8 +401,12 @@
 
                         // Slide in
                         petArea.classList.add('room-slide-in');
-                        setTimeout(() => petArea.classList.remove('room-slide-in'), 350);
-                    }, 250);
+                        setTimeout(() => {
+                            petArea.classList.remove('room-slide-in');
+                            petArea.classList.remove('room-transitioning');
+                            petArea.style.removeProperty('--room-transition-dir');
+                        }, transitionInMs + (transitionInMs > 0 ? 20 : 0));
+                    }, transitionOutMs);
                 }
             }
 

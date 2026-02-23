@@ -450,7 +450,7 @@
                 }
             });
         }
-        window.addEventListener('mlf-audio-caption', (event) => {
+	        window.addEventListener('mlf-audio-caption', (event) => {
             if (!soundCueCaptionsEnabled()) return;
             const detail = event && event.detail ? event.detail : null;
             if (!detail || !detail.text) return;
@@ -463,8 +463,75 @@
             if (now - last < 1000) return;
             _audioCaptionToastLastByText.set(dedupeKey, now);
             const categoryPrefix = category ? `[${category}] ` : '';
-            showToast(`🔊 ${categoryPrefix}${captionText}`, '#90A4AE', { announce: true });
-        });
+	            showToast(`🔊 ${categoryPrefix}${captionText}`, '#90A4AE', { announce: true });
+	        });
+
+            const REWARD_PRESENTATION_TOKENS = Object.freeze({
+                coinColors: ['#FFD54F', '#FFEE58', '#FFC107'],
+                badgeToneColors: {
+                    soft: '#90CAF9',
+                    bronze: '#CD7F32',
+                    silver: '#B0BEC5',
+                    gold: '#FFD700'
+                }
+            });
+
+            function isRewardFxReducedMotion() {
+                try {
+                    if (document.documentElement.getAttribute('data-reduced-motion') === 'true') return true;
+                    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            function showRewardBurstFX(anchorEl, options = {}) {
+                if (typeof document === 'undefined') return null;
+                const anchor = anchorEl || document.body;
+                const rect = (anchor && anchor.getBoundingClientRect) ? anchor.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 0, height: 0 };
+                const reduced = isRewardFxReducedMotion();
+                const layer = document.createElement('div');
+                layer.className = 'reward-fx-layer';
+                layer.setAttribute('aria-hidden', 'true');
+                const cx = Math.max(20, Math.min(window.innerWidth - 20, rect.left + (rect.width / 2)));
+                const cy = Math.max(20, Math.min(window.innerHeight - 20, rect.top + (rect.height / 2)));
+                layer.style.left = `${cx}px`;
+                layer.style.top = `${cy}px`;
+
+                const coinCount = Math.max(0, Math.min(12, Number(options.coinCount) || 0));
+                for (let i = 0; i < coinCount; i++) {
+                    const coin = document.createElement('span');
+                    coin.className = 'reward-coin-particle';
+                    coin.textContent = '🪙';
+                    coin.style.setProperty('--rx', `${(Math.random() * 2 - 1) * (34 + Math.random() * 22)}px`);
+                    coin.style.setProperty('--ry', `${-18 - Math.random() * 26}px`);
+                    coin.style.setProperty('--delay', `${(i % 4) * 0.02}s`);
+                    if (reduced) coin.style.animation = 'none';
+                    layer.appendChild(coin);
+                }
+
+                if (options.ribbonText) {
+                    const ribbon = document.createElement('div');
+                    ribbon.className = 'reward-ribbon-pop';
+                    ribbon.textContent = String(options.ribbonText);
+                    if (reduced) ribbon.classList.add('reduced');
+                    layer.appendChild(ribbon);
+                }
+
+                if (options.badgeText) {
+                    const badge = document.createElement('div');
+                    badge.className = 'reward-badge-pop';
+                    const tone = String(options.badgeTone || 'soft');
+                    badge.style.setProperty('--reward-badge-tone', REWARD_PRESENTATION_TOKENS.badgeToneColors[tone] || REWARD_PRESENTATION_TOKENS.badgeToneColors.soft);
+                    badge.textContent = String(options.badgeText);
+                    if (reduced) badge.classList.add('reduced');
+                    layer.appendChild(badge);
+                }
+
+                document.body.appendChild(layer);
+                setTimeout(() => { if (layer.parentNode) layer.remove(); }, reduced ? 900 : 1600);
+                return layer;
+            }
 
         const REWARD_CARD_META = {
             achievement: { title: 'Achievement Unlocked', fallbackIcon: '🏆' },
@@ -519,11 +586,18 @@
             card.style.cursor = 'pointer';
             card.title = 'Click to dismiss';
             card.setAttribute('aria-label', `${escapeHTML(cardData.title)}: ${escapeHTML(cardData.name)}. Click to dismiss.`);
-            document.body.appendChild(card);
-            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
-                GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
-            }
-            requestAnimationFrame(() => card.classList.add('show'));
+	            document.body.appendChild(card);
+	            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+	                GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
+	            }
+                if (typeof showRewardBurstFX === 'function') {
+                    showRewardBurstFX(card, {
+                        badgeText: (cardData.type === 'badge' || cardData.type === 'achievement') ? `${cardData.icon} ${cardData.name}` : cardData.title,
+                        badgeTone: (cardData.type === 'trophy' || cardData.type === 'achievement') ? 'gold' : 'soft',
+                        coinCount: cardData.type === 'trophy' ? 4 : 0
+                    });
+                }
+	            requestAnimationFrame(() => card.classList.add('show'));
 
             function dismissRewardCard() {
                 if (_rewardCardTimer) clearTimeout(_rewardCardTimer);

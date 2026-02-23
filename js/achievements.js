@@ -458,6 +458,15 @@
                 const cl = gameState.dailyChecklist;
                 if (cl && !cl._completionCounted) {
                     cl._completionCounted = true;
+                    if (typeof triggerUiHaptic === 'function') triggerUiHaptic('dailyComplete');
+                    if (typeof showRewardBurstFX === 'function') {
+                        showRewardBurstFX(document.getElementById('daily-btn') || document.body, {
+                            ribbonText: 'Daily Complete',
+                            badgeText: 'Checklist Cleared',
+                            badgeTone: 'gold',
+                            coinCount: 6
+                        });
+                    }
                     if (typeof gameState.totalDailyCompletions !== 'number') gameState.totalDailyCompletions = 0;
                     gameState.totalDailyCompletions++;
                     if (!cl._rewardGranted) {

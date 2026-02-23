@@ -2953,3 +2953,656 @@ html.visual-keyboard-open .naming-skip-btn {
         text-overflow: ellipsis;
     }
 }
+
+/* Step D: iOS-friendly room transition polish (short, low-shift) */
+.pet-area.room-transitioning {
+    will-change: opacity, transform, filter;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+.pet-area.room-slide-out {
+    animation: mlfRoomSlideOut 100ms cubic-bezier(0.35, 0, 0.8, 1) forwards;
+}
+
+.pet-area.room-slide-in {
+    animation: mlfRoomSlideIn 130ms cubic-bezier(0.2, 0.85, 0.25, 1) forwards;
+}
+
+@keyframes mlfRoomSlideOut {
+    from {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: saturate(1) brightness(1);
+    }
+    to {
+        opacity: 0.18;
+        transform: translate3d(calc(var(--room-transition-dir, 1) * -12px), 0, 0) scale(0.992);
+        filter: saturate(0.92) brightness(0.96);
+    }
+}
+
+@keyframes mlfRoomSlideIn {
+    from {
+        opacity: 0.2;
+        transform: translate3d(calc(var(--room-transition-dir, 1) * 12px), 0, 0) scale(0.992);
+        filter: saturate(0.94) brightness(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: saturate(1) brightness(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pet-area.room-transitioning,
+    .pet-area.room-slide-out,
+    .pet-area.room-slide-in {
+        animation: none !important;
+        transform: none !important;
+        filter: none !important;
+        opacity: 1 !important;
+    }
+}
+
+/* Step C: Pet care micro-reactions (short, touch-first polish) */
+.pet-container {
+    position: relative;
+}
+
+.pet-micro-reaction-layer {
+    position: absolute;
+    inset: 10% 8% auto 8%;
+    height: 44%;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.pet-micro-burst {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.2rem;
+    font-size: 1.05rem;
+    line-height: 1;
+    filter: drop-shadow(0 2px 3px rgba(22, 35, 58, 0.18));
+    animation: petMicroBurst 420ms ease-out forwards;
+}
+
+.pet-micro-burst.alt {
+    animation-delay: 40ms;
+}
+
+.pet-micro-yum { left: 46%; top: 32%; }
+.pet-micro-heart { left: 58%; top: 22%; font-size: 1.1rem; }
+.pet-micro-heart.alt { left: 40%; top: 18%; }
+.pet-micro-sparkle { left: 60%; top: 16%; }
+.pet-micro-sparkle.alt { left: 36%; top: 16%; }
+.pet-micro-zzz { left: 60%; top: 10%; color: #5c6ac4; font-weight: 700; }
+.pet-micro-zzz.alt { left: 48%; top: 4%; opacity: 0.9; }
+.pet-micro-bolt { left: 60%; top: 14%; }
+.pet-micro-bolt.alt { left: 38%; top: 18%; }
+
+@keyframes petMicroBurst {
+    from { opacity: 0; transform: translate3d(0, 8px, 0) scale(0.7); }
+    30% { opacity: 1; transform: translate3d(0, -1px, 0) scale(1); }
+    to { opacity: 0; transform: translate3d(0, -12px, 0) scale(0.94); }
+}
+
+.pet-container.pet-react-yum .pet-svg {
+    animation: petReactYumNudge 260ms ease-out;
+}
+.pet-container.pet-react-lean .pet-svg {
+    animation: petReactLeanIn 520ms ease-out;
+}
+.pet-container.pet-react-fresh-shake .pet-svg {
+    animation: petReactFreshShake 340ms ease-out;
+}
+.pet-container.pet-react-sleepy-curl .pet-svg {
+    transform-origin: 50% 70%;
+    animation: petReactSleepyCurl 600ms ease-out;
+}
+.pet-container.pet-react-bounce .pet-svg {
+    animation: petReactBounce 380ms cubic-bezier(0.22, 0.9, 0.22, 1);
+}
+.pet-container.pet-react-blink .pet-svg,
+.pet-container.pet-react-slow-blink .pet-svg,
+.pet-container.pet-react-blink-fast .pet-svg {
+    filter: saturate(1.05);
+}
+.pet-container.pet-react-blink::after,
+.pet-container.pet-react-slow-blink::after,
+.pet-container.pet-react-blink-fast::after {
+    content: '';
+    position: absolute;
+    left: 31%;
+    top: 30%;
+    width: 38%;
+    height: 8%;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.85);
+    pointer-events: none;
+    animation: petReactionBlinkFlash 180ms ease-out;
+}
+.pet-container.pet-react-slow-blink::after {
+    animation-duration: 340ms;
+    opacity: 0.8;
+}
+.pet-container.pet-react-blink-fast::after {
+    animation-duration: 120ms;
+}
+
+@keyframes petReactYumNudge {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    35% { transform: translate3d(0, 4px, 0) scale(1.015, 0.985); }
+    100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes petReactLeanIn {
+    0% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+    35% { transform: translate3d(-2px, 1px, 0) rotate(-2deg) scale(1.02); }
+    70% { transform: translate3d(1px, 0, 0) rotate(1deg) scale(1.01); }
+    100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+}
+@keyframes petReactFreshShake {
+    0%, 100% { transform: translate3d(0,0,0); }
+    20% { transform: translate3d(-2px,0,0) rotate(-1deg); }
+    40% { transform: translate3d(2px,0,0) rotate(1deg); }
+    60% { transform: translate3d(-1px,0,0) rotate(-0.5deg); }
+    80% { transform: translate3d(1px,0,0) rotate(0.5deg); }
+}
+@keyframes petReactSleepyCurl {
+    0% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+    50% { transform: translate3d(0, 3px, 0) scale(0.985); opacity: 0.96; }
+    100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+}
+@keyframes petReactBounce {
+    0% { transform: translate3d(0, 0, 0) scale(1); }
+    35% { transform: translate3d(0, -8px, 0) scale(1.02); }
+    70% { transform: translate3d(0, 2px, 0) scale(0.995); }
+    100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes petReactionBlinkFlash {
+    from { opacity: 0; transform: scaleX(0.6); }
+    40% { opacity: 0.9; transform: scaleX(1); }
+    to { opacity: 0; transform: scaleX(0.7); }
+}
+
+html[data-reduced-motion="true"] .pet-micro-burst {
+    animation: none !important;
+    opacity: 0.95;
+}
+html[data-reduced-motion="true"] .pet-container[class*="pet-react-"] .pet-svg {
+    animation: none !important;
+}
+html[data-reduced-motion="true"] .pet-container.pet-react-blink::after,
+html[data-reduced-motion="true"] .pet-container.pet-react-slow-blink::after,
+html[data-reduced-motion="true"] .pet-container.pet-react-blink-fast::after {
+    animation: none !important;
+    opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pet-micro-burst {
+        animation: none !important;
+        opacity: 0.95;
+    }
+    .pet-container[class*="pet-react-"] .pet-svg {
+        animation: none !important;
+    }
+    .pet-container.pet-react-blink::after,
+    .pet-container.pet-react-slow-blink::after,
+    .pet-container.pet-react-blink-fast::after {
+        animation: none !important;
+        opacity: 0;
+    }
+}
+
+/* Step E: Minigame card art polish */
+.minigame-card {
+    position: relative;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,255,255,0.88)),
+        linear-gradient(135deg, var(--minigame-card-c1, #DDE8FF), var(--minigame-card-c2, #BBD1FF));
+    border-color: rgba(44, 62, 80, 0.12);
+}
+
+.minigame-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 15% 18%, rgba(255,255,255,0.9), transparent 32%),
+        radial-gradient(circle at 88% 84%, rgba(255,255,255,0.56), transparent 36%);
+    pointer-events: none;
+}
+
+.minigame-card-visual {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--minigame-card-c1, #DDE8FF) 70%, white), color-mix(in srgb, var(--minigame-card-c2, #BBD1FF) 75%, white));
+}
+
+.minigame-card-pattern {
+    position: absolute;
+    inset: 0;
+    opacity: 0.28;
+    pointer-events: none;
+    background-image:
+        radial-gradient(circle at 20% 25%, rgba(255,255,255,0.9) 0 10%, transparent 11%),
+        radial-gradient(circle at 76% 30%, rgba(255,255,255,0.75) 0 8%, transparent 9%),
+        radial-gradient(circle at 54% 78%, rgba(255,255,255,0.6) 0 12%, transparent 13%);
+}
+
+.minigame-card[data-art-pattern="track"] .minigame-card-pattern,
+.minigame-card[data-art-pattern="lane"] .minigame-card-pattern {
+    background-image:
+        repeating-linear-gradient(115deg, rgba(255,255,255,0.8) 0 4px, transparent 4px 12px),
+        linear-gradient(180deg, transparent, rgba(255,255,255,0.25));
+}
+
+.minigame-card[data-art-pattern="grid"] .minigame-card-pattern,
+.minigame-card[data-art-pattern="tiles"] .minigame-card-pattern {
+    background-image:
+        linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
+    background-size: 10px 10px, 10px 10px;
+}
+
+.minigame-card-badges {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    display: flex;
+    gap: 4px;
+    z-index: 2;
+}
+
+.minigame-card-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 6px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: #17324a;
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(23, 50, 74, 0.08);
+    box-shadow: 0 2px 6px rgba(17, 24, 39, 0.08);
+}
+
+.minigame-card-badge.soft {
+    color: #4a5568;
+    background: rgba(255, 255, 255, 0.72);
+}
+
+/* Step F: Reusable reward presentation pops */
+.reward-fx-layer {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+    z-index: calc(var(--z-overlay-alert, 9999) + 2);
+}
+
+.reward-coin-particle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 1rem;
+    transform: translate(-50%, -50%);
+    animation: rewardCoinBurst 620ms cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+    animation-delay: var(--delay, 0s);
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.15));
+}
+
+.reward-ribbon-pop {
+    position: absolute;
+    left: 50%;
+    top: -34px;
+    transform: translate(-50%, 0);
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ffd54f, #ffb300);
+    color: #4e342e;
+    font-weight: 800;
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    box-shadow: 0 8px 16px rgba(255, 179, 0, 0.22);
+    animation: rewardRibbonPop 500ms ease-out forwards;
+}
+
+.reward-badge-pop {
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    transform: translate(-50%, 0);
+    padding: 7px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.66);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--reward-badge-tone, #90CAF9) 92%, #ffffff), color-mix(in srgb, var(--reward-badge-tone, #90CAF9) 75%, #ffffff));
+    color: #102a43;
+    font-weight: 700;
+    font-size: 0.73rem;
+    line-height: 1.1;
+    box-shadow: 0 12px 22px rgba(17, 24, 39, 0.14);
+    white-space: nowrap;
+    animation: rewardBadgePop 620ms cubic-bezier(0.18, 0.88, 0.2, 1) forwards;
+}
+
+.reward-ribbon-pop.reduced,
+.reward-badge-pop.reduced {
+    animation: none !important;
+}
+
+.reward-card-pop {
+    overflow: visible;
+}
+
+.reward-card-pop::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255,255,255,0.65), transparent 45%, rgba(255,255,255,0.35));
+    opacity: 0.8;
+}
+
+.daily-all-done {
+    position: relative;
+    overflow: hidden;
+}
+
+.daily-all-done::before {
+    content: 'Daily Complete';
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 8px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: #5d4037;
+    background: linear-gradient(135deg, #ffe082, #ffca28);
+    box-shadow: 0 4px 10px rgba(255, 193, 7, 0.18);
+}
+
+@keyframes rewardCoinBurst {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+    20% { opacity: 1; }
+    to { opacity: 0; transform: translate(calc(-50% + var(--rx, 0px)), calc(-50% + var(--ry, -16px))) scale(0.92); }
+}
+@keyframes rewardRibbonPop {
+    from { opacity: 0; transform: translate(-50%, 6px) scale(0.86); }
+    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+@keyframes rewardBadgePop {
+    from { opacity: 0; transform: translate(-50%, 8px) scale(0.82); }
+    60% { opacity: 1; transform: translate(-50%, -2px) scale(1.02); }
+    to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* Step G: Tappable room props / easter taps */
+.interactive-room-prop {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.interactive-room-prop .room-prop-art {
+    position: relative;
+    display: inline-flex;
+}
+
+.interactive-room-prop .room-prop-art img {
+    transition: filter 150ms ease, transform 150ms ease;
+}
+
+.interactive-room-prop.is-lit .room-prop-art::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 245, 157, 0.6), rgba(255, 213, 79, 0.12) 58%, transparent 75%);
+    filter: blur(2px);
+    pointer-events: none;
+    animation: propGlowPulse 1.4s ease-in-out infinite;
+}
+
+.interactive-room-prop.is-lit .room-prop-art img {
+    filter: drop-shadow(0 0 8px rgba(255, 213, 79, 0.42)) saturate(1.08);
+}
+
+.interactive-room-prop.prop-tapped .room-prop-art img {
+    animation: propTapShake 360ms ease-out;
+}
+
+.room-prop-hit {
+    position: absolute;
+    inset: -10px;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 14px;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.room-prop-hit:focus-visible {
+    outline: 2px solid #42a5f5;
+    outline-offset: 1px;
+    background: rgba(66, 165, 245, 0.08);
+}
+
+.room-prop-particle-layer {
+    position: absolute;
+    inset: -8px;
+    pointer-events: none;
+}
+
+.room-prop-particle {
+    position: absolute;
+    font-size: 0.8rem;
+    line-height: 1;
+    animation: roomPropParticleFloat 600ms ease-out forwards;
+}
+
+@keyframes propTapShake {
+    0%, 100% { transform: translate3d(0,0,0); }
+    30% { transform: translate3d(-1px, 0, 0) rotate(-1deg); }
+    60% { transform: translate3d(1px, 0, 0) rotate(1deg); }
+}
+@keyframes propGlowPulse {
+    0%, 100% { opacity: 0.7; transform: scale(0.96); }
+    50% { opacity: 1; transform: scale(1.02); }
+}
+@keyframes roomPropParticleFloat {
+    from { opacity: 0; transform: translate3d(0, 6px, 0) scale(0.7); }
+    30% { opacity: 1; }
+    to { opacity: 0; transform: translate3d(0, -14px, 0) scale(0.95); }
+}
+
+/* Step I: Illustrated empty states / what next cards */
+.advanced-empty-states {
+    margin: 10px 0 14px;
+    padding: 12px;
+    border-radius: 18px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.95), rgba(247, 250, 255, 0.95));
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.advanced-empty-states-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #1f2937;
+}
+
+.advanced-empty-states-head p {
+    margin: 4px 0 10px;
+    font-size: 0.82rem;
+    color: #64748b;
+}
+
+.advanced-empty-states-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+}
+
+.advanced-empty-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 156px;
+    padding: 10px;
+    border-radius: 14px;
+    background: linear-gradient(145deg, #ffffff, #f8fbff);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+}
+
+.advanced-empty-card h4 {
+    margin: 0;
+    font-size: 0.86rem;
+    color: #1f2937;
+}
+
+.advanced-empty-card p {
+    margin: 0;
+    font-size: 0.76rem;
+    line-height: 1.3;
+    color: #5b6b7d;
+    flex: 1;
+}
+
+.advanced-empty-illustration {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(145deg, #eef5ff, #ffffff);
+    border: 1px solid rgba(148, 163, 184, 0.14);
+    font-size: 1.25rem;
+}
+
+.advanced-empty-spark {
+    position: absolute;
+    right: 3px;
+    top: 2px;
+    font-size: 0.65rem;
+    color: #f59e0b;
+}
+
+.advanced-empty-cta {
+    min-height: 42px;
+    border: 0;
+    border-radius: 12px;
+    padding: 8px 10px;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #4fc3f7, #5c6bc0);
+    box-shadow: 0 8px 14px rgba(92, 107, 192, 0.18);
+    cursor: pointer;
+}
+
+.advanced-empty-cta:focus-visible {
+    outline: 2px solid #42a5f5;
+    outline-offset: 2px;
+}
+
+/* Step J: Cosmetic theme pack (safe, layout-preserving) */
+:root {
+    --mlf-cosmetic-btn-a: #4fc3f7;
+    --mlf-cosmetic-btn-b: #5c6bc0;
+    --mlf-cosmetic-btn-text: #ffffff;
+    --mlf-cosmetic-chip-bg: rgba(255,255,255,0.88);
+    --mlf-cosmetic-prop-filter: none;
+}
+
+html[data-cosmetic-theme="cozy"] {
+    --mlf-cosmetic-btn-a: #ffb74d;
+    --mlf-cosmetic-btn-b: #8d6e63;
+    --mlf-cosmetic-btn-text: #fffaf2;
+    --mlf-cosmetic-chip-bg: rgba(255, 248, 234, 0.92);
+    --mlf-cosmetic-prop-filter: saturate(1.04) hue-rotate(-8deg);
+}
+
+html[data-cosmetic-theme="seasonal"] {
+    --mlf-cosmetic-btn-a: #66bb6a;
+    --mlf-cosmetic-btn-b: #26a69a;
+    --mlf-cosmetic-btn-text: #f5fffb;
+    --mlf-cosmetic-chip-bg: rgba(240, 255, 244, 0.9);
+    --mlf-cosmetic-prop-filter: saturate(1.08) hue-rotate(6deg);
+}
+
+html[data-cosmetic-theme="cozy"] .action-btn,
+html[data-cosmetic-theme="cozy"] .core-care-btn,
+html[data-cosmetic-theme="cozy"] .top-action-btn,
+html[data-cosmetic-theme="cozy"] .advanced-empty-cta,
+html[data-cosmetic-theme="cozy"] .minigame-summary-btn.primary,
+html[data-cosmetic-theme="seasonal"] .action-btn,
+html[data-cosmetic-theme="seasonal"] .core-care-btn,
+html[data-cosmetic-theme="seasonal"] .top-action-btn,
+html[data-cosmetic-theme="seasonal"] .advanced-empty-cta,
+html[data-cosmetic-theme="seasonal"] .minigame-summary-btn.primary {
+    background-image: linear-gradient(135deg, var(--mlf-cosmetic-btn-a), var(--mlf-cosmetic-btn-b));
+    color: var(--mlf-cosmetic-btn-text);
+    border-color: color-mix(in srgb, var(--mlf-cosmetic-btn-b) 50%, rgba(0,0,0,0.1));
+}
+
+html[data-cosmetic-theme="cozy"] .room-prop-art img,
+html[data-cosmetic-theme="seasonal"] .room-prop-art img {
+    filter: var(--mlf-cosmetic-prop-filter);
+}
+
+html[data-cosmetic-theme="cozy"] .minigame-card-badge,
+html[data-cosmetic-theme="seasonal"] .minigame-card-badge {
+    background: var(--mlf-cosmetic-chip-bg);
+}
+
+html[data-cosmetic-theme="seasonal"] .reward-card-pop::after {
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.55), transparent 40%),
+        radial-gradient(circle at 88% 18%, rgba(102, 187, 106, 0.25), transparent 35%);
+}
+
+html[data-cosmetic-theme="cozy"] .reward-card-pop::after {
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.55), transparent 40%),
+        radial-gradient(circle at 88% 18%, rgba(255, 183, 77, 0.25), transparent 35%);
+}
+
+@media (max-width: 520px) {
+    .advanced-empty-states-grid {
+        grid-template-columns: 1fr;
+    }
+    .advanced-empty-card {
+        min-height: 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reward-coin-particle,
+    .reward-ribbon-pop,
+    .reward-badge-pop,
+    .room-prop-particle,
+    .interactive-room-prop.is-lit .room-prop-art::after,
+    .interactive-room-prop.prop-tapped .room-prop-art img {
+        animation: none !important;
+    }
+}
