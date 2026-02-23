@@ -108,6 +108,17 @@
         <div id="toast-container"></div>
     </main>
 
-    <script type="module" src="js/main.js"></script>
+    <script>
+        (function bootRuntimeEntry() {
+            var script = document.createElement('script');
+            if (window.location.protocol === 'file:') {
+                script.src = 'js/boot/file-runtime-bootstrap.js';
+            } else {
+                script.type = 'module';
+                script.src = 'js/main.js';
+            }
+            document.body.appendChild(script);
+        })();
+    </script>
 </body>
 </html>

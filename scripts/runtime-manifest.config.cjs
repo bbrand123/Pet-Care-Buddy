@@ -74,9 +74,11 @@ const RUNTIME_BOOT_FILES = [
   './js/main.js',
   './js/boot/runtime-loader.js',
   './js/boot/runtime-orchestrators.js',
+  './js/boot/file-runtime-bootstrap.js',
   './js/boot/pwa.js',
   './js/config/app-config.js',
-  './js/config/runtime-manifest.generated.js'
+  './js/config/runtime-manifest.generated.js',
+  './js/config/runtime-manifest.classic.generated.js'
 ];
 
 const ROOT_STATIC_FILES = [
