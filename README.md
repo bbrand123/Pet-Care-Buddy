@@ -162,6 +162,17 @@ Coverage includes:
 - Content-pack registry application
 - Generated runtime/SW manifest smoke checks
 
+For iOS release candidates (WKWebView runtime), use the manual regression checklist before TestFlight/App Store submission:
+
+- `RELEASE_CHECKLIST_IOS.md`
+
+## 🚢 iOS Release Validation
+
+The shipping product is the native iOS app embedding this runtime in `WKWebView`. Browser checks are useful for local development, but they do not replace iOS lifecycle and bridge validation.
+
+- Run the checklist in `RELEASE_CHECKLIST_IOS.md` for every release candidate.
+- Prioritize save persistence, background/foreground resume, audio resume, haptics bridge, and external link handling.
+
 ## 🔄 Migration Notes
 
 - Save storage key remains `myLittleFriend` (existing saves should continue to load).
