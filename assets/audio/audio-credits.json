@@ -432,6 +432,42 @@
       "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
       "modified": "No local audio edits; filename normalized on import",
       "original_file": "jingles_PIZZI13.ogg"
+    },
+    {
+      "file": "bathroom-tub-loop.mp3",
+      "path": "assets/audio/ambient/bathroom-tub-loop.mp3",
+      "category": "ambient",
+      "author": "CheatinSloth",
+      "title": "Quick stream and splashing - Loopable!",
+      "source_url": "https://freesound.org/people/CheatinSloth/sounds/770483/",
+      "license_name": "Creative Commons 0 (CC0)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modified": "No local audio edits; filename normalized on import (Freesound HQ preview MP3 downloaded from source page)",
+      "original_file": "770483_13230621-hq.mp3"
+    },
+    {
+      "file": "kitchen-fridge-hum.mp3",
+      "path": "assets/audio/ambient/kitchen-fridge-hum.mp3",
+      "category": "ambient",
+      "author": "HECKFRICKER",
+      "title": "Home Fridge Hum, Perspective 01",
+      "source_url": "https://freesound.org/people/HECKFRICKER/sounds/753296/",
+      "license_name": "Creative Commons 0 (CC0)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modified": "No local audio edits; filename normalized on import (Freesound HQ preview MP3 downloaded from source page)",
+      "original_file": "753296_12863902-hq.mp3"
+    },
+    {
+      "file": "bedroom-aircon-hum.mp3",
+      "path": "assets/audio/ambient/bedroom-aircon-hum.mp3",
+      "category": "ambient",
+      "author": "TimBahrij",
+      "title": "ambient low hum (aircon)",
+      "source_url": "https://freesound.org/people/TimBahrij/sounds/234918/",
+      "license_name": "Creative Commons 0 (CC0)",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "modified": "No local audio edits; filename normalized on import (Freesound HQ preview MP3 downloaded from source page)",
+      "original_file": "234918_3463736-hq.mp3"
     }
   ]
 }

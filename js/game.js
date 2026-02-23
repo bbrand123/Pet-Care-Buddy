@@ -19,6 +19,8 @@
         let _lastTimeJumpToastAt = 0;
         let _timeSessionPerfAnchor = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : null;
         let _timeSessionWallAnchor = Date.now();
+        let _timeJumpResumeGraceUntil = 0;
+        let _timeHardeningLifecycleBound = false;
 
         function getHardeningCfg(path, fallback) {
             const root = (typeof ECONOMY_HARDENING_BALANCE !== 'undefined' && ECONOMY_HARDENING_BALANCE) || null;
@@ -80,6 +82,30 @@
             };
         }
 
+        function resetTimeJumpSessionAnchors(nowMs, graceMs) {
+            const now = Number.isFinite(nowMs) ? nowMs : Date.now();
+            const perfNow = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : 0;
+            _timeSessionPerfAnchor = perfNow > 0 ? perfNow : null;
+            _timeSessionWallAnchor = now;
+            if (Number.isFinite(graceMs) && graceMs > 0) {
+                _timeJumpResumeGraceUntil = now + graceMs;
+            }
+        }
+
+        function bindTimeHardeningLifecycleGuards() {
+            if (_timeHardeningLifecycleBound) return;
+            if (typeof document === 'undefined' || typeof window === 'undefined') return;
+            _timeHardeningLifecycleBound = true;
+            const graceMs = 2 * 60 * 1000;
+            const handleVisibility = () => {
+                // Reset drift anchors on hide/show so suspend/resume doesn't look like clock tampering.
+                resetTimeJumpSessionAnchors(Date.now(), graceMs);
+            };
+            document.addEventListener('visibilitychange', handleVisibility, true);
+            window.addEventListener('pageshow', handleVisibility, true);
+            window.addEventListener('pagehide', handleVisibility, true);
+        }
+
         function ensureTimeHardeningState(targetState) {
             const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
             if (!state.timeHardening || typeof state.timeHardening !== 'object' || Array.isArray(state.timeHardening)) {
@@ -120,10 +146,14 @@
             const timeState = ensureTimeHardeningState(state);
             const cfg = getHardeningCfg('timeHardening', {}) || {};
             const now = Number.isFinite(opts && opts.now) ? opts.now : Date.now();
+            const labelText = String(label || '').toLowerCase();
             const perfNow = (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : 0;
             const backwardThreshold = Math.max(30000, Number(cfg.backwardJumpThresholdMs) || (2 * 60 * 1000));
             const forwardThreshold = Math.max(30000, Number(cfg.forwardJumpThresholdMs) || (4 * 60 * 60 * 1000));
             const stabilizationWindowMs = Math.max(60000, Number(cfg.stabilizationWindowMs) || (10 * 60 * 1000));
+            const perfGraceActive = (_timeJumpResumeGraceUntil || 0) > now;
+            const skipForwardWallCheck = !!(opts && opts.skipForwardWallCheck) || labelText === 'load';
+            const pageHidden = (typeof document !== 'undefined' && document && typeof document.hidden === 'boolean') ? document.hidden : false;
 
             let detected = false;
             let wallDelta = 0;
@@ -131,12 +161,12 @@
 
             if (Number.isFinite(timeState.lastSeenWallClock) && timeState.lastSeenWallClock > 0) {
                 wallDelta = now - timeState.lastSeenWallClock;
-                if (wallDelta < -backwardThreshold || wallDelta > forwardThreshold) {
+                if (wallDelta < -backwardThreshold || (!skipForwardWallCheck && wallDelta > forwardThreshold)) {
                     detected = true;
                 }
             }
 
-            if (!detected && Number.isFinite(_timeSessionPerfAnchor) && Number.isFinite(_timeSessionWallAnchor) && perfNow > 0) {
+            if (!detected && !pageHidden && !perfGraceActive && Number.isFinite(_timeSessionPerfAnchor) && Number.isFinite(_timeSessionWallAnchor) && perfNow > 0) {
                 const expectedWall = _timeSessionWallAnchor + (perfNow - _timeSessionPerfAnchor);
                 perfDrift = now - expectedWall;
                 const perfThreshold = Math.max(backwardThreshold, Math.min(forwardThreshold, 3 * 60 * 1000));
@@ -160,6 +190,10 @@
             } else if (perfNow > 0 && (!Number.isFinite(_timeSessionPerfAnchor) || _timeSessionPerfAnchor === null)) {
                 _timeSessionPerfAnchor = perfNow;
                 _timeSessionWallAnchor = now;
+            } else if (pageHidden || perfGraceActive) {
+                // Treat hidden/resume windows as trusted lifecycle transitions, not tamper events.
+                _timeSessionPerfAnchor = perfNow > 0 ? perfNow : null;
+                _timeSessionWallAnchor = now;
             }
 
             timeState.lastSeenWallClock = now;
@@ -167,6 +201,8 @@
             timeState.lastSeenSessionWallClock = now;
             return { detected, wallDeltaMs: wallDelta, perfDriftMs: perfDrift, stabilizationActive: isTimeStabilizationActive(state, now) };
         }
+
+        bindTimeHardeningLifecycleGuards();
 
         function clampElapsedForHardening(elapsedMs, channel) {
             const cfg = getHardeningCfg('timeHardening', {}) || {};

@@ -416,7 +416,13 @@
       "alias": "pet-excited"
     },
     "sleep": {
-      "alias": "pet-sleeping-zzz"
+      "path": "assets/audio/ui/ui-toggle.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.48,
+      "preload": false,
+      "throttleMs": 0
     },
     "cuddle": {
       "alias": "pet-affection-heart"
@@ -507,6 +513,42 @@
     },
     "night": {
       "alias": "pet-theme-night"
+    },
+    "bathroom-tub-loop": {
+      "path": "assets/audio/ambient/bathroom-tub-loop.mp3",
+      "category": "ambient",
+      "channel": "ambient",
+      "loop": true,
+      "defaultVolume": 0.48,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "kitchen-fridge-hum": {
+      "path": "assets/audio/ambient/kitchen-fridge-hum.mp3",
+      "category": "ambient",
+      "channel": "ambient",
+      "loop": true,
+      "defaultVolume": 0.42,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "bedroom-aircon-hum": {
+      "path": "assets/audio/ambient/bedroom-aircon-hum.mp3",
+      "category": "ambient",
+      "channel": "ambient",
+      "loop": true,
+      "defaultVolume": 0.4,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "bathroom": {
+      "alias": "bathroom-tub-loop"
+    },
+    "kitchen": {
+      "alias": "kitchen-fridge-hum"
+    },
+    "bedroom": {
+      "alias": "bedroom-aircon-hum"
     }
   }
 }

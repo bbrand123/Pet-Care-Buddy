@@ -24,7 +24,10 @@
             'feed': { path: 'assets/audio/pet/pet-eating.ogg', channel: 'sfx', category: 'pet', defaultVolume: 0.7 },
             'wash': { path: 'assets/audio/pet/pet-bath-splash.ogg', channel: 'sfx', category: 'pet', defaultVolume: 0.7 },
             'play': { path: 'assets/audio/pet/pet-excited.ogg', channel: 'sfx', category: 'pet', defaultVolume: 0.8 },
-            'sleep': { path: 'assets/audio/pet/pet-sleeping-zzz.ogg', channel: 'ambient', category: 'pet', defaultVolume: 0.45 },
+            'sleep': { path: 'assets/audio/ui/ui-toggle.ogg', channel: 'sfx', category: 'pet', defaultVolume: 0.48 },
+            'bathroom-tub-loop': { path: 'assets/audio/ambient/bathroom-tub-loop.mp3', channel: 'ambient', category: 'ambient', defaultVolume: 0.48, loop: true },
+            'kitchen-fridge-hum': { path: 'assets/audio/ambient/kitchen-fridge-hum.mp3', channel: 'ambient', category: 'ambient', defaultVolume: 0.42, loop: true },
+            'bedroom-aircon-hum': { path: 'assets/audio/ambient/bedroom-aircon-hum.mp3', channel: 'ambient', category: 'ambient', defaultVolume: 0.4, loop: true },
             'cozy-room-ambience': { path: 'assets/audio/ambient/cozy-room-ambience.mp3', channel: 'ambient', category: 'ambient', defaultVolume: 0.55, loop: true },
             'outdoor-garden-ambience': { path: 'assets/audio/ambient/outdoor-garden-ambience.mp3', channel: 'ambient', category: 'ambient', defaultVolume: 0.5, loop: true },
             'nighttime-ambience': { path: 'assets/audio/ambient/nighttime-ambience.mp3', channel: 'ambient', category: 'ambient', defaultVolume: 0.52, loop: true }
@@ -50,16 +53,20 @@
     let creditsPromise = null;
     let initPromise = null;
     let listenersBound = false;
+    let lifecycleListenersBound = false;
     let unlocked = false;
     let destroyed = false;
     let audioSupported = true;
     let currentRoom = null;
     let currentAudioPreset = safeRead('myLittleFriend_audioPreset', 'standard');
+    let pausedForBackground = false;
 
     let audioCtx = null;
     let webAudioGains = null;
 
     const baseAudioCache = new Map();
+    const decodedBufferCache = new Map();
+    const decodedBufferPromises = new Map();
     const activeVoices = new Set();
     const lastPlayedAt = new Map();
     const channelLoopPlayers = new Map();
@@ -271,6 +278,58 @@
         return player;
     }
 
+    function decodeAudioDataCompat(ctx, arrayBuffer) {
+        try {
+            const maybePromise = ctx.decodeAudioData(arrayBuffer.slice(0));
+            if (maybePromise && typeof maybePromise.then === 'function') return maybePromise;
+        } catch (err) {
+            // Fall through to callback API.
+        }
+        return new Promise((resolve, reject) => {
+            try {
+                ctx.decodeAudioData(arrayBuffer.slice(0), resolve, reject);
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    async function getDecodedBuffer(src) {
+        if (!src) return null;
+        if (!audioCtx) return null;
+        if (decodedBufferCache.has(src)) return decodedBufferCache.get(src);
+        if (!decodedBufferPromises.has(src)) {
+            decodedBufferPromises.set(src, (async () => {
+                try {
+                    const res = await fetch(src, { credentials: 'same-origin' });
+                    if (!res.ok) throw new Error(`fetch ${res.status}`);
+                    const bytes = await res.arrayBuffer();
+                    const buffer = await decodeAudioDataCompat(audioCtx, bytes);
+                    decodedBufferCache.set(src, buffer || null);
+                    return buffer || null;
+                } catch (err) {
+                    warnDebug('decode failed for', src, err && err.message ? err.message : err);
+                    decodedBufferCache.set(src, null);
+                    return null;
+                } finally {
+                    decodedBufferPromises.delete(src);
+                }
+            })());
+        }
+        return decodedBufferPromises.get(src);
+    }
+
+    function getChannelOutputNode(channel) {
+        if (!audioCtx) return null;
+        if (channel === 'ui' && webAudioGains && webAudioGains.ui) return webAudioGains.ui;
+        if (channel === 'ambient' && webAudioGains && webAudioGains.ambient) return webAudioGains.ambient;
+        if (channel === 'music' && webAudioGains && webAudioGains.music) return webAudioGains.music;
+        if ((channel === 'sfx' || channel === 'gameplay') && getBusInputNode) {
+            return getBusInputNode(channel === 'gameplay' ? 'gameplay' : 'sfx');
+        }
+        return (webAudioGains && (webAudioGains.sfx || webAudioGains.master)) || (audioCtx && audioCtx.destination) || null;
+    }
+
     function effectiveChannelVolume(channel) {
         const channelVolume = state.volumes[channel] == null ? 1 : state.volumes[channel];
         const masterVolume = state.volumes.master == null ? 1 : state.volumes.master;
@@ -281,15 +340,27 @@
     }
 
     function applyRuntimeGains() {
-        // Update HTMLAudio loops
-        channelLoopPlayers.forEach((voice, channel) => {
-            if (!voice || !voice.player) return;
-            const gain = (voice.baseGain == null ? 1 : voice.baseGain) * effectiveChannelVolume(channel);
-            voice.player.volume = clamp01(gain);
-            voice.player.muted = gain <= 0;
-        });
+        activeVoices.forEach((voice) => applyVoiceOutputGain(voice));
         // Update WebAudio graph for procedural tones
         applyWebAudioChannelGains();
+    }
+
+    function applyVoiceOutputGain(voice) {
+        if (!voice) return;
+        const channel = voice.channel || 'sfx';
+        const gain = (voice.baseGain == null ? 1 : voice.baseGain) * effectiveChannelVolume(channel);
+        if (voice.gainNode && audioCtx) {
+            try {
+                const now = audioCtx.currentTime;
+                voice.gainNode.gain.cancelScheduledValues(now);
+                voice.gainNode.gain.setTargetAtTime(Math.max(0.00001, clamp01(gain)), now, 0.01);
+            } catch (err) {}
+            return;
+        }
+        if (voice.player) {
+            voice.player.volume = clamp01(gain);
+            voice.player.muted = gain <= 0;
+        }
     }
 
     function ensureAudioContext() {
@@ -357,6 +428,33 @@
         });
     }
 
+    function bindLifecycleListeners() {
+        if (lifecycleListenersBound || typeof document === 'undefined' || typeof window === 'undefined') return;
+        lifecycleListenersBound = true;
+        const onVisibilityChange = () => {
+            if (destroyed) return;
+            if (document.hidden) {
+                pausedForBackground = true;
+                stop('music');
+                stop('ambient');
+                if (audioCtx && audioCtx.state === 'running') {
+                    audioCtx.suspend().catch(() => {});
+                }
+                return;
+            }
+            if (!pausedForBackground) return;
+            pausedForBackground = false;
+            if (audioCtx && audioCtx.state === 'suspended' && unlocked) {
+                audioCtx.resume().catch(() => {});
+            }
+            if (unlocked && getEnabled() && currentRoom) {
+                startAmbientForRoom(currentRoom);
+            }
+        };
+        document.addEventListener('visibilitychange', onVisibilityChange, true);
+        window.addEventListener('pageshow', onVisibilityChange, true);
+    }
+
     async function unlock() {
         if (destroyed) return false;
         await ensureManifest();
@@ -380,6 +478,7 @@
         if (!initPromise) {
             initPromise = Promise.allSettled([ensureManifest(), ensureCredits()]).then(() => {
                 bindUnlockListeners();
+                bindLifecycleListeners();
                 return true;
             });
         }
@@ -443,11 +542,25 @@
 
     function cleanupVoice(voice) {
         if (!voice) return;
+        if (voice._cleaned) return;
+        voice._cleaned = true;
         activeVoices.delete(voice);
+        if (voice.sourceNode) {
+            try { voice.sourceNode.onended = null; } catch (err) {}
+            try { voice.sourceNode.stop(0); } catch (err) {}
+            try { voice.sourceNode.disconnect(); } catch (err) {}
+        }
+        if (voice.mediaSourceNode) {
+            try { voice.mediaSourceNode.disconnect(); } catch (err) {}
+        }
+        if (voice.gainNode) {
+            try { voice.gainNode.disconnect(); } catch (err) {}
+        }
         const player = voice.player;
-        if (!player) return;
-        try { player.pause(); } catch (err) {}
-        try { player.src = ''; } catch (err) {}
+        if (player) {
+            try { player.pause(); } catch (err) {}
+            try { player.src = ''; } catch (err) {}
+        }
     }
 
     function enforceVoiceLimits(channel) {
@@ -481,6 +594,37 @@
         const channel = entry.channel || 'sfx';
         if (!canPlayChannel(channel, opts)) return null;
         if (!unlocked) await unlock();
+
+        // Prefer Web Audio sample playback so per-channel volume works on iOS/WKWebView.
+        const ctx = ensureAudioContext();
+        if (ctx && webAudioGains) {
+            try {
+                if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+                const buffer = await getDecodedBuffer(entry.path);
+                if (buffer) {
+                    const sourceNode = ctx.createBufferSource();
+                    const gainNode = ctx.createGain();
+                    sourceNode.buffer = buffer;
+                    sourceNode.loop = false;
+                    sourceNode.connect(gainNode);
+                    const outNode = getChannelOutputNode(channel);
+                    if (outNode) gainNode.connect(outNode);
+                    const baseGain = clamp01(entry.defaultVolume == null ? 1 : entry.defaultVolume);
+                    const optsGain = clamp01(opts && opts.gain != null ? opts.gain : 1);
+                    const voice = { name: soundName, channel, sourceNode, gainNode, baseGain: baseGain * optsGain, startedAt: Date.now() };
+                    activeVoices.add(voice);
+                    applyVoiceOutputGain(voice);
+                    enforceVoiceLimits(channel);
+                    sourceNode.onended = () => cleanupVoice(voice);
+                    sourceNode.start(ctx.currentTime);
+                    logDebug('playOneShot(webAudio)', soundName, entry.path, { channel });
+                    return voice;
+                }
+            } catch (err) {
+                warnDebug('WebAudio one-shot failed; falling back to HTMLAudio', soundName, err && err.message ? err.message : err);
+            }
+        }
+
         const base = getBaseAudioElement(entry.path);
         if (!base) return null;
         const player = createPlayerFromSource(base.currentSrc || entry.path);
@@ -489,11 +633,29 @@
         const baseGain = clamp01(entry.defaultVolume == null ? 1 : entry.defaultVolume);
         const optsGain = clamp01(opts && opts.gain != null ? opts.gain : 1);
         const vol = clamp01(baseGain * optsGain * effectiveChannelVolume(channel));
-        player.volume = vol;
+        let mediaSourceNode = null;
+        let gainNode = null;
+        if (ctx && webAudioGains) {
+            try {
+                mediaSourceNode = ctx.createMediaElementSource(player);
+                gainNode = ctx.createGain();
+                mediaSourceNode.connect(gainNode);
+                const outNode = getChannelOutputNode(channel);
+                if (outNode) gainNode.connect(outNode);
+                player.volume = 1;
+            } catch (err) {
+                mediaSourceNode = null;
+                gainNode = null;
+                player.volume = vol;
+            }
+        } else {
+            player.volume = vol;
+        }
         player.loop = false;
         player.currentTime = 0;
-        const voice = { name: soundName, channel, player, baseGain: baseGain * optsGain, startedAt: Date.now() };
+        const voice = { name: soundName, channel, player, mediaSourceNode, gainNode, baseGain: baseGain * optsGain, startedAt: Date.now() };
         activeVoices.add(voice);
+        if (gainNode) applyVoiceOutputGain(voice);
         enforceVoiceLimits(channel);
 
         const cleanup = () => cleanupVoice(voice);
@@ -537,16 +699,66 @@
             return current;
         }
         if (current) stop(channel);
+        const baseGain = clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (opts && opts.gain != null ? opts.gain : 1));
+        const shouldLoop = opts && typeof opts.loop === 'boolean' ? opts.loop : true;
+
+        const ctx = ensureAudioContext();
+        if (ctx && webAudioGains) {
+            try {
+                if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+                const buffer = await getDecodedBuffer(entry.path);
+                if (buffer) {
+                    const sourceNode = ctx.createBufferSource();
+                    const gainNode = ctx.createGain();
+                    sourceNode.buffer = buffer;
+                    sourceNode.loop = shouldLoop;
+                    sourceNode.connect(gainNode);
+                    const outNode = getChannelOutputNode(channel);
+                    if (outNode) gainNode.connect(outNode);
+                    const voice = { name: soundName, channel, sourceNode, gainNode, baseGain, startedAt: Date.now(), loop: true };
+                    const cleanup = () => {
+                        if (channelLoopPlayers.get(channel) === voice) channelLoopPlayers.delete(channel);
+                        cleanupVoice(voice);
+                    };
+                    sourceNode.onended = cleanup;
+                    channelLoopPlayers.set(channel, voice);
+                    activeVoices.add(voice);
+                    applyVoiceOutputGain(voice);
+                    sourceNode.start(ctx.currentTime);
+                    logDebug('playLoop(webAudio)', channel, soundName, entry.path);
+                    return voice;
+                }
+            } catch (err) {
+                warnDebug('WebAudio loop failed; falling back to HTMLAudio', soundName, err && err.message ? err.message : err);
+            }
+        }
 
         const player = createPlayerFromSource(entry.path);
         if (!player) return null;
-        player.loop = opts && typeof opts.loop === 'boolean' ? opts.loop : !!entry.loop || true;
+        let mediaSourceNode = null;
+        let gainNode = null;
+        if (ctx && webAudioGains) {
+            try {
+                mediaSourceNode = ctx.createMediaElementSource(player);
+                gainNode = ctx.createGain();
+                mediaSourceNode.connect(gainNode);
+                const outNode = getChannelOutputNode(channel);
+                if (outNode) gainNode.connect(outNode);
+                player.volume = 1;
+            } catch (err) {
+                mediaSourceNode = null;
+                gainNode = null;
+            }
+        }
+        player.loop = shouldLoop;
         player.currentTime = 0;
         const voice = {
             name: soundName,
             channel,
             player,
-            baseGain: clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (opts && opts.gain != null ? opts.gain : 1)),
+            mediaSourceNode,
+            gainNode,
+            baseGain,
             startedAt: Date.now(),
             loop: true
         };
@@ -814,6 +1026,9 @@
     function chooseAmbientForRoom(roomId) {
         const id = String(roomId || '').toLowerCase();
         if (id.includes('garden') || id.includes('park') || id.includes('yard') || id.includes('outdoor')) return 'outdoor-garden-ambience';
+        if (id.includes('bath') || id.includes('spa')) return 'bathroom-tub-loop';
+        if (id.includes('kitchen')) return 'kitchen-fridge-hum';
+        if (id.includes('bedroom')) return 'bedroom-aircon-hum';
         if (id.includes('bed') || id.includes('observatory') || id.includes('night') || isNightLocal()) return 'nighttime-ambience';
         return 'cozy-room-ambience';
     }
@@ -935,6 +1150,8 @@
             try { audio.src = ''; } catch (err) {}
         });
         baseAudioCache.clear();
+        decodedBufferCache.clear();
+        decodedBufferPromises.clear();
         if (audioCtx) {
             try { audioCtx.close(); } catch (err) {}
             audioCtx = null;
