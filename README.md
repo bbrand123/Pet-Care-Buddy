@@ -182,6 +182,16 @@ npm run test:e2e
 
 Run iOS app build/test checks (Xcode / `xcodebuild`) for `WKWebView` and native bridge coverage before release.
 
+## 🤖 CI
+
+GitHub Actions runs lightweight validation on every push and pull request:
+
+- `npm test`
+- `npm run gen:runtime`
+- generated-manifest drift check (`git diff --exit-code` for runtime/SW manifest outputs)
+
+This CI lane is intentionally lightweight and does not replace iOS simulator/device validation or the checklist in `RELEASE_CHECKLIST_IOS.md`.
+
 Coverage includes:
 
 - Garden systems (existing)

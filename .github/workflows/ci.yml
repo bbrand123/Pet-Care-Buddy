@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test-and-manifests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit/integration tests
+        run: npm test
+
+      - name: Regenerate runtime manifests
+        run: npm run gen:runtime
+
+      - name: Verify generated manifests are committed
+        run: git diff --exit-code -- js/config/runtime-manifest.generated.js js/config/runtime-manifest.classic.generated.js sw-assets.generated.js
