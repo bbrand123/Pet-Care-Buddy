@@ -13,6 +13,8 @@ const BASE_RUNTIME_FILES = [
   './save/migrations/registry.js',
   './save/migrate.js',
   './save/lifecycle-bridge.js',
+  './save/offline-simulation.js',
+  './save/recovery-ui.js',
   './constants.js',
   './registries/content-registries.js',
   './content-packs.js',

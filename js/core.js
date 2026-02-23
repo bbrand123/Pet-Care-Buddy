@@ -1461,130 +1461,27 @@
                         parsed.pet = parsed.pets[parsed.activePetIndex];
                     }
 
-                    // Apply garden growth for time passed
-                    if (parsed.garden.plots.length > 0 && parsed.garden.lastGrowTick) {
-                        const gardenTimePassed = Date.now() - parsed.garden.lastGrowTick;
-                        const gardenTicksPassed = Math.floor(gardenTimePassed / 60000); // 1 tick per minute
-                        if (gardenTicksPassed > 0) {
-                            const season = parsed.season || getCurrentSeason();
-                            const growthMult = SEASONS[season] ? SEASONS[season].gardenGrowthMultiplier : 1;
-                            parsed.garden.plots.forEach(plot => {
-                                if (plot && plot.cropId && plot.stage < 3) {
-                                    const crop = GARDEN_CROPS[plot.cropId];
-                                    if (crop) {
-                                        const effectiveGrowTime = Math.max(1, Math.round(crop.growTime / growthMult));
-                                        // Watered plots get +2 on first tick (then water dries),
-                                        // remaining ticks get +1, matching live tick behavior
-                                        // First tick: watered=2, unwatered=1. Remaining: always 1.
-                                        const firstTickValue = plot.watered ? 2 : 1;
-                                        plot.growTicks += firstTickValue + (gardenTicksPassed - 1);
-                                        plot.watered = false;
-                                        const newStage = Math.min(3, Math.floor(plot.growTicks / effectiveGrowTime));
-                                        plot.stage = Math.max(plot.stage, newStage);
-                                    }
-                                }
+                    if (typeof MLFSaveOfflineSimulation !== 'undefined' && MLFSaveOfflineSimulation && typeof MLFSaveOfflineSimulation.applyOfflineSimulation === 'function') {
+                        try {
+                            MLFSaveOfflineSimulation.applyOfflineSimulation(parsed, {
+                                getCurrentSeason,
+                                getTimeOfDay,
+                                seasons: SEASONS,
+                                gardenCrops: GARDEN_CROPS,
+                                clamp,
+                                personalityTraits: PERSONALITY_TRAITS,
+                                elderConfig: ELDER_CONFIG
                             });
-                            parsed.garden.lastGrowTick = Date.now();
-                        }
-                    }
-
-                    // Update time of day
-                    parsed.timeOfDay = getTimeOfDay();
-
-                    // Apply time-based changes for needs (offline time simulation)
-                    // Apply to ALL pets, not just the active one
-                    if (parsed.lastUpdate) {
-                        const timePassed = Date.now() - parsed.lastUpdate;
-                        const minutesPassed = Math.max(0, timePassed / 60000);
-                        // Keep offline progression meaningful so long absences cannot fully reset pressure.
-                        const decay = Math.min(Math.floor(minutesPassed / 2), 80);
-                        if (decay > 0) {
-                            const petsToDecay = parsed.pets && parsed.pets.length > 0 ? parsed.pets : (parsed.pet ? [parsed.pet] : []);
-                            let activeOldStats = null;
-                            petsToDecay.forEach((p, idx) => {
-                                if (!p) return;
-                                const oldStats = {
-                                    hunger: p.hunger,
-                                    cleanliness: p.cleanliness,
-                                    happiness: p.happiness,
-                                    energy: p.energy
-                                };
-                                if (idx === parsed.activePetIndex) activeOldStats = oldStats;
-
-                                const isActive = idx === parsed.activePetIndex;
-                                // Non-active pets get gentler decay (0.5x rate) matching live gameplay
-                                const rateMult = isActive ? 1 : 0.5;
-
-                                // Personality-driven offline decay multipliers
-                                const pTrait = p.personality && PERSONALITY_TRAITS[p.personality];
-                                const pMods = pTrait ? pTrait.statModifiers : null;
-                                const hungerM = pMods ? pMods.hungerDecayMultiplier : 1;
-                                const cleanM = pMods ? pMods.cleanlinessDecayMultiplier : 1;
-                                const happyM = pMods ? pMods.happinessDecayMultiplier : 1;
-                                const energyM = pMods ? pMods.energyDecayMultiplier : 1;
-                                // Decay multipliers > 1 should not also increase passive recovery.
-                                const energyRecoveryM = energyM > 0 ? (1 / energyM) : 1;
-                                // Elder wisdom offline reduction
-                                const elderR = p.growthStage === 'elder' ? ELDER_CONFIG.wisdomDecayReduction : 1;
-
-                                // Hunger decays faster while away (pet gets hungry)
-                                p.hunger = clamp(p.hunger - Math.floor(decay * 1.5 * rateMult * hungerM * elderR), 0, 100);
-                                // Cleanliness decays slower (pet isn't doing much)
-                                p.cleanliness = clamp(p.cleanliness - Math.floor(decay * 0.5 * rateMult * cleanM * elderR), 0, 100);
-                                // Happiness decays at normal rate
-                                p.happiness = clamp(p.happiness - Math.floor(decay * rateMult * happyM * elderR), 0, 100);
-                                // Energy recovers only partially while away.
-                                p.energy = clamp(p.energy + Math.floor(decay * 0.2 * rateMult * energyRecoveryM), 0, 100);
-
-                                // Pets with friends get a happiness bonus while away (scaled by relationship quality)
-                                if (parsed.pets.length > 1 && parsed.relationships) {
-                                    let bestRelPoints = 0;
-                                    const pid = p.id;
-                                    Object.entries(parsed.relationships).forEach(([key, rel]) => {
-                                        if (!rel || typeof rel.points !== 'number') return;
-                                        // Only consider relationships involving this pet
-                                        if (pid != null && key.split('-').indexOf(String(pid)) === -1) return;
-                                        if (rel.points > bestRelPoints) {
-                                            bestRelPoints = rel.points;
-                                        }
-                                    });
-                                    if (bestRelPoints > 0) {
-                                        const relScale = Math.min(1, bestRelPoints / 180);
-                                        const friendBonus = Math.min(5, Math.floor(decay * 0.2 * relScale));
-                                        p.happiness = clamp(p.happiness + friendBonus, 0, 100);
-                                    }
-                                }
-                            });
-
-                            // Track neglect for offline decay — if stats dropped below 20, increment neglectCount
-                            petsToDecay.forEach(p => {
-                                if (!p) return;
-                                const isNeglected = p.hunger < 20 || p.cleanliness < 20 || p.happiness < 20 || p.energy < 20;
-                                if (isNeglected) {
-                                    // Scale neglect count by offline time (1 per ~10 minutes of neglect), capped at 10
-                                    const neglectIncrements = Math.min(10, Math.floor(minutesPassed / 10));
-                                    if (neglectIncrements > 0) {
-                                        p.neglectCount = (p.neglectCount || 0) + neglectIncrements;
-                                    }
-                                }
-                            });
-
-                            // Sync active pet reference
-                            if (parsed.pets.length > 0) {
-                                parsed.pet = parsed.pets[parsed.activePetIndex];
+                        } catch (offlineSimulationError) {
+                            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
+                                MLFDiagnostics.warn('LOAD', 'Offline save simulation failed; continuing with loaded state.', {
+                                    error: String(offlineSimulationError && offlineSimulationError.message ? offlineSimulationError.message : offlineSimulationError)
+                                });
                             }
-
-                            // Store offline changes for welcome-back summary (active pet only)
-                            if (minutesPassed >= 5 && parsed.pet && activeOldStats) {
-                                parsed._offlineChanges = {
-                                    minutes: Math.round(minutesPassed),
-                                    hunger: parsed.pet.hunger - activeOldStats.hunger,
-                                    cleanliness: parsed.pet.cleanliness - activeOldStats.cleanliness,
-                                    happiness: parsed.pet.happiness - activeOldStats.happiness,
-                                    energy: parsed.pet.energy - activeOldStats.energy
-                                };
-                            }
+                            parsed.timeOfDay = getTimeOfDay();
                         }
+                    } else {
+                        parsed.timeOfDay = getTimeOfDay();
                     }
                     // Persist any migrations (e.g. random personality) so they're stable
                     if (parsed.phase === 'pet') {
@@ -1634,56 +1531,31 @@
         let _loadError = null;
 	        function showSaveRecoveryDialog() {
 	            if (!_loadError) return;
-	            if (document.getElementById('save-recovery-overlay')) return;
 	            const recoveryError = _loadError;
 	            _loadError = null;
-            const overlay = document.createElement('div');
-            overlay.id = 'save-recovery-overlay';
-            overlay.className = 'modal-overlay';
-            overlay.setAttribute('role', 'alertdialog');
-            overlay.setAttribute('aria-modal', 'true');
-            overlay.setAttribute('aria-label', 'Save data corrupted');
-	            overlay.innerHTML = `
-	                <div class="modal-content" style="max-width:320px;text-align:center;">
-	                    <h2 style="margin-bottom:12px;">Save Data Issue</h2>
-	                    <p style="margin-bottom:16px;font-size:0.9rem;">We could not safely read your save data. You can start fresh, or export diagnostics first to help support troubleshoot what happened.</p>
-	                    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-	                        <button id="recovery-export-diagnostics" style="padding:10px 18px;border:1px solid #90CAF9;border-radius:8px;background:#E3F2FD;color:#0D47A1;cursor:pointer;font-weight:600;font-family:inherit;">Export Diagnostics</button>
-	                        <button id="recovery-fresh" style="padding:10px 18px;border:none;border-radius:8px;background:#EF5350;color:white;cursor:pointer;font-weight:600;font-family:inherit;">Start Fresh</button>
-	                        <button id="recovery-dismiss" style="padding:10px 18px;border:1px solid #ccc;border-radius:8px;background:white;cursor:pointer;font-weight:600;font-family:inherit;">Try Continue</button>
-	                    </div>
-	                </div>
-	            `;
-	            document.body.appendChild(overlay);
-		            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.error === 'function') {
-		                MLFDiagnostics.error('UI', 'Save recovery dialog displayed after load failure.', {
-		                    error: recoveryError ? String(recoveryError.message || recoveryError) : null
-		                });
-		            }
-	            const exportBtn = document.getElementById('recovery-export-diagnostics');
-	            if (exportBtn) {
-	                exportBtn.addEventListener('click', () => {
-	                    try {
-	                        if (typeof MLFDiagnosticsUI !== 'undefined' && MLFDiagnosticsUI && typeof MLFDiagnosticsUI.openDiagnosticsExportDialog === 'function') {
-	                            MLFDiagnosticsUI.openDiagnosticsExportDialog({ context: 'save-recovery-dialog' });
-	                        } else if (typeof openDiagnosticsReport === 'function') {
-	                            openDiagnosticsReport({ context: 'save-recovery-dialog' });
-	                        }
-	                    } catch (e) {}
+	            if (typeof MLFSaveRecoveryUI !== 'undefined' && MLFSaveRecoveryUI && typeof MLFSaveRecoveryUI.showSaveRecoveryDialog === 'function') {
+	                MLFSaveRecoveryUI.showSaveRecoveryDialog({
+	                    error: recoveryError,
+	                    storageKey: STORAGE_KEYS.gameSave,
+	                    localStorageRef: localStorage,
+	                    reloadLocation: location,
+	                    diagnostics: (typeof MLFDiagnostics !== 'undefined') ? MLFDiagnostics : null,
+	                    diagnosticsUI: (typeof MLFDiagnosticsUI !== 'undefined') ? MLFDiagnosticsUI : null,
+	                    openDiagnosticsReport: (typeof openDiagnosticsReport === 'function') ? openDiagnosticsReport : null,
+	                    suppressUnloadAutosaveForReload,
+	                    onStartFreshReset: function onStartFreshReset() {
+	                        _lastSavedStorageSnapshot = null;
+	                    },
+	                    announce
+	                });
+	                return;
+	            }
+	            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.error === 'function') {
+	                MLFDiagnostics.error('UI', 'Save recovery dialog UI module missing; could not display recovery dialog.', {
+	                    error: String(recoveryError && recoveryError.message ? recoveryError.message : recoveryError)
 	                });
 	            }
-	            document.getElementById('recovery-fresh').addEventListener('click', () => {
-	                try { localStorage.removeItem(STORAGE_KEYS.gameSave); } catch(e) {}
-	                _lastSavedStorageSnapshot = null;
-                suppressUnloadAutosaveForReload();
-                overlay.remove();
-                location.reload();
-            });
-            document.getElementById('recovery-dismiss').addEventListener('click', () => {
-                overlay.remove();
-            });
-            announce('Save data may be corrupted. A recovery dialog is available.', true);
-        }
+	        }
 
         // ==================== SAVE EXPORT/IMPORT (Item 47) ====================
         function exportSaveData() {

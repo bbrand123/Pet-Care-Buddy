@@ -170,6 +170,8 @@ self.SW_GENERATED_ASSETS = Object.freeze([
   "./js/save/migrate.js",
   "./js/save/migrations/registry.js",
   "./js/save/migrations/v0-to-v1.js",
+  "./js/save/offline-simulation.js",
+  "./js/save/recovery-ui.js",
   "./js/save/schema.js",
   "./js/state.js",
   "./js/svg.js",
