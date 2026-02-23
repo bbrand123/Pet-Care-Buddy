@@ -1,3 +1,10 @@
+/*
+ * LEGACY MONOLITH ARCHIVE (DO NOT EDIT FOR PRODUCTION CHANGES)
+ * This file is not loaded by the modular runtime or the iOS WKWebView shipping path.
+ * Make new gameplay/save/load/UI changes in modular files under `js/` instead.
+ * Kept only as legacy reference while modular migration continues.
+ */
+
 	        // Changelog (Retention pass): Added streak protection + optional prestige celebration, Journey/Bond/novelty systems, softer economy decay, reactivation memory hooks, and local reminder-center triggers.
         // ==================== GAME STATE ====================
 

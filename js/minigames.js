@@ -1,3 +1,10 @@
+/*
+ * LEGACY MONOLITH ARCHIVE (DO NOT EDIT FOR PRODUCTION CHANGES)
+ * This file is not loaded by the modular runtime or the iOS WKWebView shipping path.
+ * Make new gameplay/save/load/UI changes in modular files under `js/` instead.
+ * Kept only as legacy reference while modular migration continues.
+ */
+
         // ==================== MINI GAMES ====================
 
         // Fisher-Yates shuffle for unbiased randomization
