@@ -762,6 +762,31 @@
         let _assertiveQueue = [];
         let _assertiveTimer = null;
         const _announceRecentByKey = new Map();
+        let _announceBatchTimer = null;
+        let _announceBatchBucket = [];
+        const _announceBatchableSources = new Set(['care', 'toast', 'status', 'focus-return', 'coach']);
+        const _announceCriticalPatterns = [
+            /warning/i,
+            /critical/i,
+            /error/i,
+            /failed/i,
+            /can(?:not|n't)/i,
+            /unavailable/i,
+            /\bneed\b/i,
+            /corrupt/i,
+            /offline/i
+        ];
+        const _announceCompletionPatterns = [
+            /complete/i,
+            /completed/i,
+            /\bready\b/i,
+            /hatched/i,
+            /joined your family/i,
+            /unlocked/i,
+            /achievement/i,
+            /badge/i,
+            /trophy/i
+        ];
 
         function getAnnouncementVerbosity() {
             try {
@@ -781,13 +806,76 @@
                 return {
                     assertive: !!assertiveOrOptions.assertive,
                     source: assertiveOrOptions.source || 'app',
-                    dedupeMs: Number.isFinite(assertiveOrOptions.dedupeMs) ? Math.max(0, assertiveOrOptions.dedupeMs) : 1800
+                    dedupeMs: Number.isFinite(assertiveOrOptions.dedupeMs) ? Math.max(0, assertiveOrOptions.dedupeMs) : 1800,
+                    batch: assertiveOrOptions.batch !== false,
+                    batchMs: Number.isFinite(assertiveOrOptions.batchMs) ? Math.max(80, assertiveOrOptions.batchMs) : 220,
+                    allowEmoji: !!assertiveOrOptions.allowEmoji
                 };
             }
-            return { assertive: !!assertiveOrOptions, source: 'app', dedupeMs: 1800 };
+            return { assertive: !!assertiveOrOptions, source: 'app', dedupeMs: 1800, batch: true, batchMs: 220, allowEmoji: false };
+        }
+
+        function normalizeAnnouncementSpeechText(text, options) {
+            const raw = String(text || '');
+            const keepEmoji = !!(options && options.allowEmoji);
+            if (keepEmoji) return raw.replace(/\s+/g, ' ').trim();
+            if (typeof normalizeSpeechLabelText === 'function') {
+                return normalizeSpeechLabelText(raw);
+            }
+            return raw.replace(/\s+/g, ' ').trim();
+        }
+
+        function shouldKeepAssertive(message) {
+            const txt = String(message || '');
+            return _announceCriticalPatterns.some((p) => p.test(txt)) || _announceCompletionPatterns.some((p) => p.test(txt));
+        }
+
+        function enqueuePoliteAnnouncement(message, options) {
+            const canBatch = !!options.batch
+                && _announceBatchableSources.has(options.source)
+                && message.length <= 180;
+            if (!canBatch) {
+                _announceQueue.push(message);
+                if (_announceQueue.length > 6) {
+                    _announceQueue = _announceQueue.slice(-5);
+                    _announceQueue.unshift('Multiple updates available.');
+                }
+                if (!_announceTimer) _announceTimer = setTimeout(flushAnnouncementQueue, 40);
+                return;
+            }
+            _announceBatchBucket.push({ message, source: options.source });
+            if (_announceBatchTimer) return;
+            _announceBatchTimer = setTimeout(() => {
+                _announceBatchTimer = null;
+                const batch = _announceBatchBucket.splice(0);
+                if (batch.length === 0) return;
+                const unique = [];
+                const seen = new Set();
+                batch.forEach((entry) => {
+                    const key = String(entry.message || '').toLowerCase();
+                    if (!key || seen.has(key)) return;
+                    seen.add(key);
+                    unique.push(entry.message);
+                });
+                if (unique.length === 0) return;
+                const batchedMessage = unique.length === 1
+                    ? unique[0]
+                    : `Updates: ${unique.slice(0, 3).join(' • ')}${unique.length > 3 ? ` (+${unique.length - 3} more)` : ''}`;
+                _announceQueue.push(batchedMessage);
+                if (_announceQueue.length > 6) {
+                    _announceQueue = _announceQueue.slice(-5);
+                    _announceQueue.unshift('Multiple updates available.');
+                }
+                if (!_announceTimer) _announceTimer = setTimeout(flushAnnouncementQueue, 40);
+            }, options.batchMs);
         }
 
         function flushAnnouncementQueue() {
+            if (_announceQueue.length > 4) {
+                const kept = _announceQueue.splice(0, 3);
+                const remainder = _announceQueue.length;
+                _announceQueue = [`${kept.join(' • ')}${remainder > 0 ? ` (+${remainder} more)` : ''}`];
+            }
             const next = _announceQueue.shift();
             if (!next) {
                 _announceTimer = null;
@@ -835,9 +923,12 @@
 
         function announce(message, assertiveOrOptions = false) {
             const options = normalizeAnnounceOptions(assertiveOrOptions);
-            const assertive = options.assertive;
-            const plainMessage = String(message || '').trim();
+            let assertive = options.assertive;
+            const plainMessage = normalizeAnnouncementSpeechText(message, options);
             if (!plainMessage) return;
+            if (assertive && !shouldKeepAssertive(plainMessage)) {
+                assertive = false;
+            }
             const verbosity = getAnnouncementVerbosity();
             if (!assertive && verbosity === 'brief' && isRoutineAnnouncement(plainMessage)) return;
             if (!assertive && options.source === 'coach') {
@@ -861,10 +952,8 @@
                 return;
             }
 
-            // Queue polite messages and flush one at a time to keep announcements atomic.
-            _announceQueue.push(plainMessage);
-            if (_announceTimer) return;
-            _announceTimer = setTimeout(flushAnnouncementQueue, 40);
+            // Queue polite messages and batch rapid updates to avoid a speech backlog.
+            enqueuePoliteAnnouncement(plainMessage, options);
         }
 
 

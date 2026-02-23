@@ -1032,6 +1032,9 @@
             }
             const content = document.getElementById('game-content');
             if (!content) return;
+            const preRenderFocusSnapshot = (typeof captureUiFocusSnapshot === 'function')
+                ? captureUiFocusSnapshot({ scope: content, context: 'pet-phase' })
+                : null;
             const pet = gameState.pet;
             const petData = (typeof getAllPetTypeData === 'function' ? getAllPetTypeData(pet.type) : null) || PET_TYPES[pet.type];
             if (!petData) {
@@ -1193,7 +1196,7 @@
                             <button class="top-action-btn" id="achievements-btn" type="button" aria-haspopup="dialog" title="Achievements" aria-label="Achievements" aria-describedby="top-meta-achievements">
                                 <span class="top-action-btn-icon" aria-hidden="true">🏆</span>
                                 <span class="top-action-btn-label" aria-hidden="true">Awards</span>
-                                ${getAchievementCount() > 0 ? `<span class="achievement-count-badge" aria-hidden="true">${getAchievementCount()}</span>` : ''}
+                                ${getAchievementCount() > 0 ? `<span class="achievement-count-badge" aria-hidden="true">${getAchievementCount() > 99 ? '99+' : getAchievementCount()}</span>` : ''}
                             </button>
 	                            <button class="top-action-btn" id="daily-btn" type="button" aria-haspopup="dialog" title="Daily Tasks" aria-label="Daily Tasks${isDailyComplete() ? ' (all complete)' : ''}">
 	                                <span class="top-action-btn-icon" aria-hidden="true">📋</span>
@@ -1214,7 +1217,7 @@
                             <button class="top-action-btn" id="economy-btn" type="button" aria-haspopup="dialog" title="Economy & Trading" aria-label="Economy and trading" aria-describedby="top-meta-economy">
                                 <span class="top-action-btn-icon" aria-hidden="true">🪙</span>
                                 <span class="top-action-btn-label" aria-hidden="true">Economy</span>
-                                <span class="explore-alert-badge" aria-hidden="true" style="background:#FFD700;color:#5D4037;">${typeof getCoinBalance === 'function' ? Math.min(999, getCoinBalance()) : 0}</span>
+                                <span class="explore-alert-badge" aria-hidden="true" style="background:#FFD700;color:#5D4037;">${typeof getCoinBalance === 'function' ? (getCoinBalance() > 999 ? '999+' : getCoinBalance()) : 0}</span>
                             </button>
                             <button class="top-action-btn" id="explore-btn" type="button" aria-haspopup="dialog" title="Exploration" aria-label="Exploration map" aria-describedby="top-meta-explore">
                                 <span class="top-action-btn-icon" aria-hidden="true">🗺️</span>
@@ -1804,21 +1807,30 @@
                     moreToggle.classList.toggle('expanded', !!prefExpanded);
                     moreToggle.setAttribute('aria-label', `More actions ${prefExpanded ? 'expanded' : 'collapsed'}`);
                 }
-                moreToggle.addEventListener('click', () => {
-                    const panel = document.getElementById('more-actions-panel');
-                    if (!panel) return;
-                    const expanded = moreToggle.getAttribute('aria-expanded') === 'true';
+                    moreToggle.addEventListener('click', () => {
+                        const panel = document.getElementById('more-actions-panel');
+                        if (!panel) return;
+                        const expanded = moreToggle.getAttribute('aria-expanded') === 'true';
                     moreToggle.setAttribute('aria-expanded', String(!expanded));
                     panel.hidden = expanded;
                     const icon = moreToggle.querySelector('.more-actions-toggle-icon');
                     const stateLabel = moreToggle.querySelector('.more-actions-toggle-state');
                     if (icon) icon.textContent = expanded ? '▸' : '▾';
                     if (stateLabel) stateLabel.textContent = expanded ? 'Collapsed' : 'Expanded';
-                    moreToggle.classList.toggle('expanded', !expanded);
-                    moreToggle.setAttribute('aria-label', `More actions ${expanded ? 'collapsed' : 'expanded'}`);
-                    setMoreActionsExpandedPref(!expanded);
-                });
-            }
+                        moreToggle.classList.toggle('expanded', !expanded);
+                        moreToggle.setAttribute('aria-label', `More actions ${expanded ? 'collapsed' : 'expanded'}`);
+                        setMoreActionsExpandedPref(!expanded);
+                        if (typeof announce === 'function') {
+                            const visibleGroups = !expanded ? panel.querySelectorAll('.more-actions-section').length : 0;
+                            announce(
+                                !expanded
+                                    ? `More actions expanded. ${visibleGroups} groups available.`
+                                    : 'More actions collapsed.',
+                                { source: 'status', dedupeMs: 900 }
+                            );
+                        }
+                    });
+                }
 
             // Pet switcher tab handling
             document.querySelectorAll('.pet-tab').forEach(tab => {
@@ -1954,4 +1966,7 @@
             // Show first-time onboarding hints
             showOnboardingHints(currentRoom);
             renderCoachChecklist();
+            if (preRenderFocusSnapshot && preRenderFocusSnapshot.descriptor && typeof restoreFocusFromSnapshot === 'function') {
+                restoreFocusFromSnapshot(preRenderFocusSnapshot, { scope: content });
+            }
         }

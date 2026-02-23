@@ -222,6 +222,18 @@
                             pet._neglectRecoveryStep = 0;
                         }
                     }
+                    // Threshold-based status announcements (critical -> recovered -> stable only)
+                    const minNeed = Math.min(pet.hunger, pet.cleanliness, pet.happiness, pet.energy);
+                    const priorMinNeed = Math.min(prevHunger, prevClean, prevHappy, prevEnergy);
+                    const currentNeedStatus = minNeed <= lowThreshold ? 'critical' : (minNeed <= 40 ? 'low' : 'stable');
+                    const priorNeedStatus = priorMinNeed <= lowThreshold ? 'critical' : (priorMinNeed <= 40 ? 'low' : 'stable');
+                    if (currentNeedStatus !== priorNeedStatus && typeof announce === 'function') {
+                        if (priorNeedStatus === 'critical' && currentNeedStatus !== 'critical') {
+                            announce(`${petName} has recovered from critical needs.`, { source: 'status', dedupeMs: 3000 });
+                        } else if (currentNeedStatus === 'stable' && priorNeedStatus !== 'stable') {
+                            announce(`${petName} is stable now.`, { source: 'status', dedupeMs: 3000 });
+                        }
+                    }
 
                     // Apply passive decay to non-active pets (gentler rate)
                     if (gameState.pets && gameState.pets.length > 1) {

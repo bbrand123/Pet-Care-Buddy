@@ -49,19 +49,19 @@
             overlay.className = 'notif-history-overlay modal-overlay';
             overlay.setAttribute('role', 'dialog');
             overlay.setAttribute('aria-modal', 'true');
-            overlay.setAttribute('aria-label', 'Notification History');
+            overlay.setAttribute('aria-labelledby', 'notif-history-title');
 
             const items = _notificationHistory.length > 0
                 ? _notificationHistory.slice().reverse().map(n =>
-                    `<div class="notif-history-item"><span class="notif-history-time">${escapeHTML(n.time)}</span> ${escapeHTML(n.text)}</div>`
+                    `<li class="notif-history-item"><time class="notif-history-time" aria-label="Time ${escapeHTML(n.time)}">${escapeHTML(n.time)}</time><span class="notif-history-message">${escapeHTML(n.text)}</span></li>`
                 ).join('')
-                : '<p class="notif-history-empty">No recent notifications</p>';
+                : '<li class="notif-history-empty" aria-live="off">No recent notifications</li>';
 
             overlay.innerHTML = `
                 <div class="modal-content notif-history-modal">
-                    <h2 class="notif-history-title">Recent Notifications</h2>
-                    <div class="notif-history-list">${items}</div>
-                    <button class="notif-history-close" id="notif-history-close" aria-label="Close notification history">Close</button>
+                    <h2 class="notif-history-title" id="notif-history-title">Recent Notifications</h2>
+                    <ul class="notif-history-list" role="log" aria-live="off" aria-label="Recent notifications list">${items}</ul>
+                    <button class="notif-history-close" id="notif-history-close" data-focus-key="notif-history-close" aria-label="Close notification history">Close</button>
                 </div>
             `;
 
@@ -95,18 +95,19 @@
             overlay.setAttribute('aria-label', 'More tools');
             overlay.innerHTML = `
                 <div class="modal-content tools-menu-modal">
-                    <h2 class="tools-menu-title">More tools</h2>
+                    <h2 class="tools-menu-title" id="tools-menu-title">More tools</h2>
                     <div class="tools-menu-list" role="group" aria-label="More tools">
-                        <button class="tools-menu-btn" data-tool-action="furniture">🛋️ Decor</button>
-                        <button class="tools-menu-btn" data-tool-action="journal">📔 Journal</button>
-                        <button class="tools-menu-btn" data-tool-action="diary">📖 Diary</button>
-                        <button class="tools-menu-btn" data-tool-action="memorial">🏛️ Hall</button>
-                        <button class="tools-menu-btn" data-tool-action="alerts">🔔 Alerts</button>
-                        <button class="tools-menu-btn" data-tool-action="settings">⚙️ Settings</button>
+                        <button class="tools-menu-btn" data-tool-action="furniture" data-focus-key="tool-furniture" aria-label="Decor">🛋️ Decor</button>
+                        <button class="tools-menu-btn" data-tool-action="journal" data-focus-key="tool-journal" aria-label="Journal">📔 Journal</button>
+                        <button class="tools-menu-btn" data-tool-action="diary" data-focus-key="tool-diary" aria-label="Diary">📖 Diary</button>
+                        <button class="tools-menu-btn" data-tool-action="memorial" data-focus-key="tool-memorial" aria-label="Hall of fame">🏛️ Hall</button>
+                        <button class="tools-menu-btn" data-tool-action="alerts" data-focus-key="tool-alerts" aria-label="Alerts">🔔 Alerts</button>
+                        <button class="tools-menu-btn" data-tool-action="settings" data-focus-key="tool-settings" aria-label="Settings">⚙️ Settings</button>
                     </div>
-                    <button class="tools-menu-close" id="tools-menu-close" aria-label="Close tools menu">Close</button>
+                    <button class="tools-menu-close" id="tools-menu-close" data-focus-key="tools-menu-close" aria-label="Close tools menu">Close</button>
                 </div>
             `;
+            overlay.setAttribute('aria-labelledby', 'tools-menu-title');
             document.body.appendChild(overlay);
 
             const runAction = (action) => {

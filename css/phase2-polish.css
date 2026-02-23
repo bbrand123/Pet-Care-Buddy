@@ -2576,3 +2576,380 @@ body {
     18% { opacity: 1; }
     100% { opacity: 0; transform: translateY(18px); }
 }
+
+/* QoL accessibility/mobile polish overrides (iOS WebView-safe) */
+:root {
+    --vv-keyboard-overlap: 0px;
+    --vv-offset-top: 0px;
+    --vv-height: 100vh;
+}
+
+html,
+body {
+    -webkit-text-size-adjust: 100%;
+}
+
+button,
+[role="button"],
+.top-action-btn,
+.core-care-btn,
+.action-btn,
+.room-btn,
+.settings-choice,
+.settings-toggle,
+.settings-preset-btn,
+.modal-btn,
+.settings-close,
+.tools-menu-btn,
+.tools-menu-close,
+.notif-history-close {
+    -webkit-tap-highlight-color: rgba(52, 133, 255, 0.14);
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.top-action-btn,
+.core-care-btn,
+.action-btn,
+.room-btn,
+.settings-choice,
+.settings-preset-btn,
+.settings-toggle,
+.settings-sound-cue-test,
+.modal-btn,
+.settings-close,
+.tools-menu-btn,
+.tools-menu-close,
+.notif-history-close {
+    min-height: max(44px, var(--touch-target-min, 44px));
+    min-width: 44px;
+}
+
+.top-action-btn:active,
+.core-care-btn:active,
+.action-btn:active,
+.room-btn:active,
+.settings-choice:active,
+.settings-preset-btn:active,
+.settings-toggle:active,
+.settings-sound-cue-test:active,
+.modal-btn:active,
+.settings-close:active {
+    filter: brightness(0.98) saturate(1.02);
+    transform: translateY(1px) scale(0.99);
+}
+
+.top-action-btn:focus-visible,
+.core-care-btn:focus-visible,
+.action-btn:focus-visible,
+.room-btn:focus-visible,
+.settings-choice:focus-visible,
+.settings-preset-btn:focus-visible,
+.settings-toggle:focus-visible,
+.modal-btn:focus-visible,
+.settings-close:focus-visible,
+.tools-menu-btn:focus-visible,
+.notif-history-close:focus-visible {
+    outline: 3px solid rgba(38, 118, 215, 0.5);
+    outline-offset: 2px;
+}
+
+body.has-core-care-dock #game-content {
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px) + 78px);
+}
+
+.core-care-dock-wrap {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+.core-care-dock {
+    margin-bottom: max(2px, env(safe-area-inset-bottom, 0px));
+}
+
+#toast-container,
+.toast-container {
+    bottom: calc(max(92px, env(safe-area-inset-bottom, 0px) + 18px + (var(--vv-keyboard-overlap) * 0.35)));
+}
+
+.toast-text,
+.settings-volume-value,
+.wellness-bar-pct,
+.wellness-bar-value,
+.need-bubble-value,
+.growth-compact-pct,
+.growth-detail-item,
+.achievement-count-badge,
+.daily-complete-badge,
+.rewards-alert-badge,
+.explore-alert-badge,
+.feed-crop-badge,
+.cooldown-count {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+.personality-badge,
+.caretaker-title-badge,
+.actions-simplified-hint,
+.settings-row-help,
+.settings-verbosity-desc,
+.notif-history-time,
+.more-actions-section-title,
+.codex-subtitle,
+.stats-subtitle,
+.achievements-subtitle,
+.daily-subtitle,
+.modal-message {
+    color: color-mix(in srgb, currentColor 82%, #122033 18%) !important;
+    opacity: 0.95;
+}
+
+.settings-row-help,
+.settings-verbosity-desc {
+    display: block;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+.settings-preview-note {
+    margin: 0 0 10px;
+}
+
+.settings-subgroup-label {
+    margin: 8px 2px 6px;
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 900;
+    color: #4b6178;
+}
+
+.achievement-count-badge,
+.daily-complete-badge,
+.rewards-alert-badge,
+.explore-alert-badge,
+.feed-crop-badge,
+.room-bonus-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    max-width: 56px;
+    min-height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-weight: 800;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.room-btn.active {
+    border-color: rgba(32, 106, 196, 0.42) !important;
+    background: linear-gradient(180deg, rgba(226, 245, 255, 0.98), rgba(204, 233, 252, 0.95));
+    box-shadow:
+        0 10px 20px rgba(61, 129, 197, 0.2),
+        inset 0 0 0 1px rgba(255,255,255,0.85);
+}
+
+.action-btn:disabled:not(.cooldown),
+.core-care-btn:disabled:not(.cooldown),
+.top-action-btn[aria-disabled="true"]:not(.cooldown),
+.room-btn[aria-disabled="true"]:not(.active) {
+    opacity: 0.6;
+    filter: grayscale(0.2);
+    border-style: dashed !important;
+}
+
+.action-btn.cooldown {
+    opacity: 0.9;
+    border-style: solid !important;
+    background-image:
+        repeating-linear-gradient(-45deg, rgba(120, 134, 156, 0.1) 0 6px, rgba(120, 134, 156, 0.18) 6px 12px),
+        linear-gradient(180deg, rgba(255,255,255,0.9), rgba(239,242,247,0.88));
+}
+
+.action-btn.cooldown .cooldown-count[data-visible="true"] {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(111, 125, 147, 0.22);
+    background: rgba(255,255,255,0.88);
+    color: #334155;
+    font-size: 0.68rem;
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.locked,
+.locked-tag,
+.locked-badge {
+    border-style: dashed !important;
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(243,243,243,0.9));
+}
+
+.settings-overlay,
+.modal-overlay,
+.welcome-back-overlay,
+.naming-overlay {
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+    padding-bottom: max(8px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(8px, env(safe-area-inset-left, 0px));
+    padding-right: max(8px, env(safe-area-inset-right, 0px));
+}
+
+.codex-modal,
+.stats-modal,
+.achievements-modal,
+.settings-modal,
+.daily-modal,
+.modal-content,
+.tools-menu-modal,
+.notif-history-modal,
+.naming-modal {
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 18px - min(var(--vv-keyboard-overlap), 42px));
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-title,
+.notif-history-title,
+.tools-menu-title,
+.codex-title,
+.stats-title,
+.achievements-title,
+.daily-title,
+.modal-title,
+.naming-modal-title {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(255,255,255,0.92));
+    padding-top: 2px;
+    margin-bottom: 8px;
+}
+
+.settings-list,
+.notif-history-list,
+.tools-menu-list,
+.scrollable-list,
+.codex-grid,
+.stats-grid,
+.achievements-grid {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+}
+
+.settings-close,
+.notif-history-close,
+.tools-menu-close,
+.codex-close-btn,
+.stats-close-btn,
+.achievements-close,
+.daily-close {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(248,249,252,0.98));
+}
+
+.notif-history-list {
+    list-style: none;
+    padding-left: 0;
+}
+
+.notif-history-item {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    align-items: start;
+}
+
+.notif-history-time {
+    white-space: nowrap;
+    font-weight: 700;
+}
+
+.notif-history-message {
+    overflow-wrap: anywhere;
+}
+
+.settings-undo-toast {
+    grid-template-columns: auto 1fr auto;
+}
+
+.settings-undo-toast .undo-toast-btn {
+    min-height: 36px;
+    border-radius: 10px;
+    border: 1px solid rgba(104, 124, 148, 0.2);
+    background: rgba(255,255,255,0.92);
+    padding: 4px 10px;
+    font-weight: 800;
+    color: #1f3b63;
+}
+
+html.visual-keyboard-open .settings-modal,
+html.visual-keyboard-open .modal-content,
+html.visual-keyboard-open .naming-modal {
+    max-height: calc(var(--vv-height, 100dvh) - env(safe-area-inset-top, 0px) - 10px);
+}
+
+html.visual-keyboard-open .settings-close,
+html.visual-keyboard-open .modal-btn,
+html.visual-keyboard-open .naming-submit-btn,
+html.visual-keyboard-open .naming-skip-btn {
+    scroll-margin-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (hover: none), (pointer: coarse) {
+    .action-btn .action-btn-tooltip {
+        position: static !important;
+        transform: none !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: inline-flex;
+        order: -1;
+        margin: 0 0 4px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.86);
+        border: 1px solid rgba(110, 128, 152, 0.16);
+        font-size: 0.68rem;
+        line-height: 1.2;
+        color: #334155;
+        pointer-events: none;
+        white-space: normal;
+    }
+
+    .action-btn,
+    .core-care-btn {
+        align-items: center;
+        justify-content: center;
+        row-gap: 4px;
+    }
+}
+
+@media (max-width: 520px) {
+    .settings-row {
+        align-items: flex-start;
+    }
+
+    .settings-toggle,
+    .settings-choice,
+    .settings-preset-btn {
+        margin-top: 2px;
+    }
+
+    .top-action-btn-label {
+        max-width: 7.3ch;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}

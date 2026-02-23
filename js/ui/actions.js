@@ -585,6 +585,9 @@
 
             const content = document.getElementById('game-content');
             if (!content) return;
+            const preRenderFocusSnapshot = (typeof captureUiFocusSnapshot === 'function')
+                ? captureUiFocusSnapshot({ scope: content, context: 'egg-phase' })
+                : null;
             const crackLevel = Math.min(gameState.eggTaps, 3);
             const eggData = EGG_TYPES[gameState.eggType] || EGG_TYPES['furry'];
 
@@ -655,6 +658,8 @@
             // Maintain focus for keyboard users / VoiceOver
             if (maintainFocus) {
                 eggButton.focus();
+            } else if (preRenderFocusSnapshot && preRenderFocusSnapshot.descriptor && typeof restoreFocusFromSnapshot === 'function') {
+                restoreFocusFromSnapshot(preRenderFocusSnapshot, { scope: content });
             }
         }
 
@@ -1162,17 +1167,52 @@
             return actionCooldown;
         }
 
+        function ensureActionUnavailableReason(btn, message) {
+            if (!btn) return null;
+            let reasonId = btn.getAttribute('data-unavailable-reason-id');
+            let reasonEl = reasonId ? document.getElementById(reasonId) : null;
+            if (!reasonEl) {
+                reasonId = `action-unavailable-${btn.id || Math.random().toString(36).slice(2, 8)}`;
+                reasonEl = document.createElement('span');
+                reasonEl.className = 'sr-only action-unavailable-reason';
+                reasonEl.id = reasonId;
+                btn.appendChild(reasonEl);
+                btn.setAttribute('data-unavailable-reason-id', reasonId);
+            }
+            reasonEl.textContent = message;
+            const describedBy = (btn.getAttribute('aria-describedby') || '')
+                .split(/\s+/)
+                .filter(Boolean)
+                .filter((id) => id !== reasonId);
+            describedBy.push(reasonId);
+            btn.setAttribute('aria-describedby', describedBy.join(' '));
+            return reasonEl;
+        }
+
+        function setActionButtonCooldownState(btn, seconds) {
+            if (!btn) return;
+            const remaining = Math.max(1, Math.ceil(seconds || (ACTION_COOLDOWN_MS / 1000)));
+            const reasonText = `Cooling down. Available in ${remaining} second${remaining !== 1 ? 's' : ''}.`;
+            btn.classList.add('cooldown');
+            btn.disabled = true;
+            btn.setAttribute('aria-disabled', 'true');
+            if (!btn.dataset.originalLabel) {
+                btn.dataset.originalLabel = btn.getAttribute('aria-label') || btn.querySelector('span:not(.btn-icon):not(.action-btn-tooltip):not(.cooldown-count):not(.kbd-hint):not(.room-bonus-badge):not(.feed-crop-badge)')?.textContent.trim() || '';
+            }
+            btn.setAttribute('aria-label', `${btn.dataset.originalLabel || 'Action'} (${reasonText})`);
+            ensureActionUnavailableReason(btn, reasonText);
+            const cooldownCount = btn.querySelector('.cooldown-count');
+            if (cooldownCount) {
+                cooldownCount.textContent = `Wait ${remaining}s`;
+                cooldownCount.setAttribute('data-visible', 'true');
+            }
+        }
+
         function startActionCooldownWindow() {
             actionCooldown = true;
             const buttons = document.querySelectorAll('.action-btn');
             buttons.forEach(btn => {
-                btn.classList.add('cooldown');
-                btn.disabled = true;
-                btn.setAttribute('aria-disabled', 'true');
-                if (!btn.dataset.originalLabel) {
-                    btn.dataset.originalLabel = btn.getAttribute('aria-label') || btn.querySelector('span:not(.btn-icon):not(.action-btn-tooltip):not(.cooldown-count):not(.kbd-hint):not(.room-bonus-badge):not(.feed-crop-badge)')?.textContent.trim() || '';
-                }
-                btn.setAttribute('aria-label', (btn.dataset.originalLabel || '') + ` (available in ${Math.ceil(ACTION_COOLDOWN_MS / 1000)} second${Math.ceil(ACTION_COOLDOWN_MS / 1000) !== 1 ? 's' : ''})`);
+                setActionButtonCooldownState(btn, ACTION_COOLDOWN_MS / 1000);
             });
             if (actionCooldownTimer) {
                 clearTimeout(actionCooldownTimer);
@@ -1413,6 +1453,23 @@
                 if (btn.dataset.originalLabel) {
                     btn.setAttribute('aria-label', btn.dataset.originalLabel);
                 }
+                const reasonId = btn.getAttribute('data-unavailable-reason-id');
+                if (reasonId) {
+                    const reasonEl = document.getElementById(reasonId);
+                    if (reasonEl) reasonEl.remove();
+                    const describedBy = (btn.getAttribute('aria-describedby') || '')
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .filter((id) => id !== reasonId);
+                    if (describedBy.length > 0) btn.setAttribute('aria-describedby', describedBy.join(' '));
+                    else btn.removeAttribute('aria-describedby');
+                    btn.removeAttribute('data-unavailable-reason-id');
+                }
+                const cooldownCount = btn.querySelector('.cooldown-count');
+                if (cooldownCount) {
+                    cooldownCount.textContent = '';
+                    cooldownCount.removeAttribute('data-visible');
+                }
                 // Pulse glow to signal availability
                 btn.classList.add('cooldown-ready');
                 setTimeout(() => btn.classList.remove('cooldown-ready'), 600);
@@ -1438,14 +1495,7 @@
             actionCooldown = true;
             const buttons = document.querySelectorAll('.action-btn');
             buttons.forEach(btn => {
-                btn.classList.add('cooldown');
-                btn.disabled = true;
-                btn.setAttribute('aria-disabled', 'true');
-                // Preserve the original aria-label before overwriting
-                if (!btn.dataset.originalLabel) {
-                    btn.dataset.originalLabel = btn.getAttribute('aria-label') || btn.querySelector('span:not(.btn-icon):not(.action-btn-tooltip):not(.cooldown-count):not(.kbd-hint):not(.room-bonus-badge):not(.feed-crop-badge)')?.textContent.trim() || '';
-                }
-                btn.setAttribute('aria-label', (btn.dataset.originalLabel || '') + ` (available in ${Math.ceil(ACTION_COOLDOWN_MS / 1000)} second${Math.ceil(ACTION_COOLDOWN_MS / 1000) !== 1 ? 's' : ''})`);
+                setActionButtonCooldownState(btn, ACTION_COOLDOWN_MS / 1000);
             });
 
             if (actionCooldownTimer) {

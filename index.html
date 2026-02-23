@@ -11,6 +11,23 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="My Little Friend">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <script>
+        (function applyPrepaintA11yPrefs() {
+            try {
+                var root = document.documentElement;
+                var theme = localStorage.getItem('myLittleFriend_theme');
+                var textSize = localStorage.getItem('myLittleFriend_textSize');
+                var reducedMotion = localStorage.getItem('myLittleFriend_reducedMotion');
+                var calmMode = localStorage.getItem('myLittleFriend_calmMode');
+                var highContrast = localStorage.getItem('petcare_highContrast');
+                if (theme === 'light' || theme === 'dark') root.setAttribute('data-theme', theme);
+                if (textSize === 'large') root.setAttribute('data-text-size', 'large');
+                if (reducedMotion === 'true') root.setAttribute('data-reduced-motion', 'true');
+                if (calmMode === 'true') root.setAttribute('data-calm-mode', 'true');
+                if (highContrast === 'true') root.setAttribute('data-high-contrast', 'true');
+            } catch (e) {}
+        })();
+    </script>
     <title>My Little Friend</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/phase2-polish.css">
@@ -96,7 +113,8 @@
             <h1 class="game-title">My Little Friend</h1>
         </header>
 
-        <div id="game-content" role="region" aria-label="Game content">
+        <h2 id="game-content-heading" class="sr-only">Game content</h2>
+        <div id="game-content" role="region" aria-labelledby="game-content-heading">
             <!-- Game content will be dynamically inserted here -->
         </div>
 

@@ -2695,6 +2695,201 @@ function getRelationshipProgress(points) {
     return Math.min(100, Math.max(0, ((points - currentMin) / range) * 100));
 }
 
+// ==================== FOCUS SNAPSHOT + RESTORE HELPERS ====================
+function _canUseUnicodeProps() {
+    try { return !!new RegExp('\\p{Extended_Pictographic}', 'u'); } catch (e) { return false; }
+}
+
+const _emojiSpeechRegex = _canUseUnicodeProps()
+    ? /[\p{Extended_Pictographic}\uFE0F\u200D]+/gu
+    : /[\u{1F300}-\u{1FAFF}\u2600-\u27BF]/gu;
+
+function normalizeSpeechLabelText(text) {
+    return String(text || '')
+        .replace(_emojiSpeechRegex, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function getElementFocusKey(el) {
+    if (!el || !el.getAttribute) return '';
+    return el.getAttribute('data-focus-key')
+        || el.getAttribute('data-room')
+        || el.getAttribute('data-tool-action')
+        || el.getAttribute('data-sound-cue')
+        || el.getAttribute('data-quality-mode')
+        || el.getAttribute('data-pet-index')
+        || '';
+}
+
+function _escapeSelectorValue(value) {
+    const str = String(value || '');
+    if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') return CSS.escape(str);
+    return str.replace(/["\\]/g, '\\$&');
+}
+
+function isElementActuallyHidden(el) {
+    if (!el || !(el instanceof Element)) return true;
+    if (el.hidden) return true;
+    if (el.closest('[hidden], [aria-hidden="true"], [inert]')) return true;
+    if (el.closest('.duplicate-core-action')) return true;
+    const style = window.getComputedStyle ? window.getComputedStyle(el) : null;
+    if (style && (style.display === 'none' || style.visibility === 'hidden')) return true;
+    if (typeof el.getClientRects === 'function' && el.getClientRects().length === 0 && style && style.position !== 'fixed') return true;
+    return false;
+}
+
+function isFocusableRestoreCandidate(el) {
+    if (!el || !(el instanceof HTMLElement)) return false;
+    if (!document.contains(el)) return false;
+    if (isElementActuallyHidden(el)) return false;
+    if (el.disabled) return false;
+    if (el.getAttribute && el.getAttribute('aria-disabled') === 'true') return false;
+    return typeof el.focus === 'function';
+}
+
+function createFocusSnapshot(activeElement, options = {}) {
+    const active = activeElement || (typeof document !== 'undefined' ? document.activeElement : null);
+    const scope = options.scope && options.scope instanceof Element ? options.scope : null;
+    const validActive = active && active !== document.body && active !== document.documentElement && (!scope || scope.contains(active));
+    const el = validActive ? active : null;
+    const descriptor = el ? {
+        id: el.id || '',
+        focusKey: getElementFocusKey(el),
+        role: (el.getAttribute && el.getAttribute('role')) || '',
+        ariaLabel: (el.getAttribute && el.getAttribute('aria-label')) || '',
+        name: normalizeSpeechLabelText(el.textContent || ''),
+        tag: (el.tagName || '').toLowerCase(),
+        room: (el.getAttribute && el.getAttribute('data-room')) || '',
+        toolAction: (el.getAttribute && el.getAttribute('data-tool-action')) || '',
+        soundCue: (el.getAttribute && el.getAttribute('data-sound-cue')) || '',
+        qualityMode: (el.getAttribute && el.getAttribute('data-quality-mode')) || '',
+        petIndex: (el.getAttribute && el.getAttribute('data-pet-index')) || '',
+        classes: (el.className && typeof el.className === 'string')
+            ? el.className.split(/\s+/).filter(Boolean).slice(0, 4)
+            : []
+    } : null;
+    return {
+        at: Date.now(),
+        context: options.context || '',
+        scopeSelector: scope ? (scope.id ? `#${scope.id}` : '') : '',
+        scopeScrollTop: (scope && 'scrollTop' in scope) ? scope.scrollTop : null,
+        scopeScrollLeft: (scope && 'scrollLeft' in scope) ? scope.scrollLeft : null,
+        windowScrollX: typeof window !== 'undefined' ? window.scrollX : 0,
+        windowScrollY: typeof window !== 'undefined' ? window.scrollY : 0,
+        descriptor
+    };
+}
+
+function _findFocusCandidateFromDescriptor(snapshot, options = {}) {
+    const desc = snapshot && snapshot.descriptor;
+    if (!desc) return null;
+    const scope = options.scope && options.scope instanceof Element ? options.scope : null;
+    const root = scope || document;
+    const tryCandidate = (el) => {
+        if (!el) return null;
+        if (scope && !scope.contains(el)) return null;
+        return isFocusableRestoreCandidate(el) ? el : null;
+    };
+
+    if (desc.id) {
+        const byId = tryCandidate(document.getElementById(desc.id));
+        if (byId) return byId;
+    }
+    if (desc.focusKey) {
+        const byKey = tryCandidate(root.querySelector(`[data-focus-key="${_escapeSelectorValue(desc.focusKey)}"]`));
+        if (byKey) return byKey;
+        if (desc.room) {
+            const byRoom = tryCandidate(root.querySelector(`[data-room="${_escapeSelectorValue(desc.room)}"]`));
+            if (byRoom) return byRoom;
+        }
+        if (desc.toolAction) {
+            const byTool = tryCandidate(root.querySelector(`[data-tool-action="${_escapeSelectorValue(desc.toolAction)}"]`));
+            if (byTool) return byTool;
+        }
+        if (desc.soundCue) {
+            const byCue = tryCandidate(root.querySelector(`[data-sound-cue="${_escapeSelectorValue(desc.soundCue)}"]`));
+            if (byCue) return byCue;
+        }
+        if (desc.qualityMode) {
+            const byQuality = tryCandidate(root.querySelector(`[data-quality-mode="${_escapeSelectorValue(desc.qualityMode)}"]`));
+            if (byQuality) return byQuality;
+        }
+        if (desc.petIndex) {
+            const byPetIndex = tryCandidate(root.querySelector(`[data-pet-index="${_escapeSelectorValue(desc.petIndex)}"]`));
+            if (byPetIndex) return byPetIndex;
+        }
+    }
+    if (desc.ariaLabel) {
+        const escaped = _escapeSelectorValue(desc.ariaLabel);
+        const byAria = tryCandidate(root.querySelector(`[aria-label="${escaped}"]`));
+        if (byAria) return byAria;
+    }
+    if (desc.tag && desc.classes && desc.classes.length > 0) {
+        const selector = `${desc.tag}.${desc.classes.map((c) => _escapeSelectorValue(c)).join('.')}`;
+        const byClass = tryCandidate(root.querySelector(selector));
+        if (byClass) return byClass;
+    }
+    return null;
+}
+
+function _findFocusFallbackCandidate(options = {}) {
+    const scope = options.scope && options.scope instanceof Element ? options.scope : document.getElementById('game-content');
+    const root = scope || document;
+    const selectors = [
+        '[data-focus-fallback]',
+        '.region-heading',
+        'h1, h2, h3',
+        '.more-actions-toggle',
+        '#settings-btn',
+        '.top-action-btn',
+        '.core-care-btn',
+        'button:not([disabled])'
+    ];
+    for (const selector of selectors) {
+        const candidates = root.querySelectorAll(selector);
+        for (const el of candidates) {
+            if (!(el instanceof HTMLElement)) continue;
+            if (!el.hasAttribute('tabindex') && /^h[1-6]$/i.test(el.tagName)) el.setAttribute('tabindex', '-1');
+            if (isFocusableRestoreCandidate(el)) return el;
+        }
+    }
+    return null;
+}
+
+function restoreFocusFromSnapshot(snapshot, options = {}) {
+    if (!snapshot || typeof document === 'undefined') return false;
+    const scope = options.scope && options.scope instanceof Element ? options.scope : null;
+    const candidate = _findFocusCandidateFromDescriptor(snapshot, { scope })
+        || _findFocusFallbackCandidate({ scope });
+    if (!candidate) return false;
+    const shouldRestoreScroll = options.restoreScroll !== false;
+    const focusNow = () => {
+        if (shouldRestoreScroll && scope && Number.isFinite(snapshot.scopeScrollTop) && Number.isFinite(snapshot.scopeScrollLeft)) {
+            scope.scrollTop = snapshot.scopeScrollTop;
+            scope.scrollLeft = snapshot.scopeScrollLeft;
+        }
+        if (shouldRestoreScroll && !scope && Number.isFinite(snapshot.windowScrollX) && Number.isFinite(snapshot.windowScrollY)) {
+            window.scrollTo(snapshot.windowScrollX, snapshot.windowScrollY);
+        }
+        candidate.focus({ preventScroll: true });
+        if (shouldRestoreScroll && !scope && Number.isFinite(snapshot.windowScrollX) && Number.isFinite(snapshot.windowScrollY)) {
+            window.scrollTo(snapshot.windowScrollX, snapshot.windowScrollY);
+        }
+    };
+    // Two RAFs helps VoiceOver stay on the intended node after large innerHTML swaps.
+    requestAnimationFrame(() => requestAnimationFrame(focusNow));
+    return true;
+}
+
+function captureUiFocusSnapshot(options = {}) {
+    return createFocusSnapshot(document.activeElement, options);
+}
+
+window.captureUiFocusSnapshot = captureUiFocusSnapshot;
+window.restoreFocusFromSnapshot = restoreFocusFromSnapshot;
+window.normalizeSpeechLabelText = normalizeSpeechLabelText;
+
 // ==================== MODAL ESCAPE KEY STACK ====================
 // Ensures only the topmost modal/overlay responds to the Escape key.
 const _modalEscapeStack = [];
@@ -2737,7 +2932,7 @@ function pushModalEscape(closeFn) {
     if (typeof document !== 'undefined' && typeof closeFn === 'function') {
         const active = document.activeElement;
         if (active && active !== document.body && typeof active.focus === 'function') {
-            _modalFocusRestoreByCloseFn.set(closeFn, active);
+            _modalFocusRestoreByCloseFn.set(closeFn, createFocusSnapshot(active, { context: 'modal-opener' }));
         }
     }
     _modalEscapeStack.push(closeFn);
@@ -2748,23 +2943,20 @@ function popModalEscape(closeFn) {
     const idx = _modalEscapeStack.lastIndexOf(closeFn);
     if (idx !== -1) _modalEscapeStack.splice(idx, 1);
     updateBackgroundInertState();
-    if (_modalEscapeStack.length === 0) {
-        setTimeout(() => {
-            const restoreTarget = (typeof closeFn === 'function' && _modalFocusRestoreByCloseFn.get(closeFn)) || null;
-            if (restoreTarget && document.contains(restoreTarget) && typeof restoreTarget.focus === 'function') {
-                restoreTarget.focus();
-            }
-            const active = document.activeElement;
-            if (!active || typeof announce !== 'function' || isBriefScreenReaderMode()) return;
-            const label = active.getAttribute('aria-label') || active.textContent || '';
-            const compact = String(label).trim().replace(/\s+/g, ' ').slice(0, 48);
-            if (!compact) return;
-            const now = Date.now();
-            if (now - _modalLastReturnAnnounceAt < 1200) return;
-            _modalLastReturnAnnounceAt = now;
-            announce(`Returned to ${compact}.`, { source: 'focus-return', dedupeMs: 1000 });
-        }, 60);
-    }
+    setTimeout(() => {
+        const snapshot = (typeof closeFn === 'function' && _modalFocusRestoreByCloseFn.get(closeFn)) || null;
+        if (snapshot) restoreFocusFromSnapshot(snapshot);
+        if (_modalEscapeStack.length !== 0) return;
+        const active = document.activeElement;
+        if (!active || typeof announce !== 'function' || isBriefScreenReaderMode()) return;
+        const label = normalizeSpeechLabelText(active.getAttribute('aria-label') || active.textContent || '');
+        const compact = String(label).slice(0, 48);
+        if (!compact) return;
+        const now = Date.now();
+        if (now - _modalLastReturnAnnounceAt < 1200) return;
+        _modalLastReturnAnnounceAt = now;
+        announce(`Returned to ${compact}.`, { source: 'focus-return', dedupeMs: 1000 });
+    }, 60);
 }
 
 if (typeof document !== 'undefined' && !window.__modalEscapeListenerRegistered) {
@@ -2780,16 +2972,47 @@ if (typeof document !== 'undefined' && !window.__modalEscapeListenerRegistered) 
 
 // Trap Tab focus within a modal overlay element
 function trapFocus(overlay) {
+    if (!overlay || !(overlay instanceof HTMLElement)) return;
     const ensureOverlayFocusable = () => {
         if (!overlay.hasAttribute('tabindex')) overlay.setAttribute('tabindex', '-1');
     };
-    const getFocusable = () => overlay.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="button"]:not([disabled]), [role="link"], [role="tab"], [tabindex]:not([tabindex="-1"]):not([disabled])');
+    const getFocusable = () => Array.from(overlay.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [role="button"]:not([disabled]), [role="link"], [role="tab"], [role="switch"]:not([disabled]), [tabindex]:not([tabindex="-1"]):not([disabled])'))
+        .filter((el) => (el instanceof HTMLElement) && (!el.hasAttribute('tabindex') || el.getAttribute('tabindex') !== '-1'))
+        .filter((el) => isFocusableRestoreCandidate(el));
+    const getDialogTitle = () => overlay.querySelector('[data-dialog-title], h1, h2, h3, legend');
+    const focusModalEntry = () => {
+        const title = getDialogTitle();
+        if (title instanceof HTMLElement && !isElementActuallyHidden(title)) {
+            if (!overlay.hasAttribute('aria-labelledby') && title.id) {
+                overlay.setAttribute('aria-labelledby', title.id);
+            }
+            if (!title.id && !overlay.hasAttribute('aria-labelledby')) {
+                title.id = `dialog-title-${Math.random().toString(36).slice(2, 9)}`;
+                overlay.setAttribute('aria-labelledby', title.id);
+            }
+            if (!title.hasAttribute('tabindex')) title.setAttribute('tabindex', '-1');
+            title.focus({ preventScroll: true });
+            if (typeof announce === 'function' && overlay.dataset.modalTitleAnnounced !== 'true') {
+                const label = normalizeSpeechLabelText(title.textContent || overlay.getAttribute('aria-label') || 'Dialog');
+                if (label) {
+                    overlay.dataset.modalTitleAnnounced = 'true';
+                    announce(label, { source: 'modal-title', dedupeMs: 900 });
+                }
+            }
+            return true;
+        }
+        const focusable = getFocusable();
+        if (focusable.length > 0) {
+            focusable[0].focus({ preventScroll: true });
+            return true;
+        }
+        overlay.focus({ preventScroll: true });
+        return false;
+    };
     ensureOverlayFocusable();
     const focusableNow = getFocusable();
-    if (focusableNow.length > 0) {
-        if (!overlay.contains(document.activeElement)) focusableNow[0].focus();
-    } else if (!overlay.contains(document.activeElement)) {
-        overlay.focus();
+    if (!overlay.contains(document.activeElement)) {
+        focusModalEntry();
     }
     overlay.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {

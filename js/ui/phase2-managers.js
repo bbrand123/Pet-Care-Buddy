@@ -1294,6 +1294,32 @@
         apply();
     }
 
+    function installVisualViewportInsetsWatcher() {
+        if (!window.visualViewport) return;
+        let rafId = 0;
+        const apply = () => {
+            rafId = 0;
+            const vv = window.visualViewport;
+            if (!vv) return;
+            const keyboardOverlap = Math.max(0, Math.round(window.innerHeight - (vv.height + vv.offsetTop)));
+            document.documentElement.style.setProperty('--vv-keyboard-overlap', `${keyboardOverlap}px`);
+            document.documentElement.style.setProperty('--vv-offset-top', `${Math.max(0, Math.round(vv.offsetTop))}px`);
+            document.documentElement.style.setProperty('--vv-height', `${Math.max(0, Math.round(vv.height))}px`);
+            document.documentElement.classList.toggle('visual-keyboard-open', keyboardOverlap > 72);
+        };
+        const schedule = () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = requestAnimationFrame(apply);
+        };
+        if (typeof window.visualViewport.addEventListener === 'function') {
+            window.visualViewport.addEventListener('resize', schedule, { passive: true });
+            window.visualViewport.addEventListener('scroll', schedule, { passive: true });
+        }
+        window.addEventListener('resize', schedule, { passive: true });
+        window.addEventListener('orientationchange', schedule, { passive: true });
+        schedule();
+    }
+
     function initPhase2Polish() {
         ToastSystemEnhancer.init();
         GestureManager.attach();
@@ -1304,6 +1330,7 @@
         patchRoomSwitchFeedback();
         bindGlobalFeedbackTap();
         installReducedMotionWatchers();
+        installVisualViewportInsetsWatcher();
 
         document.documentElement.classList.add('phase2-polish-ready');
 

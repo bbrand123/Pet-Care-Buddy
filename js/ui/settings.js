@@ -7,9 +7,97 @@
 // Extracted from ui.js (lines 8686-9340)
 // ============================================================
 
-        // ==================== SETTINGS MODAL ====================
+	        // ==================== SETTINGS MODAL ====================
+        let _settingsModalUiRestore = null;
 
-        function showSettingsModal() {
+        function captureSettingsPreferenceSnapshot() {
+            const getStorage = (key) => {
+                try { return localStorage.getItem(key); } catch (e) { return null; }
+            };
+            return {
+                theme: document.documentElement.getAttribute('data-theme') || '',
+                textSize: document.documentElement.getAttribute('data-text-size') || '',
+                reducedMotion: document.documentElement.getAttribute('data-reduced-motion') === 'true',
+                calmMode: document.documentElement.getAttribute('data-calm-mode') === 'true' || (document.body && document.body.classList.contains('calm-mode')),
+                highContrast: document.documentElement.getAttribute('data-high-contrast') === 'true',
+                srVerbosity: getStorage(STORAGE_KEYS.srVerbosity) || 'brief',
+                hapticOff: getStorage(STORAGE_KEYS.hapticOff) === 'true',
+                ttsOff: getStorage(STORAGE_KEYS.ttsOff) === 'true',
+                soundCueCaptions: getStorage(STORAGE_KEYS.soundCueCaptions) === 'true',
+                soundEnabled: (typeof GameAudio !== 'undefined' && typeof GameAudio.getEnabled === 'function') ? !!GameAudio.getEnabled() : getStorage(STORAGE_KEYS.soundEnabled) !== 'false',
+                musicEnabled: (typeof GameAudio !== 'undefined' && typeof GameAudio.getMusicEnabled === 'function') ? !!GameAudio.getMusicEnabled() : getStorage(STORAGE_KEYS.musicEnabled) !== 'false',
+                sfxVolume: (typeof GameAudio !== 'undefined' && typeof GameAudio.getSfxVolumeSetting === 'function') ? GameAudio.getSfxVolumeSetting() : Number(getStorage(STORAGE_KEYS.sfxVolume) || 1),
+                ambientVolume: (typeof GameAudio !== 'undefined' && typeof GameAudio.getAmbientVolumeSetting === 'function') ? GameAudio.getAmbientVolumeSetting() : Number(getStorage(STORAGE_KEYS.ambientVolume) || 1),
+                musicVolume: (typeof GameAudio !== 'undefined' && typeof GameAudio.getMusicVolumeSetting === 'function') ? GameAudio.getMusicVolumeSetting() : Number(getStorage(STORAGE_KEYS.musicVolume) || 1)
+            };
+        }
+
+        function applySettingsPreferenceSnapshot(snapshot) {
+            if (!snapshot || typeof snapshot !== 'object') return false;
+            const html = document.documentElement;
+            if (snapshot.theme) html.setAttribute('data-theme', snapshot.theme);
+            else html.removeAttribute('data-theme');
+            if (snapshot.textSize === 'large') html.setAttribute('data-text-size', 'large');
+            else html.removeAttribute('data-text-size');
+            html.setAttribute('data-reduced-motion', snapshot.reducedMotion ? 'true' : 'false');
+            html.setAttribute('data-calm-mode', snapshot.calmMode ? 'true' : 'false');
+            html.setAttribute('data-high-contrast', snapshot.highContrast ? 'true' : 'false');
+            if (document.body) document.body.classList.toggle('calm-mode', !!snapshot.calmMode);
+            try {
+                if (snapshot.theme) localStorage.setItem(STORAGE_KEYS.theme, snapshot.theme);
+                else localStorage.removeItem(STORAGE_KEYS.theme);
+                if (snapshot.textSize) localStorage.setItem(STORAGE_KEYS.textSize, snapshot.textSize);
+                else localStorage.removeItem(STORAGE_KEYS.textSize);
+                localStorage.setItem(STORAGE_KEYS.reducedMotion, snapshot.reducedMotion ? 'true' : 'false');
+                localStorage.setItem(STORAGE_KEYS.calmMode, snapshot.calmMode ? 'true' : 'false');
+                localStorage.setItem('petcare_highContrast', snapshot.highContrast ? 'true' : 'false');
+                localStorage.setItem(STORAGE_KEYS.srVerbosity, snapshot.srVerbosity || 'brief');
+                localStorage.setItem(STORAGE_KEYS.hapticOff, snapshot.hapticOff ? 'true' : 'false');
+                localStorage.setItem(STORAGE_KEYS.ttsOff, snapshot.ttsOff ? 'true' : 'false');
+                localStorage.setItem(STORAGE_KEYS.soundCueCaptions, snapshot.soundCueCaptions ? 'true' : 'false');
+            } catch (e) {}
+            if (typeof GameAudio !== 'undefined') {
+                try {
+                    if (typeof GameAudio.getEnabled === 'function' && typeof GameAudio.toggle === 'function' && !!GameAudio.getEnabled() !== !!snapshot.soundEnabled) GameAudio.toggle();
+                    if (typeof GameAudio.getMusicEnabled === 'function' && typeof GameAudio.toggleMusic === 'function' && !!GameAudio.getMusicEnabled() !== !!snapshot.musicEnabled) GameAudio.toggleMusic();
+                    if (typeof GameAudio.setSfxVolumeSetting === 'function' && Number.isFinite(snapshot.sfxVolume)) GameAudio.setSfxVolumeSetting(Math.max(0, Math.min(1, Number(snapshot.sfxVolume))));
+                    if (typeof GameAudio.setAmbientVolumeSetting === 'function' && Number.isFinite(snapshot.ambientVolume)) GameAudio.setAmbientVolumeSetting(Math.max(0, Math.min(1, Number(snapshot.ambientVolume))));
+                    if (typeof GameAudio.setMusicVolumeSetting === 'function' && Number.isFinite(snapshot.musicVolume)) GameAudio.setMusicVolumeSetting(Math.max(0, Math.min(1, Number(snapshot.musicVolume))));
+                    if (typeof GameAudio.setSoundCueCaptionsEnabled === 'function') GameAudio.setSoundCueCaptionsEnabled(!!snapshot.soundCueCaptions);
+                } catch (e) {}
+            }
+            return true;
+        }
+
+        function showSettingsUndoToast(actionLabel, previousSnapshot) {
+            if (!previousSnapshot || !document) return;
+            const container = document.getElementById('toast-container') || document.body;
+            const toast = document.createElement('div');
+            toast.className = 'toast settings-undo-toast';
+            toast.innerHTML = `
+                <span class="toast-icon" aria-hidden="true">↩️</span>
+                <span class="toast-text">${escapeHTML(actionLabel)} applied.</span>
+                <button type="button" class="undo-toast-btn" aria-label="Restore previous settings">Undo</button>
+            `;
+            const btn = toast.querySelector('.undo-toast-btn');
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    if (applySettingsPreferenceSnapshot(previousSnapshot)) {
+                        if (typeof showToast === 'function') showToast('Previous settings restored.', '#66BB6A', { announce: true });
+                        toast.remove();
+                    }
+                });
+            }
+            container.appendChild(toast);
+            setTimeout(() => {
+                if (toast && toast.parentNode) {
+                    toast.classList.add('toast-exiting');
+                    setTimeout(() => toast.remove(), 260);
+                }
+            }, 6500);
+        }
+
+	        function showSettingsModal() {
             const existing = document.querySelector('.settings-overlay');
             if (existing) {
                 if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
@@ -52,18 +140,18 @@
 	                : true;
 	            const highContrastEnabled = document.documentElement.getAttribute('data-high-contrast') === 'true';
 
-            const overlay = document.createElement('div');
-            overlay.className = 'settings-overlay';
-            overlay.setAttribute('role', 'dialog');
-            overlay.setAttribute('aria-modal', 'true');
-            overlay.setAttribute('aria-label', 'Settings');
+	            const overlay = document.createElement('div');
+	            overlay.className = 'settings-overlay';
+	            overlay.setAttribute('role', 'dialog');
+	            overlay.setAttribute('aria-modal', 'true');
+	            overlay.setAttribute('aria-labelledby', 'settings-title');
             const soundCueSummary = soundCueLegend.map((cue) => `${cue.label}: ${cue.description}`).join(' ');
             const soundCueButtons = soundCueLegend.map((cue) => `
                 <button class="settings-choice settings-sound-cue-test" type="button" data-sound-cue="${cue.id}" aria-label="Test ${escapeHTML(cue.label)} cue">${escapeHTML(cue.label)}</button>
             `).join('');
             overlay.innerHTML = `
                 <div class="settings-modal">
-                    <h2 class="settings-title">⚙️ Settings</h2>
+                    <h2 class="settings-title" id="settings-title">⚙️ Settings</h2>
                     <div class="settings-list">
 
                         <fieldset class="settings-group"><legend class="settings-group-heading">Audio</legend>
@@ -224,10 +312,86 @@
                     <button class="settings-close" id="settings-close" aria-label="Close settings">Close</button>
                 </div>
             `;
-            document.body.appendChild(overlay);
+	            document.body.appendChild(overlay);
 
-            function setSwitchStateText(id, isOn) {
-                const stateEl = document.getElementById(`state-${id}`);
+                const settingsListEl = overlay.querySelector('.settings-list');
+                const titleEl = overlay.querySelector('#settings-title');
+                if (titleEl && !overlay.querySelector('.settings-preview-note')) {
+                    const previewNote = document.createElement('p');
+                    previewNote.className = 'settings-preview-note settings-row-help';
+                    previewNote.id = 'settings-preview-note';
+                    previewNote.textContent = 'Changes preview live while this dialog is open.';
+                    titleEl.insertAdjacentElement('afterend', previewNote);
+                }
+
+                // Add stable focus keys + visible/screen-reader descriptions without rewriting the template.
+                const settingsHelpByControlId = {
+                    'setting-sound': 'Turns all game audio on or off.',
+                    'setting-music': 'Background music only.',
+                    'setting-sample-pack': 'Uses the alternate sample audio set.',
+                    'setting-sound-captions': 'Shows short captions when sound cues play.',
+                    'setting-darkmode': 'Switches between light and dark color themes.',
+                    'setting-textsize': 'Increases text size across the game UI.',
+                    'setting-high-contrast': 'Boosts contrast for text, controls, and badges.',
+                    'setting-reduced-motion': 'Reduces animations and screen movement.',
+                    'setting-calm-mode': 'Uses a calmer, lower-stimulation presentation.',
+                    'setting-sr-brief': 'Shorter spoken announcements.',
+                    'setting-sr-detailed': 'More detailed spoken announcements.',
+                    'setting-tts': 'Reads some messages out loud using device speech.',
+                    'setting-low-stim': 'Preset: turns on calmer visual and speech settings in one tap.',
+                    'setting-haptic': 'Vibration feedback for taps and alerts.',
+                    'setting-reminders': 'Local reminders for hatch, harvest, expedition, and streak risks.',
+                    'setting-streak-freeze-auto': 'Automatically spends a freeze token to protect your streak.',
+                    'setting-reset-defaults': 'Restores default display, accessibility, and audio settings.'
+                };
+                Object.keys(settingsHelpByControlId).forEach((id) => {
+                    const control = overlay.querySelector(`#${id}`);
+                    if (!control) return;
+                    if (!control.getAttribute('data-focus-key')) control.setAttribute('data-focus-key', id);
+                    const row = control.closest('.settings-row');
+                    if (!row || row.querySelector(`[data-settings-help-for="${id}"]`)) return;
+                    const help = document.createElement('small');
+                    help.className = 'settings-row-help';
+                    help.setAttribute('data-settings-help-for', id);
+                    help.id = `${id}-desc`;
+                    help.textContent = settingsHelpByControlId[id];
+                    row.appendChild(help);
+                    const describedBy = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean);
+                    if (!describedBy.includes(help.id)) describedBy.push(help.id);
+                    control.setAttribute('aria-describedby', describedBy.join(' '));
+                });
+
+                // Lightweight subgroup labels inside large fieldsets for scanning/rotor context.
+                const addSubgroupLabel = (fieldsetSelector, targetControlId, labelText) => {
+                    const fieldset = overlay.querySelector(fieldsetSelector);
+                    const targetRow = overlay.querySelector(`#${targetControlId}`)?.closest('.settings-row');
+                    if (!fieldset || !targetRow) return;
+                    const prev = targetRow.previousElementSibling;
+                    if (prev && prev.classList && prev.classList.contains('settings-subgroup-label')) return;
+                    const label = document.createElement('div');
+                    label.className = 'settings-subgroup-label';
+                    label.textContent = labelText;
+                    label.setAttribute('role', 'heading');
+                    label.setAttribute('aria-level', '3');
+                    targetRow.parentNode.insertBefore(label, targetRow);
+                };
+                addSubgroupLabel('.settings-group:nth-of-type(2)', 'setting-darkmode', 'Vision');
+                addSubgroupLabel('.settings-group:nth-of-type(3)', 'setting-reduced-motion', 'Motion');
+                addSubgroupLabel('.settings-group:nth-of-type(3)', 'setting-sr-brief', 'Speech');
+                addSubgroupLabel('.settings-group:nth-of-type(4)', 'setting-haptic', 'Touch & Device');
+
+                const saveSettingsUiRestore = () => {
+                    if (!settingsListEl) return;
+                    _settingsModalUiRestore = {
+                        focus: (typeof captureUiFocusSnapshot === 'function') ? captureUiFocusSnapshot({ scope: overlay, context: 'settings-modal' }) : null,
+                        scrollTop: settingsListEl.scrollTop
+                    };
+                };
+                overlay.addEventListener('focusin', saveSettingsUiRestore);
+                if (settingsListEl) settingsListEl.addEventListener('scroll', saveSettingsUiRestore, { passive: true });
+
+	            function setSwitchStateText(id, isOn) {
+	                const stateEl = document.getElementById(`state-${id}`);
                 if (stateEl) stateEl.textContent = isOn ? 'On' : 'Off';
             }
 
@@ -236,26 +400,47 @@
                 if (output) output.textContent = `${Math.round(value)}%`;
             }
 
-            function setCalmModeEnabled(enabled) {
+	            function setCalmModeEnabled(enabled) {
                 const next = !!enabled;
                 document.documentElement.setAttribute('data-calm-mode', next ? 'true' : 'false');
                 if (document.body) document.body.classList.toggle('calm-mode', next);
                 try { localStorage.setItem(STORAGE_KEYS.calmMode, next ? 'true' : 'false'); } catch (e) {}
-                return next;
-            }
+	                return next;
+	            }
 
-            function bindVolumeSlider(sliderId, setter) {
-                const slider = document.getElementById(sliderId);
-                if (!slider) return;
-                const onInput = () => {
-                    const raw = Number(slider.value);
-                    const value = Number.isFinite(raw) ? raw : 100;
-                    updateVolumeLabel(sliderId, value);
-                    if (typeof setter === 'function') setter(value / 100);
-                };
-                slider.addEventListener('input', onInput);
-                slider.addEventListener('change', onInput);
-            }
+                function notifyPreview(message) {
+                    const note = overlay.querySelector('#settings-preview-note');
+                    if (note) note.textContent = message;
+                }
+
+	            function bindVolumeSlider(sliderId, setter) {
+	                const slider = document.getElementById(sliderId);
+	                if (!slider) return;
+                    const labelText = ((slider.closest('.settings-row') && slider.closest('.settings-row').querySelector('.settings-row-label')) || {}).textContent || 'Volume';
+                    let lastAnnouncedVolume = null;
+	                const onInput = () => {
+	                    const raw = Number(slider.value);
+	                    const value = Number.isFinite(raw) ? raw : 100;
+	                    updateVolumeLabel(sliderId, value);
+                        slider.setAttribute('aria-valuetext', `${Math.round(value)} percent`);
+	                    if (typeof setter === 'function') setter(value / 100);
+	                };
+                    const onChangeAnnounce = () => {
+                        const value = Math.round(Number(slider.value) || 0);
+                        if (value === lastAnnouncedVolume) return;
+                        lastAnnouncedVolume = value;
+                        if (typeof announce === 'function') {
+                            announce(`${String(labelText).replace(/[^\w\s]/g, '').trim()} ${value} percent`, {
+                                source: 'settings',
+                                dedupeMs: 600,
+                                batch: false
+                            });
+                        }
+                    };
+	                slider.addEventListener('input', onInput);
+	                slider.addEventListener('change', onInput);
+                    slider.addEventListener('change', onChangeAnnounce);
+	            }
 
             function syncVolumeControlAvailability() {
                 const soundOn = typeof GameAudio !== 'undefined' ? GameAudio.getEnabled() : false;
@@ -377,7 +562,7 @@
             syncVolumeControlAvailability();
 
             // Dark mode toggle
-            document.getElementById('setting-darkmode').addEventListener('click', function() {
+	            document.getElementById('setting-darkmode').addEventListener('click', function() {
                 const html = document.documentElement;
                 const current = html.getAttribute('data-theme');
                 const wasDark = current === 'dark' || (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -389,9 +574,10 @@
                 setSwitchStateText('setting-darkmode', newTheme === 'dark');
                 const label = this.parentElement.querySelector('.settings-row-label');
                 if (label) label.textContent = (newTheme === 'dark' ? '🌙' : '☀️') + ' Dark Mode';
-                const meta = document.querySelector('meta[name="theme-color"]');
-                if (meta) meta.content = newTheme === 'dark' ? '#1a1a2e' : '#A8D8EA';
-            });
+	                const meta = document.querySelector('meta[name="theme-color"]');
+	                if (meta) meta.content = newTheme === 'dark' ? '#1a1a2e' : '#A8D8EA';
+                    notifyPreview(`Preview: ${newTheme === 'dark' ? 'Dark' : 'Light'} mode applied.`);
+	            });
 
             // Haptic toggle
             document.getElementById('setting-haptic').addEventListener('click', function() {
@@ -412,21 +598,23 @@
             });
 
             // Text size toggle (Item 30)
-            document.getElementById('setting-textsize').addEventListener('click', function() {
+	            document.getElementById('setting-textsize').addEventListener('click', function() {
                 const isOn = this.classList.toggle('on');
                 this.setAttribute('aria-checked', String(isOn));
                 setSwitchStateText('setting-textsize', isOn);
-                document.documentElement.setAttribute('data-text-size', isOn ? 'large' : 'normal');
-                try { localStorage.setItem(STORAGE_KEYS.textSize, isOn ? 'large' : 'normal'); } catch (e) {}
-            });
+	                document.documentElement.setAttribute('data-text-size', isOn ? 'large' : 'normal');
+	                try { localStorage.setItem(STORAGE_KEYS.textSize, isOn ? 'large' : 'normal'); } catch (e) {}
+                    notifyPreview(`Preview: text size ${isOn ? 'large' : 'normal'}.`);
+	            });
 
-            document.getElementById('setting-reduced-motion').addEventListener('click', function() {
+	            document.getElementById('setting-reduced-motion').addEventListener('click', function() {
                 const isOn = this.classList.toggle('on');
                 this.setAttribute('aria-checked', String(isOn));
                 setSwitchStateText('setting-reduced-motion', isOn);
-                document.documentElement.setAttribute('data-reduced-motion', isOn ? 'true' : 'false');
-                try { localStorage.setItem(STORAGE_KEYS.reducedMotion, isOn ? 'true' : 'false'); } catch (e) {}
-            });
+	                document.documentElement.setAttribute('data-reduced-motion', isOn ? 'true' : 'false');
+	                try { localStorage.setItem(STORAGE_KEYS.reducedMotion, isOn ? 'true' : 'false'); } catch (e) {}
+                    notifyPreview(`Preview: motion ${isOn ? 'reduced' : 'standard'}.`);
+	            });
 
             const calmModeBtn = document.getElementById('setting-calm-mode');
             if (calmModeBtn) {
@@ -489,10 +677,11 @@
                 srDetailed.addEventListener('click', () => setSrVerbosity('detailed'));
             }
 
-            const lowStim = document.getElementById('setting-low-stim');
-            if (lowStim) {
-                lowStim.addEventListener('click', () => {
-                    document.documentElement.setAttribute('data-reduced-motion', 'true');
+	            const lowStim = document.getElementById('setting-low-stim');
+	            if (lowStim) {
+	                lowStim.addEventListener('click', () => {
+                        const previousSettings = captureSettingsPreferenceSnapshot();
+	                    document.documentElement.setAttribute('data-reduced-motion', 'true');
                     try { localStorage.setItem(STORAGE_KEYS.reducedMotion, 'true'); } catch (e) {}
                     try { localStorage.setItem(STORAGE_KEYS.srVerbosity, 'brief'); } catch (e) {}
                     const ttsBtn = document.getElementById('setting-tts');
@@ -504,13 +693,14 @@
                     const calmBtn = document.getElementById('setting-calm-mode');
                     if (calmBtn && !calmBtn.classList.contains('on')) calmBtn.click();
                     if (srBrief) srBrief.click();
-                    const presetSummary = 'Low stimulation preset applied: sound off, text-to-speech off, reduced motion on, calm mode on, screen reader verbosity set to brief.';
-                    showToast(presetSummary, '#66BB6A');
-                    if (typeof announce === 'function') {
-                        announce(presetSummary, { source: 'settings', dedupeMs: 1200 });
-                    }
-                });
-            }
+	                    const presetSummary = 'Low stimulation preset applied: sound off, text-to-speech off, reduced motion on, calm mode on, screen reader verbosity set to brief.';
+	                    showToast(presetSummary, '#66BB6A');
+                        showSettingsUndoToast('Low stimulation preset', previousSettings);
+	                    if (typeof announce === 'function') {
+	                        announce(presetSummary, { source: 'settings', dedupeMs: 1200 });
+	                    }
+	                });
+	            }
 
             // D29: High Contrast toggle
             const hcBtn = document.getElementById('setting-high-contrast');
@@ -518,19 +708,21 @@
                 hcBtn.addEventListener('click', function() {
                     const isOn = document.documentElement.getAttribute('data-high-contrast') === 'true';
                     const newVal = !isOn;
-                    document.documentElement.setAttribute('data-high-contrast', String(newVal));
-                    try { localStorage.setItem('petcare_highContrast', String(newVal)); } catch (e) {}
-                    this.classList.toggle('on', newVal);
-                    this.setAttribute('aria-checked', String(newVal));
-                    setSwitchStateText('setting-high-contrast', newVal);
-                });
-            }
+	                    document.documentElement.setAttribute('data-high-contrast', String(newVal));
+	                    try { localStorage.setItem('petcare_highContrast', String(newVal)); } catch (e) {}
+	                    this.classList.toggle('on', newVal);
+	                    this.setAttribute('aria-checked', String(newVal));
+	                    setSwitchStateText('setting-high-contrast', newVal);
+                        notifyPreview(`Preview: contrast ${newVal ? 'high' : 'standard'}.`);
+	                });
+	            }
 
             // D32: Reset all settings to defaults
-            const resetBtn = document.getElementById('setting-reset-defaults');
-            if (resetBtn) {
-                resetBtn.addEventListener('click', () => {
-                    if (!window.confirm('Reset all settings to their defaults? This cannot be undone.')) return;
+	            const resetBtn = document.getElementById('setting-reset-defaults');
+	            if (resetBtn) {
+	                resetBtn.addEventListener('click', () => {
+                        const previousSettings = captureSettingsPreferenceSnapshot();
+	                    if (!window.confirm('Reset all settings to defaults? You can undo from the next toast for a few seconds.')) return;
                     // Reset theme
                     document.documentElement.removeAttribute('data-theme');
                     document.documentElement.removeAttribute('data-text-size');
@@ -558,29 +750,38 @@
                             if (typeof GameAudio.setSoundCueCaptionsEnabled === 'function') GameAudio.setSoundCueCaptionsEnabled(false);
 	                    }
 	                    if (typeof setStreakFreezeAutoUse === 'function') setStreakFreezeAutoUse(true);
-	                    showToast('Settings reset to defaults.', '#66BB6A');
-	                    closeSettings();
+		                    showToast('Settings reset to defaults.', '#66BB6A');
+                            showSettingsUndoToast('Settings reset', previousSettings);
+		                    closeSettings();
                     // Re-open to reflect changes
                     setTimeout(() => showSettingsModal(), 300);
                 });
             }
 
-            function closeSettings() {
-                popModalEscape(closeSettings);
-                animateModalClose(overlay, () => {
-                    const trigger = document.getElementById('settings-btn');
-                    if (trigger) trigger.focus();
-                });
+	            function closeSettings() {
+                    saveSettingsUiRestore();
+	                popModalEscape(closeSettings);
+	                animateModalClose(overlay, () => {
+	                    const trigger = document.getElementById('settings-btn');
+	                    if (trigger) trigger.focus();
+	                });
             }
 
-            const initialSettingsFocus = document.getElementById('setting-sound') || document.getElementById('settings-close');
-            if (initialSettingsFocus) initialSettingsFocus.focus();
-            document.getElementById('settings-close').addEventListener('click', closeSettings);
+	            document.getElementById('settings-close').addEventListener('click', closeSettings);
             overlay.addEventListener('click', (e) => { if (e.target === overlay) closeSettings(); });
-            pushModalEscape(closeSettings);
-            overlay._closeOverlay = closeSettings;
-            trapFocus(overlay);
-        }
+	            pushModalEscape(closeSettings);
+	            overlay._closeOverlay = closeSettings;
+	            trapFocus(overlay);
+                if (_settingsModalUiRestore) {
+                    const restore = _settingsModalUiRestore;
+                    requestAnimationFrame(() => {
+                        if (settingsListEl && Number.isFinite(restore.scrollTop)) settingsListEl.scrollTop = restore.scrollTop;
+                        if (restore.focus && restore.focus.descriptor && typeof restoreFocusFromSnapshot === 'function') {
+                            restoreFocusFromSnapshot(restore.focus, { scope: overlay });
+                        }
+                    });
+                }
+	        }
 
         // ==================== LOW STAT WARNINGS ON ROOM NAV ====================
 
