@@ -71,6 +71,15 @@
   function defaultFailureHandler(globalObj, err) {
     const target = getGlobal(globalObj);
     try {
+      const diagnostics = target && target.MLFDiagnostics;
+      if (diagnostics && typeof diagnostics.error === 'function') {
+        diagnostics.error('BOOT', 'Runtime bootstrap failed.', {
+          error: String(err && err.message ? err.message : err),
+          bootInfo: target.__MLF_RUNTIME_BOOT_INFO__ || null
+        });
+      }
+    } catch (_) {}
+    try {
       console.error('[MLF] Bootstrap failed:', err);
     } catch (_) {}
     try {
@@ -115,6 +124,17 @@
 
       markRuntimeScriptsLoaded(globalObj, meta);
       markRuntimeReady(globalObj, meta);
+      try {
+        const diagnostics = globalObj && globalObj.MLFDiagnostics;
+        if (diagnostics && typeof diagnostics.log === 'function') {
+          diagnostics.log('BOOT', 'Runtime ready signal emitted.', {
+            bootPath: meta.bootPath,
+            durationMs: meta.durationMs,
+            runtimeScriptCount: Array.isArray(meta.runtimeScriptFiles) ? meta.runtimeScriptFiles.length : null,
+            parityOk: !!(meta.manifestParityReport && meta.manifestParityReport.ok)
+          });
+        }
+      } catch (_) {}
 
       if (typeof cfg.onReady === 'function') {
         await cfg.onReady(meta);

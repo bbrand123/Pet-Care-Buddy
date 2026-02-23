@@ -84,6 +84,15 @@
             });
         })
         .catch(function(err) {
+            try {
+                var diagnostics = global && global.MLFDiagnostics;
+                if (diagnostics && typeof diagnostics.error === 'function') {
+                    diagnostics.error('BOOT', 'File-protocol bootstrap failed.', {
+                        error: String(err && err.message ? err.message : err),
+                        bootInfo: global.__MLF_RUNTIME_BOOT_INFO__ || null
+                    });
+                }
+            } catch (_) {}
             console.error('[MLF] File-protocol bootstrap failed:', err);
             try {
                 if (typeof global.dismissSplashScreen === 'function') {

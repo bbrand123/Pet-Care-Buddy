@@ -21,6 +21,7 @@ struct My_Little_FriendApp: App {
 struct ContentView: View {
     @State private var isLoading = true
     @State private var reloadToken = UUID()
+    @State private var webViewLoadFailure: WebViewLoadFailureState? = nil
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +30,7 @@ struct ContentView: View {
                     .font(.headline)
                 Spacer()
                 Button {
+                    webViewLoadFailure = nil
                     reloadToken = UUID()
                 } label: {
                     Label("Reload", systemImage: "arrow.clockwise")
@@ -41,7 +43,7 @@ struct ContentView: View {
             .background(.ultraThinMaterial)
 
             ZStack {
-                GameWebView(isLoading: $isLoading, reloadToken: reloadToken)
+                GameWebView(isLoading: $isLoading, reloadToken: reloadToken, loadFailure: $webViewLoadFailure)
                     .ignoresSafeArea(edges: .bottom)
 
                 if isLoading {
@@ -49,17 +51,65 @@ struct ContentView: View {
                         .padding(12)
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
                 }
+
+                if let failure = webViewLoadFailure {
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(.orange)
+                            .accessibilityHidden(true)
+                        Text("Game Load Problem")
+                            .font(.headline)
+                        Text(failure.userMessage)
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                        Text(failure.details)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(4)
+                        HStack(spacing: 10) {
+                            Button("Retry") {
+                                webViewLoadFailure = nil
+                                isLoading = true
+                                reloadToken = UUID()
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Reloads the game web view")
+
+                            Button("Copy Diagnostics") {
+                                UIPasteboard.general.string = failure.diagnosticsText
+                            }
+                            .buttonStyle(.bordered)
+                            .accessibilityHint("Copies technical details for support")
+                        }
+                    }
+                    .padding(16)
+                    .frame(maxWidth: 420)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(16)
+                    .accessibilityElement(children: .contain)
+                }
             }
         }
     }
 }
 
+struct WebViewLoadFailureState: Identifiable, Equatable {
+    let id: UUID = UUID()
+    let userMessage: String
+    let details: String
+    let diagnosticsText: String
+}
+
 struct GameWebView: UIViewRepresentable {
     @Binding var isLoading: Bool
     let reloadToken: UUID
+    @Binding var loadFailure: WebViewLoadFailureState?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(isLoading: $isLoading)
+        Coordinator(isLoading: $isLoading, loadFailure: $loadFailure)
     }
 
     func makeUIView(context: Context) -> WKWebView {
@@ -124,6 +174,7 @@ struct GameWebView: UIViewRepresentable {
         }
 
         @Binding private var isLoading: Bool
+        @Binding private var loadFailure: WebViewLoadFailureState?
         var lastReloadToken = UUID()
         private weak var webView: WKWebView?
         private let lightImpact = UIImpactFeedbackGenerator(style: .light)
@@ -136,8 +187,9 @@ struct GameWebView: UIViewRepresentable {
         private let lifecycleSaveQueue = DispatchQueue.main
         private var lastLifecycleSaveTriggerAt = Date.distantPast
 
-        init(isLoading: Binding<Bool>) {
+        init(isLoading: Binding<Bool>, loadFailure: Binding<WebViewLoadFailureState?>) {
             _isLoading = isLoading
+            _loadFailure = loadFailure
             super.init()
             prepareHaptics()
         }
@@ -474,18 +526,20 @@ struct GameWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             isLoading = true
+            loadFailure = nil
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isLoading = false
+            loadFailure = nil
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-            isLoading = false
+            handleWebViewLoadFailure(in: webView, error: error, phase: "didFailNavigation")
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-            isLoading = false
+            handleWebViewLoadFailure(in: webView, error: error, phase: "didFailProvisionalNavigation")
         }
 
         func webView(
@@ -507,6 +561,79 @@ struct GameWebView: UIViewRepresentable {
                 UIApplication.shared.open(url)
             }
             decisionHandler(.cancel)
+        }
+
+        private func handleWebViewLoadFailure(in webView: WKWebView, error: Error, phase: String) {
+            let nsError = error as NSError
+            if nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled {
+                return
+            }
+
+            isLoading = false
+            let failure = buildWebViewLoadFailureState(webView: webView, error: nsError, phase: phase)
+            loadFailure = failure
+            reportWebViewLoadFailureToDiagnosticsBuffer(failure, phase: phase, nsError: nsError)
+        }
+
+        private func buildWebViewLoadFailureState(webView: WKWebView, error: NSError, phase: String) -> WebViewLoadFailureState {
+            let failingURL = webView.url?.absoluteString ?? "unknown"
+            let bundleVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown"
+            let bundleBuild = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown"
+            let timestamp = ISO8601DateFormatter().string(from: Date())
+            let diagnosticsLines = [
+                "My Little Friend Native WebView Diagnostics",
+                "Timestamp: \(timestamp)",
+                "Phase: \(phase)",
+                "Error Domain: \(error.domain)",
+                "Error Code: \(error.code)",
+                "Error: \(error.localizedDescription)",
+                "Failing URL: \(failingURL)",
+                "iOS: \(UIDevice.current.systemName) \(UIDevice.current.systemVersion)",
+                "Device: \(UIDevice.current.model)",
+                "App Version: \(bundleVersion) (\(bundleBuild))"
+            ]
+
+            return WebViewLoadFailureState(
+                userMessage: "The game page did not load correctly in the app web view.",
+                details: "\(error.localizedDescription) (code \(error.code))",
+                diagnosticsText: diagnosticsLines.joined(separator: "\n")
+            )
+        }
+
+        private func reportWebViewLoadFailureToDiagnosticsBuffer(_ failure: WebViewLoadFailureState, phase: String, nsError: NSError) {
+            print("[MLF][NATIVE] WebView load failure (\(phase)): \(nsError.domain) \(nsError.code) \(nsError.localizedDescription)")
+            guard let webView else { return }
+
+            let entry: [String: Any] = [
+                "category": "NATIVE",
+                "level": "error",
+                "message": "WKWebView navigation/load failure.",
+                "meta": [
+                    "phase": phase,
+                    "errorDomain": nsError.domain,
+                    "errorCode": nsError.code,
+                    "errorMessage": nsError.localizedDescription,
+                    "diagnosticsText": failure.diagnosticsText
+                ]
+            ]
+            guard
+                JSONSerialization.isValidJSONObject(entry),
+                let data = try? JSONSerialization.data(withJSONObject: entry),
+                let json = String(data: data, encoding: .utf8)
+            else {
+                return
+            }
+
+            let script = """
+            (function() {
+              try {
+                if (window.MLFDiagnostics && typeof window.MLFDiagnostics.push === 'function') {
+                  window.MLFDiagnostics.push(\(json));
+                }
+              } catch (_) {}
+            })();
+            """
+            webView.evaluateJavaScript(script, completionHandler: nil)
         }
     }
 }

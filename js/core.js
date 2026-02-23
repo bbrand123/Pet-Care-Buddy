@@ -1245,6 +1245,14 @@
 	                            }
 	                            if (migrationResult.report.appliedMigrations && migrationResult.report.appliedMigrations.length > 0) {
 	                                console.info('[MLF][MIGRATE] Applied save migrations:', migrationResult.report);
+	                                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function') {
+	                                    MLFDiagnostics.log('MIGRATE', 'Applied save migrations during load.', {
+	                                        fromVersion: migrationResult.report.fromVersion,
+	                                        toVersion: migrationResult.report.toVersion,
+	                                        appliedMigrations: migrationResult.report.appliedMigrations,
+	                                        changeCount: migrationResult.report.changes ? migrationResult.report.changes.length : 0
+	                                    });
+	                                }
 	                            }
 	                        }
 	                    } else {
@@ -1600,10 +1608,16 @@
                             const migrated = JSON.stringify(parsed);
                             localStorage.setItem(STORAGE_KEYS.gameSave, migrated);
                             _lastSavedStorageSnapshot = migrated;
-                        } catch (e) {}
-                    } else {
-                        _lastSavedStorageSnapshot = saved;
-                    }
+	                        } catch (e) {
+	                            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
+	                                MLFDiagnostics.warn('LOAD', 'Failed to persist migrated save immediately after load.', {
+	                                    error: String(e && e.message ? e.message : e)
+	                                });
+	                            }
+	                        }
+	                    } else {
+	                        _lastSavedStorageSnapshot = saved;
+	                    }
                     // Reset session-local transient state (Recommendations #1, #2)
                     parsed._sessionMinigameCount = 0;
                     parsed._careActionTimestamps = [];
@@ -1611,38 +1625,63 @@
                     return parsed;
                 }
             } catch (e) {
-                console.log('Failed to load game:', e);
-                // Show recovery dialog instead of silently failing
-                _loadError = e;
-            }
+	                console.log('Failed to load game:', e);
+	                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.error === 'function') {
+	                    MLFDiagnostics.error('LOAD', 'Failed to load game save.', {
+	                        error: String(e && e.message ? e.message : e),
+	                        stack: e && e.stack ? String(e.stack) : null
+	                    });
+	                }
+	                // Show recovery dialog instead of silently failing
+	                _loadError = e;
+	            }
             return null;
         }
 
         let _loadError = null;
-        function showSaveRecoveryDialog() {
-            if (!_loadError) return;
-            if (document.getElementById('save-recovery-overlay')) return;
-            _loadError = null;
+	        function showSaveRecoveryDialog() {
+	            if (!_loadError) return;
+	            if (document.getElementById('save-recovery-overlay')) return;
+	            const recoveryError = _loadError;
+	            _loadError = null;
             const overlay = document.createElement('div');
             overlay.id = 'save-recovery-overlay';
             overlay.className = 'modal-overlay';
             overlay.setAttribute('role', 'alertdialog');
             overlay.setAttribute('aria-modal', 'true');
             overlay.setAttribute('aria-label', 'Save data corrupted');
-            overlay.innerHTML = `
-                <div class="modal-content" style="max-width:320px;text-align:center;">
-                    <h2 style="margin-bottom:12px;">Save Data Issue</h2>
-                    <p style="margin-bottom:16px;font-size:0.9rem;">Your save data appears to be corrupted. You can try to start fresh or attempt to keep playing.</p>
-                    <div style="display:flex;gap:10px;justify-content:center;">
-                        <button id="recovery-fresh" style="padding:10px 18px;border:none;border-radius:8px;background:#EF5350;color:white;cursor:pointer;font-weight:600;font-family:inherit;">Start Fresh</button>
-                        <button id="recovery-dismiss" style="padding:10px 18px;border:1px solid #ccc;border-radius:8px;background:white;cursor:pointer;font-weight:600;font-family:inherit;">Dismiss</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(overlay);
-            document.getElementById('recovery-fresh').addEventListener('click', () => {
-                try { localStorage.removeItem(STORAGE_KEYS.gameSave); } catch(e) {}
-                _lastSavedStorageSnapshot = null;
+	            overlay.innerHTML = `
+	                <div class="modal-content" style="max-width:320px;text-align:center;">
+	                    <h2 style="margin-bottom:12px;">Save Data Issue</h2>
+	                    <p style="margin-bottom:16px;font-size:0.9rem;">We could not safely read your save data. You can start fresh, or export diagnostics first to help support troubleshoot what happened.</p>
+	                    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+	                        <button id="recovery-export-diagnostics" style="padding:10px 18px;border:1px solid #90CAF9;border-radius:8px;background:#E3F2FD;color:#0D47A1;cursor:pointer;font-weight:600;font-family:inherit;">Export Diagnostics</button>
+	                        <button id="recovery-fresh" style="padding:10px 18px;border:none;border-radius:8px;background:#EF5350;color:white;cursor:pointer;font-weight:600;font-family:inherit;">Start Fresh</button>
+	                        <button id="recovery-dismiss" style="padding:10px 18px;border:1px solid #ccc;border-radius:8px;background:white;cursor:pointer;font-weight:600;font-family:inherit;">Try Continue</button>
+	                    </div>
+	                </div>
+	            `;
+	            document.body.appendChild(overlay);
+		            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.error === 'function') {
+		                MLFDiagnostics.error('UI', 'Save recovery dialog displayed after load failure.', {
+		                    error: recoveryError ? String(recoveryError.message || recoveryError) : null
+		                });
+		            }
+	            const exportBtn = document.getElementById('recovery-export-diagnostics');
+	            if (exportBtn) {
+	                exportBtn.addEventListener('click', () => {
+	                    try {
+	                        if (typeof MLFDiagnosticsUI !== 'undefined' && MLFDiagnosticsUI && typeof MLFDiagnosticsUI.openDiagnosticsExportDialog === 'function') {
+	                            MLFDiagnosticsUI.openDiagnosticsExportDialog({ context: 'save-recovery-dialog' });
+	                        } else if (typeof openDiagnosticsReport === 'function') {
+	                            openDiagnosticsReport({ context: 'save-recovery-dialog' });
+	                        }
+	                    } catch (e) {}
+	                });
+	            }
+	            document.getElementById('recovery-fresh').addEventListener('click', () => {
+	                try { localStorage.removeItem(STORAGE_KEYS.gameSave); } catch(e) {}
+	                _lastSavedStorageSnapshot = null;
                 suppressUnloadAutosaveForReload();
                 overlay.remove();
                 location.reload();

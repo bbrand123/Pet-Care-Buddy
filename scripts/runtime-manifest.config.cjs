@@ -7,6 +7,7 @@ const BASE_RUNTIME_FILES = [
   './eventbus.js',
   './state.js',
   './diagnostics/error-buffer.js',
+  './diagnostics/diagnostics-ui.js',
   './save/schema.js',
   './save/migrations/v0-to-v1.js',
   './save/migrations/registry.js',

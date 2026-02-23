@@ -26,5 +26,13 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
+  try {
+    if (window.MLFDiagnostics && typeof window.MLFDiagnostics.error === 'function') {
+      window.MLFDiagnostics.error('BOOT', 'Module bootstrap entrypoint failed.', {
+        error: String(err && err.message ? err.message : err),
+        bootInfo: window.__MLF_RUNTIME_BOOT_INFO__ || null
+      });
+    }
+  } catch (_) {}
   console.error('[MLF] Bootstrap failed:', err);
 });
