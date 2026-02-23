@@ -77,6 +77,7 @@ If you maintain a web demo build, GitHub Pages can still be used (`https://[your
 - Treat browser-only polish, keyboard ergonomics, and PWA behavior as secondary unless the task explicitly requires them.
 - Run the iOS regression checklist in `RELEASE_CHECKLIST_IOS.md` for release candidates.
 - Prefer validating save/load, lifecycle suspend/resume, audio resume, and native bridge paths on iOS before browser polish.
+- Follow approved runtime boundaries/extension points in `docs/RUNTIME_BOUNDARIES.md` when adding new systems.
 
 ### Runtime Architecture Notes
 
@@ -85,6 +86,7 @@ If you maintain a web demo build, GitHub Pages can still be used (`https://[your
 - `StateManager` is the real state write/event path via a proxied `gameState` root and emits structured state events (`state:changed`, `state:replaced`) through `EventBus`.
 - Minigame metadata lives in `js/config/minigame-descriptors.js` and is registered through `js/registries/minigame-registry.js`.
 - Content packs apply through `js/registries/content-registries.js` instead of mutating global registries directly in the pack loader.
+- Extension-point and boundary guidance for contributors lives in `docs/RUNTIME_BOUNDARIES.md`.
 
 ### Regenerating Runtime / Legacy Web Manifests
 
