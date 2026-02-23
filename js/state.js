@@ -53,6 +53,36 @@
         return Object.assign({}, value);
     }
 
+    function jsonCloneForSave(value, options) {
+        const pretty = !!(options && options.pretty);
+        const transientKeys = (options && Array.isArray(options.transientKeys))
+            ? options.transientKeys
+            : ['_offlineChanges'];
+        const transientKeySet = new Set(transientKeys.map((key) => String(key)));
+        const serialized = JSON.stringify(value, function saveReplacer(key, nestedValue) {
+            if (transientKeySet.has(String(key))) return undefined;
+            return nestedValue;
+        }, pretty ? 2 : 0);
+        return {
+            serialized: typeof serialized === 'string' ? serialized : '{}',
+            payload: serialized ? JSON.parse(serialized) : {}
+        };
+    }
+
+    function stampSchemaVersionIfAvailable(globalRef, payload, options) {
+        if (!payload || !isObject(payload) || Array.isArray(payload)) return payload;
+        if (options && options.includeSchemaVersion === false) return payload;
+        const saveSchema = globalRef && globalRef.MLFSaveSchema;
+        if (saveSchema && typeof saveSchema.stampSaveSchemaVersion === 'function') {
+            saveSchema.stampSaveSchemaVersion(payload);
+            return payload;
+        }
+        if (!Number.isInteger(payload.saveSchemaVersion)) {
+            payload.saveSchemaVersion = 1;
+        }
+        return payload;
+    }
+
     const STATE_EVENTS = Object.freeze({
         changed: 'state:changed',
         replaced: 'state:replaced'
@@ -136,21 +166,48 @@
             return this._state;
         },
 
-        toSaveData() {
-            if (!this._rawState) return '{}';
-            const offlineChanges = this._rawState._offlineChanges;
-            const hadOffline = Object.prototype.hasOwnProperty.call(this._rawState, '_offlineChanges');
-            if (hadOffline) delete this._rawState._offlineChanges;
-            try {
-                return JSON.stringify(this._rawState);
-            } finally {
-                if (hadOffline) this._rawState._offlineChanges = offlineChanges;
+        serialize(options) {
+            if (!this._rawState) {
+                const emptyPayload = {};
+                stampSchemaVersionIfAvailable(global, emptyPayload, options);
+                const emptySerialized = JSON.stringify(emptyPayload, null, options && options.pretty ? 2 : 0);
+                return {
+                    payload: emptyPayload,
+                    serialized: emptySerialized,
+                    schemaVersion: emptyPayload.saveSchemaVersion
+                };
             }
+            const saveClone = jsonCloneForSave(this._rawState, options);
+            stampSchemaVersionIfAvailable(global, saveClone.payload, options);
+            saveClone.serialized = JSON.stringify(saveClone.payload, null, options && options.pretty ? 2 : 0);
+            return {
+                payload: saveClone.payload,
+                serialized: saveClone.serialized,
+                schemaVersion: saveClone.payload.saveSchemaVersion
+            };
+        },
+
+        toSaveData(options) {
+            return this.serialize(options).serialized;
+        },
+
+        hydrate(data, meta) {
+            let nextState = data;
+            if (typeof nextState === 'string') {
+                try {
+                    nextState = JSON.parse(nextState);
+                } catch (err) {
+                    throw new TypeError('StateManager.hydrate expected valid JSON string payload.');
+                }
+            }
+            if (!isObject(nextState) || Array.isArray(nextState)) {
+                throw new TypeError('StateManager.hydrate expected an object save payload.');
+            }
+            return this.replaceState(nextState, Object.assign({ reason: 'hydrate' }, meta || null));
         },
 
         loadSaveData(data, meta) {
-            if (!isObject(data)) return;
-            this.replaceState(data, Object.assign({ reason: 'loadSaveData' }, meta || null));
+            return this.hydrate(data, Object.assign({ reason: 'loadSaveData' }, meta || null));
         },
 
         onChange(path, callback) {

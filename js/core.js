@@ -1141,27 +1141,20 @@
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
                 gameState.lastUpdate = Date.now();
-                // Strip transient data that shouldn't persist
-	                const offlineChanges = gameState._offlineChanges;
-	                const hadOfflineChanges = Object.prototype.hasOwnProperty.call(gameState, '_offlineChanges');
-	                if (hadOfflineChanges) delete gameState._offlineChanges;
-	                try {
-	                    if (typeof MLFSaveSchema !== 'undefined' && MLFSaveSchema && typeof MLFSaveSchema.stampSaveSchemaVersion === 'function') {
-	                        MLFSaveSchema.stampSaveSchemaVersion(gameState);
-	                    } else {
-	                        gameState.saveSchemaVersion = 1;
-	                    }
-	                    const serialized = JSON.stringify(gameState);
-	                    localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
-	                    _lastSavedStorageSnapshot = serialized;
-	                    if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function' && saveOptions && saveOptions.source === 'lifecycle') {
-	                        MLFDiagnostics.log('SAVE', 'Lifecycle save wrote local storage.', {
-	                            reason: saveOptions.reason || 'native-lifecycle',
-	                            bytes: serialized.length
-	                        });
-	                    }
-	                } finally {
-	                    if (hadOfflineChanges) gameState._offlineChanges = offlineChanges;
+	                if (typeof StateManager === 'undefined' || !StateManager || typeof StateManager.serialize !== 'function') {
+	                    throw new Error('StateManager.serialize is required for the canonical save path.');
+	                }
+	                const snapshot = StateManager.serialize();
+	                const serialized = snapshot && typeof snapshot.serialized === 'string' ? snapshot.serialized : '{}';
+	                const schemaVersion = (snapshot && Number.isInteger(snapshot.schemaVersion)) ? snapshot.schemaVersion : 1;
+	                gameState.saveSchemaVersion = schemaVersion;
+	                localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
+	                _lastSavedStorageSnapshot = serialized;
+	                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function' && saveOptions && saveOptions.source === 'lifecycle') {
+	                    MLFDiagnostics.log('SAVE', 'Lifecycle save wrote local storage.', {
+	                        reason: saveOptions.reason || 'native-lifecycle',
+	                        bytes: serialized.length
+	                    });
 	                }
 	                // Show save indicator (Item 22)
 	                if (!saveOptions || !saveOptions.silentIndicator) {
@@ -1170,7 +1163,7 @@
 	                return {
 	                    ok: true,
 	                    savedAt: gameState.lastUpdate,
-	                    schemaVersion: gameState.saveSchemaVersion,
+	                    schemaVersion: schemaVersion,
 	                    source: saveOptions && saveOptions.source ? saveOptions.source : 'runtime'
 	                };
 	            } catch (e) {
@@ -2185,16 +2178,11 @@
 
             const saved = loadGame();
             if (saved) {
-                // Mutate in-place so closures that captured the gameState
-                // reference (e.g. timer callbacks) keep working.
-                // Assign first, then delete stale keys, to avoid a window
-                // where properties are undefined if a timer callback fires.
-                const oldKeys = new Set(Object.keys(gameState));
-                Object.assign(gameState, saved);
-                const newKeys = new Set(Object.keys(saved));
-                for (const k of oldKeys) {
-                    if (!newKeys.has(k)) delete gameState[k];
+                if (typeof StateManager === 'undefined' || !StateManager || typeof StateManager.hydrate !== 'function') {
+                    throw new Error('StateManager.hydrate is required for the canonical load path.');
                 }
+                const hydratedRoot = StateManager.hydrate(saved, { reason: 'init-load' });
+                if (hydratedRoot) gameState = hydratedRoot;
             }
             if (!saved && _loadError) {
                 showSaveRecoveryDialog();

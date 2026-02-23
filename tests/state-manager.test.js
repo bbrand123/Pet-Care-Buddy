@@ -38,3 +38,88 @@ test('StateManager proxies nested writes and emits structured events', () => {
     assert.equal(root.economy.coins, 7);
     assert.equal(root.nested.value, 9);
 });
+
+test('StateManager.serialize returns schema-stamped payload and strips transient fields', () => {
+    const originalSchema = global.MLFSaveSchema;
+    global.MLFSaveSchema = {
+        stampSaveSchemaVersion(payload) {
+            payload.saveSchemaVersion = 7;
+        }
+    };
+
+    try {
+        const root = StateManager.init({
+            phase: 'pet',
+            economy: { coins: 3 },
+            nested: { value: 4 },
+            _offlineChanges: { minutes: 12 }
+        }, { eventBus: EventBus });
+
+        const snapshot = StateManager.serialize();
+        assert.equal(typeof snapshot.serialized, 'string');
+        assert.equal(snapshot.schemaVersion, 7);
+        assert.equal(snapshot.payload.saveSchemaVersion, 7);
+        assert.equal(snapshot.serialized.includes('_offlineChanges'), false);
+        assert.equal(snapshot.payload._offlineChanges, undefined);
+        assert.equal(root._offlineChanges.minutes, 12);
+
+        snapshot.payload.nested.value = 99;
+        assert.equal(root.nested.value, 4);
+
+        const parsed = JSON.parse(snapshot.serialized);
+        assert.equal(parsed.saveSchemaVersion, 7);
+        assert.equal(parsed.nested.value, 4);
+    } finally {
+        global.MLFSaveSchema = originalSchema;
+    }
+});
+
+test('StateManager.hydrate preserves root identity and emits STATE_REPLACED', () => {
+    EventBus._listeners = {};
+    const replacedEvents = [];
+    EventBus.on(EVENTS.STATE_REPLACED, (evt) => replacedEvents.push(evt));
+
+    const root = StateManager.init({
+        phase: 'egg',
+        economy: { coins: 1 }
+    }, { eventBus: EventBus });
+
+    const hydratedRoot = StateManager.hydrate({
+        phase: 'pet',
+        economy: { coins: 22 },
+        saveSchemaVersion: 1
+    }, { source: 'test' });
+
+    assert.equal(hydratedRoot, root);
+    assert.equal(StateManager.getRoot(), root);
+    assert.equal(root.phase, 'pet');
+    assert.equal(root.economy.coins, 22);
+    assert.equal(replacedEvents.length, 1);
+    assert.equal(replacedEvents[0].type, 'replace');
+    assert.equal(replacedEvents[0].meta.reason, 'hydrate');
+    assert.equal(replacedEvents[0].meta.source, 'test');
+});
+
+test('StateManager.serialize falls back to schema version 1 without MLFSaveSchema', () => {
+    const originalSchema = global.MLFSaveSchema;
+    delete global.MLFSaveSchema;
+    try {
+        StateManager.init({
+            phase: 'egg',
+            economy: { coins: 0 }
+        }, { eventBus: EventBus });
+        const snapshot = StateManager.serialize();
+        assert.equal(snapshot.payload.saveSchemaVersion, 1);
+        assert.equal(JSON.parse(snapshot.serialized).saveSchemaVersion, 1);
+    } finally {
+        if (typeof originalSchema !== 'undefined') {
+            global.MLFSaveSchema = originalSchema;
+        }
+    }
+});
+
+test('StateManager.hydrate rejects non-object save payload roots', () => {
+    StateManager.init({ phase: 'egg' }, { eventBus: EventBus });
+    assert.throws(() => StateManager.hydrate([]), /object save payload/i);
+    assert.throws(() => StateManager.hydrate('[]'), /object save payload/i);
+});
