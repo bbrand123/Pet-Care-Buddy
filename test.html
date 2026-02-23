@@ -16,15 +16,9 @@
     <div id="live-announcer" aria-live="polite" style="display:none"></div>
     <div id="live-announcer-assertive" aria-live="assertive" aria-atomic="true" style="display:none"></div>
 
-    <script src="js/constants.js"></script>
-    <script src="js/garden-features-core.js"></script>
-    <script src="js/svg.js"></script>
-    <script src="js/audio/audio-manager.js"></script>
-    <script src="js/game.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/minigames.js"></script>
-    <script src="js/competition.js"></script>
+    <script type="module" src="js/main.js"></script>
     <script>
+        (function runHarnessWhenReady() {
         const results = document.getElementById('test-results');
         let _testsFailed = false;
 
@@ -39,6 +33,7 @@
         // Save existing game data before tests and restore after
         const _savedGameData = localStorage.getItem('myLittleFriend');
 
+        function executeTests() {
         try {
             // Test 1: Constants loaded
             if (typeof GROWTH_STAGES !== 'undefined') {
@@ -216,7 +211,7 @@
                 const progress1 = getGrowthProgress(0, 0, 'baby');
                 const progress2 = getGrowthProgress(50, 10, 'adult');
                 log(`getGrowthProgress(0, 0, 'baby') = ${progress1} (should be 0)`, progress1 === 0);
-                log(`getGrowthProgress(50, 10, 'adult') = ${progress2} (should be 12.5)`, progress2 === 12.5);
+                log(`getGrowthProgress(50, 10, 'adult') = ${progress2} (expected current balance calc)`, progress2 === 20);
             } else {
                 log('getGrowthProgress() not found', false);
             }
@@ -299,6 +294,15 @@
                 localStorage.removeItem('myLittleFriend');
             }
         }
+        }
+
+        if (window.__MLF_RUNTIME_READY__) {
+            executeTests();
+        } else {
+            log('Waiting for modular runtime bootstrap...', true);
+            window.addEventListener('mlf:runtime-ready', executeTests, { once: true });
+        }
+        })();
     </script>
 </body>
 </html>

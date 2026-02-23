@@ -30,20 +30,22 @@ A fun, interactive virtual pet game built with vanilla JavaScript, HTML, and CSS
 - **Pet Codex**: Discover and collect all pet species
 - **Stats Tracking**: View detailed statistics and achievements
 
-## 📁 Project Structure
+## 📁 Project Structure (Current Runtime)
 
-```
-My-Little-Friend/
-├── index.html          (1.2KB - minimal HTML structure)
-├── css/
-│   └── style.css      (113KB - all styles, animations, themes)
-└── js/
-    ├── constants.js   (22KB - game data: pets, rooms, seasons)
-    ├── svg.js         (60KB - SVG generation for pets and eggs)
-    ├── game.js        (82KB - core logic: save/load, stats, decay)
-    ├── ui.js          (85KB - rendering functions and modals)
-    └── minigames.js   (125KB - all 6 mini-games)
-```
+Production now boots through a single ES module entry:
+
+- `index.html` -> `js/main.js` (only production script tag)
+- `js/main.js` -> bootstraps modular runtime groups via `js/boot/runtime-orchestrators.js`
+- `js/config/runtime-manifest.generated.js` -> generated ordered runtime file manifest
+- `sw.js` + `sw-assets.generated.js` -> generated PWA precache manifest
+
+Key runtime areas:
+
+- `js/core.js` + extracted game-domain files (`js/economy.js`, `js/garden.js`, `js/decay.js`, etc.)
+- `js/ui/*` (rendering, actions, notifications, modals, settings, feature modules)
+- `js/minigames/framework.js` + `js/minigames/*` implementations
+- `js/registries/*` (minigame descriptors, content-pack application registries)
+- `js/content-packs.js` (pack validation/queries) + `js/data/packs/*` (pack data)
 
 ## 🚀 Getting Started
 
@@ -55,37 +57,28 @@ Visit the GitHub Pages URL: `https://[your-username].github.io/My-Little-Friend/
 2. Open `index.html` in a web browser
 3. Start caring for your pet!
 
-No build process or dependencies required - it's pure vanilla JavaScript!
+No bundler is required. For development, use a local HTTP server so the service worker and module entry load correctly (for example `python3 -m http.server 4173`).
 
 ## 🛠️ Development
 
-### File Organization
+### Runtime Architecture Notes
 
-**constants.js** - Game Data
-- Pet types, egg types, patterns, accessories
-- Rooms, weather, seasons, crops
-- All game constants and configuration
+- `js/game.js`, `js/ui.js`, and `js/minigames.js` are legacy monoliths and are not loaded in production.
+- Runtime load order is centralized in generated manifests, not HTML script-tag order.
+- `StateManager` is the real state write/event path via a proxied `gameState` root and emits structured state events (`state:changed`, `state:replaced`) through `EventBus`.
+- Minigame metadata lives in `js/config/minigame-descriptors.js` and is registered through `js/registries/minigame-registry.js`.
+- Content packs apply through `js/registries/content-registries.js` instead of mutating global registries directly in the pack loader.
 
-**svg.js** - Graphics
-- SVG generation for eggs (4 types)
-- SVG generation for pets (13 species)
-- Pattern and accessory overlays
+### Regenerating Runtime / SW Manifests
 
-**game.js** - Core Logic
-- Game state management
-- Save/load to localStorage
-- Pet creation and stats
-- Decay timers and weather system
+```bash
+npm run gen:runtime
+```
 
-**ui.js** - User Interface
-- Render functions (egg phase, pet phase)
-- Modals (naming, customization, codex, stats)
-- Toasts and particle effects
+This regenerates:
 
-**minigames.js** - Mini-games
-- Fetch, Hide & Seek, Bubble Pop
-- Matching, Simon Says, Coloring
-- Score tracking and rewards
+- `js/config/runtime-manifest.generated.js`
+- `sw-assets.generated.js`
 
 ### Adding New Features
 
@@ -100,9 +93,10 @@ No build process or dependencies required - it's pure vanilla JavaScript!
 3. Add navigation button in `generateRoomNavHTML()`
 
 **Add a New Mini-game:**
-1. Add game functions to `minigames.js`
-2. Add button in mini-games menu
-3. Implement scoring and rewards
+1. Add metadata descriptor in `js/config/minigame-descriptors.js`
+2. Add implementation file in `js/minigames/`
+3. Register start logic in `js/minigames/framework.js` dispatcher
+4. Regenerate manifests with `npm run gen:runtime`
 
 ## 🎨 Customization
 
@@ -150,6 +144,29 @@ Then add rendering logic in `generateAccessoryOverlay()` in `svg.js`.
 - **First Paint**: Fast (minimal HTML)
 - **Browser Caching**: CSS/JS cached separately
 - **LocalStorage**: Game saves automatically
+
+## 🧪 Tests
+
+Run all fast deterministic Node tests:
+
+```bash
+npm test
+```
+
+Coverage includes:
+
+- Garden systems (existing)
+- StateManager proxy/event behavior
+- Economy payout calculations
+- Minigame descriptor registry validation
+- Content-pack registry application
+- Generated runtime/SW manifest smoke checks
+
+## 🔄 Migration Notes
+
+- Save storage key remains `myLittleFriend` (existing saves should continue to load).
+- `StateManager` now emits real structured events through `EventBus`; listeners can subscribe to `state:changed` / `state:replaced`.
+- Production and `test.html` now boot via `js/main.js`; custom scripts/tests that depended on HTML script order should wait for `window.__MLF_RUNTIME_READY__` or the `mlf:runtime-ready` event.
 
 ## 🤝 Contributing
 
