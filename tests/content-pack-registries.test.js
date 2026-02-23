@@ -41,3 +41,46 @@ test('content packs apply through registry service without pack-level global mut
 
     registryService.applyCollectionsPack = originalApply;
 });
+
+test('content packs stay deferred when registry service is missing and can be applied later', () => {
+    const g = globalThis;
+    const originalService = g.ContentPackRegistryService;
+    g.ContentPackRegistryService = undefined;
+    g.STICKERS = {};
+    g.BADGES = {};
+    g.TROPHIES = {};
+    g.REWARD_MODIFIERS = {};
+    g.REWARD_BUNDLES = {};
+    g.EXPLORATION_BIOMES = {};
+    g.ROOMS = {};
+    g.ROOM_THEMES = {};
+    g.ROOM_FURNITURE_ITEMS = {};
+    g.FURNITURE = { decorations: {} };
+    g.PET_TYPES = {};
+    g.HYBRID_PET_TYPES = {};
+    g.EXPLORATION_LOOT = {};
+
+    const packId = `test_deferred_collections_${Date.now()}`;
+    contentPacks.registerContentPack({
+        id: packId,
+        type: 'collections',
+        version: '1.0.0',
+        items: [{ id: 'sticker_test_deferred', kind: 'sticker', data: { name: 'Deferred Sticker', emoji: '🕒' } }]
+    });
+
+    const deferredState = contentPacks.getContentPackApplyState(packId);
+    assert.equal(deferredState.applied, false);
+    assert.equal(deferredState.attempted, true);
+    assert.equal(deferredState.deferred, true);
+    assert.equal(g.STICKERS.sticker_test_deferred, undefined);
+
+    g.ContentPackRegistryService = registryService;
+    contentPacks.reapplyAllContentPacksToGlobals();
+
+    const appliedState = contentPacks.getContentPackApplyState(packId);
+    assert.equal(appliedState.applied, true);
+    assert.equal(appliedState.deferred, false);
+    assert.equal(g.STICKERS.sticker_test_deferred.name, 'Deferred Sticker');
+
+    g.ContentPackRegistryService = originalService;
+});

@@ -18,6 +18,7 @@
                 spawnEvery: Math.max(24, Math.round(50 / Math.max(0.75, difficulty))),
                 timerId: null
             };
+            initMiniGameRuntimeTracking(runnerState, { overlaySelector: '.runner-game-overlay' });
             renderRunnerGame();
             announce('Endless runner started. Press Space to jump.');
         }
@@ -50,26 +51,26 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            trackMiniGameOverlay(runnerState, overlay);
             const jumpAction = () => runnerJump();
-            overlay.querySelector('#runner-jump').addEventListener('click', jumpAction);
-            overlay.querySelector('#runner-done').addEventListener('click', () => endRunnerGame(false, false));
-            overlay.querySelector('#runner-track').addEventListener('keydown', (e) => {
+            bindMiniGameEvent(runnerState, overlay.querySelector('#runner-jump'), 'click', jumpAction);
+            bindMiniGameEvent(runnerState, overlay.querySelector('#runner-done'), 'click', () => endRunnerGame(false, false));
+            bindMiniGameEvent(runnerState, overlay.querySelector('#runner-track'), 'keydown', (e) => {
                 if (e.key === ' ' || e.key === 'ArrowUp') {
                     e.preventDefault();
                     jumpAction();
                 }
             });
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(runnerState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(runnerState ? runnerState.score : 0, () => endRunnerGame(false, false));
             });
             function runnerEscapeHandler() {
                 requestMiniGameExit(runnerState ? runnerState.score : 0, () => endRunnerGame(false, false));
             }
-            pushModalEscape(runnerEscapeHandler);
-            runnerState._escapeHandler = runnerEscapeHandler;
+            registerMiniGameEscapeHandler(runnerState, runnerEscapeHandler);
             trapFocus(overlay);
             overlay.querySelector('#runner-track').focus();
-            runnerState.timerId = setInterval(stepRunnerGame, 55);
+            runnerState.timerId = trackMiniGameInterval(runnerState, stepRunnerGame, 55);
             updateRunnerUI();
         }
 
@@ -134,14 +135,14 @@
         }
 
         function endRunnerGame(completed, crashed) {
-            dismissMiniGameExitDialog();
-            if (!runnerState) return;
-            if (runnerState.timerId) clearInterval(runnerState.timerId);
-            if (runnerState._escapeHandler) popModalEscape(runnerState._escapeHandler);
-            const overlay = document.querySelector('.runner-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!runnerState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = runnerState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.runner-game-overlay' });
 
-            const score = runnerState.score;
+            const score = finalState.score;
             if (score > 0 || completed) {
                 finalizeExpandedMiniGame({
                     gameId: 'runner',
@@ -164,4 +165,23 @@
                 restorePostMiniGameState();
             }
             runnerState = null;
+        }
+
+        function teardownRunnerGame() {
+            if (!runnerState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(runnerState, { overlaySelector: '.runner-game-overlay' });
+            runnerState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('runner', {
+                start: startRunnerGame,
+                teardown: teardownRunnerGame,
+                getState: () => runnerState,
+                overlaySelector: '.runner-game-overlay'
+            });
         }

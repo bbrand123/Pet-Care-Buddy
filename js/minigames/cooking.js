@@ -26,6 +26,7 @@
                 selected: [],
                 recipe: []
             };
+            initMiniGameRuntimeTracking(cookingState, { overlaySelector: '.cooking-game-overlay' });
             cookingState.recipe = generateCookingRecipe();
             renderCookingGame();
             announce('Cooking mini game started. Match ingredients to craft special pet food.');
@@ -64,29 +65,29 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            trackMiniGameOverlay(cookingState, overlay);
             const grid = overlay.querySelector('#cooking-grid');
             grid.innerHTML = COOKING_INGREDIENTS.map((item) => (
                 `<button type="button" class="cooking-item" data-ing="${item.id}">${item.icon} ${escapeHTML(item.name)}</button>`
             )).join('');
 
             grid.querySelectorAll('.cooking-item').forEach((btn) => {
-                btn.addEventListener('click', () => toggleCookingIngredient(btn.getAttribute('data-ing')));
+                bindMiniGameEvent(cookingState, btn, 'click', () => toggleCookingIngredient(btn.getAttribute('data-ing')));
             });
-            overlay.querySelector('#cook-btn').addEventListener('click', () => submitCookingRecipe());
-            overlay.querySelector('#cook-clear').addEventListener('click', () => {
+            bindMiniGameEvent(cookingState, overlay.querySelector('#cook-btn'), 'click', () => submitCookingRecipe());
+            bindMiniGameEvent(cookingState, overlay.querySelector('#cook-clear'), 'click', () => {
                 if (!cookingState) return;
                 cookingState.selected = [];
                 updateCookingUI();
             });
-            overlay.querySelector('#cook-done').addEventListener('click', () => endCookingGame(false));
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(cookingState, overlay.querySelector('#cook-done'), 'click', () => endCookingGame(false));
+            bindMiniGameEvent(cookingState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(cookingState ? cookingState.successes : 0, () => endCookingGame(false));
             });
             function cookingEscapeHandler() {
                 requestMiniGameExit(cookingState ? cookingState.successes : 0, () => endCookingGame(false));
             }
-            pushModalEscape(cookingEscapeHandler);
-            cookingState._escapeHandler = cookingEscapeHandler;
+            registerMiniGameEscapeHandler(cookingState, cookingEscapeHandler);
             trapFocus(overlay);
             overlay.querySelector('#cook-btn').focus();
             updateCookingUI();
@@ -170,13 +171,14 @@
         }
 
         function endCookingGame(completed) {
-            dismissMiniGameExitDialog();
-            if (!cookingState) return;
-            if (cookingState._escapeHandler) popModalEscape(cookingState._escapeHandler);
-            const overlay = document.querySelector('.cooking-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!cookingState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = cookingState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.cooking-game-overlay' });
 
-            const recipes = cookingState.successes;
+            const recipes = finalState.successes;
             if (recipes > 0 || completed) {
                 const foodsCrafted = recipes;
                 finalizeExpandedMiniGame({
@@ -187,7 +189,7 @@
                     statDelta: {
                         hunger: Math.min(24, recipes * 5),
                         happiness: Math.min(20, recipes * 4),
-                        energy: -Math.min(10, Math.max(2, cookingState.failures + 2))
+                        energy: -Math.min(10, Math.max(2, finalState.failures + 2))
                     },
                     summaryStats: [
                         { label: 'Recipes', value: recipes },
@@ -201,4 +203,23 @@
                 restorePostMiniGameState();
             }
             cookingState = null;
+        }
+
+        function teardownCookingGame() {
+            if (!cookingState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(cookingState, { overlaySelector: '.cooking-game-overlay' });
+            cookingState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('cooking', {
+                start: startCookingGame,
+                teardown: teardownCookingGame,
+                getState: () => cookingState,
+                overlaySelector: '.cooking-game-overlay'
+            });
         }

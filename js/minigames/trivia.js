@@ -26,6 +26,7 @@
                 correct: 0,
                 answered: false
             };
+            initMiniGameRuntimeTracking(triviaState, { overlaySelector: '.trivia-game-overlay' });
             renderTriviaGame();
             announce('Animal trivia started. Choose the best answer for each fact.');
         }
@@ -55,16 +56,16 @@
                 </div>
             `;
             document.body.appendChild(overlay);
-            overlay.querySelector('#trivia-next').addEventListener('click', nextTriviaQuestion);
-            overlay.querySelector('#trivia-done').addEventListener('click', () => endTriviaGame(false));
-            overlay.addEventListener('click', (e) => {
+            trackMiniGameOverlay(triviaState, overlay);
+            bindMiniGameEvent(triviaState, overlay.querySelector('#trivia-next'), 'click', nextTriviaQuestion);
+            bindMiniGameEvent(triviaState, overlay.querySelector('#trivia-done'), 'click', () => endTriviaGame(false));
+            bindMiniGameEvent(triviaState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(triviaState ? triviaState.correct : 0, () => endTriviaGame(false));
             });
             function triviaEscapeHandler() {
                 requestMiniGameExit(triviaState ? triviaState.correct : 0, () => endTriviaGame(false));
             }
-            pushModalEscape(triviaEscapeHandler);
-            triviaState._escapeHandler = triviaEscapeHandler;
+            registerMiniGameEscapeHandler(triviaState, triviaEscapeHandler);
             trapFocus(overlay);
             updateTriviaUI();
         }
@@ -89,7 +90,7 @@
                     `<button type="button" class="trivia-option" data-opt="${idx}" ${triviaState.answered ? 'disabled' : ''}>${escapeHTML(opt)}</button>`
                 )).join('');
                 optionsEl.querySelectorAll('.trivia-option').forEach((btn) => {
-                    btn.addEventListener('click', () => answerTriviaQuestion(Number(btn.getAttribute('data-opt'))));
+                    bindMiniGameEvent(triviaState, btn, 'click', () => answerTriviaQuestion(Number(btn.getAttribute('data-opt'))));
                 });
                 if (triviaState.answered) {
                     optionsEl.querySelectorAll('.trivia-option').forEach((btn) => {
@@ -126,15 +127,16 @@
         }
 
         function endTriviaGame(completed) {
-            dismissMiniGameExitDialog();
-            if (!triviaState) return;
-            if (triviaState._escapeHandler) popModalEscape(triviaState._escapeHandler);
-            const overlay = document.querySelector('.trivia-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!triviaState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = triviaState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.trivia-game-overlay' });
 
-            const score = triviaState.correct;
+            const score = finalState.correct;
             if (score > 0 || completed) {
-                const total = triviaState.questions.length;
+                const total = finalState.questions.length;
                 finalizeExpandedMiniGame({
                     gameId: 'trivia',
                     gameName: 'Animal Trivia',
@@ -155,4 +157,23 @@
                 restorePostMiniGameState();
             }
             triviaState = null;
+        }
+
+        function teardownTriviaGame() {
+            if (!triviaState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(triviaState, { overlaySelector: '.trivia-game-overlay' });
+            triviaState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('trivia', {
+                start: startTriviaGame,
+                teardown: teardownTriviaGame,
+                getState: () => triviaState,
+                overlaySelector: '.trivia-game-overlay'
+            });
         }

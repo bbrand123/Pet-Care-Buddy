@@ -19,6 +19,7 @@
                 timeLeftMs: 32000,
                 timerId: null
             };
+            initMiniGameRuntimeTracking(coopState, { overlaySelector: '.coop-game-overlay' });
             renderCoopRelayGame();
             announce('Co-op relay started. Alternate A for left pet and L for right pet.');
         }
@@ -63,29 +64,29 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            trackMiniGameOverlay(coopState, overlay);
 
-            overlay.querySelector('#coop-a').addEventListener('click', () => handleCoopInput('a'));
-            overlay.querySelector('#coop-l').addEventListener('click', () => handleCoopInput('l'));
-            overlay.querySelector('#coop-done').addEventListener('click', () => endCoopRelayGame(false));
-            overlay.querySelector('#coop-lanes').addEventListener('keydown', (e) => {
+            bindMiniGameEvent(coopState, overlay.querySelector('#coop-a'), 'click', () => handleCoopInput('a'));
+            bindMiniGameEvent(coopState, overlay.querySelector('#coop-l'), 'click', () => handleCoopInput('l'));
+            bindMiniGameEvent(coopState, overlay.querySelector('#coop-done'), 'click', () => endCoopRelayGame(false));
+            bindMiniGameEvent(coopState, overlay.querySelector('#coop-lanes'), 'keydown', (e) => {
                 const key = e.key.toLowerCase();
                 if (key === 'a' || key === 'l') {
                     e.preventDefault();
                     handleCoopInput(key);
                 }
             });
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(coopState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(coopState ? coopState.score : 0, () => endCoopRelayGame(false));
             });
             function coopEscapeHandler() {
                 requestMiniGameExit(coopState ? coopState.score : 0, () => endCoopRelayGame(false));
             }
-            pushModalEscape(coopEscapeHandler);
-            coopState._escapeHandler = coopEscapeHandler;
+            registerMiniGameEscapeHandler(coopState, coopEscapeHandler);
             trapFocus(overlay);
             overlay.querySelector('#coop-lanes').focus();
 
-            coopState.timerId = setInterval(stepCoopRelay, 150);
+            coopState.timerId = trackMiniGameInterval(coopState, stepCoopRelay, 150);
             updateCoopUI();
         }
 
@@ -142,14 +143,14 @@
         }
 
         function endCoopRelayGame(completed) {
-            dismissMiniGameExitDialog();
-            if (!coopState) return;
-            if (coopState.timerId) clearInterval(coopState.timerId);
-            if (coopState._escapeHandler) popModalEscape(coopState._escapeHandler);
-            const overlay = document.querySelector('.coop-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!coopState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = coopState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.coop-game-overlay' });
 
-            const score = coopState.score;
+            const score = finalState.score;
             if (score > 0 || completed) {
                 const expansion = ensureMiniGameExpansionMeta();
                 expansion.coop.sessions = Math.max(0, Math.floor(expansion.coop.sessions || 0)) + 1;
@@ -159,7 +160,7 @@
                     gameName: 'Co-op Relay',
                     score,
                     coinScore: Math.round(score / 3),
-                    pets: coopState.pets,
+                    pets: finalState.pets,
                     statDelta: () => ({
                         happiness: Math.min(20, Math.round(score / 8)),
                         energy: -Math.min(12, Math.round(score / 10)),
@@ -167,7 +168,7 @@
                     }),
                     summaryStats: [
                         { label: 'Relay Score', value: score },
-                        { label: 'Best Combo', value: coopState.bestCombo },
+                        { label: 'Best Combo', value: finalState.bestCombo },
                         { label: 'Sessions', value: expansion.coop.sessions }
                     ],
                     medalThresholds: { bronze: 60, silver: 120, gold: 200 }
@@ -176,4 +177,23 @@
                 restorePostMiniGameState();
             }
             coopState = null;
+        }
+
+        function teardownCoopRelayGame() {
+            if (!coopState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(coopState, { overlaySelector: '.coop-game-overlay' });
+            coopState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('coop', {
+                start: startCoopRelayGame,
+                teardown: teardownCoopRelayGame,
+                getState: () => coopState,
+                overlaySelector: '.coop-game-overlay'
+            });
         }

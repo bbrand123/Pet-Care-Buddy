@@ -2466,13 +2466,97 @@
 
         // ==================== MINI-GAME CLEANUP ====================
 
+        const MINIGAME_RUNTIME_OVERLAY_SELECTORS = [
+            '.fishing-game-overlay',
+            '.racing-game-overlay',
+            '.runner-game-overlay',
+            '.slider-game-overlay',
+            '.trivia-game-overlay',
+            '.cooking-game-overlay',
+            '.rhythm-game-overlay',
+            '.coop-game-overlay',
+            '.minigame-menu-overlay',
+            '.minigame-summary-overlay'
+        ];
+
+        function cleanupMinigameTransientOverlays() {
+            dismissMiniGameExitDialog();
+            MINIGAME_RUNTIME_OVERLAY_SELECTORS.forEach((selector) => {
+                document.querySelectorAll(selector).forEach((el) => {
+                    if (el && el.parentNode) {
+                        el.innerHTML = '';
+                        el.remove();
+                    }
+                });
+            });
+            document.body.classList.remove('minigame-menu-open');
+        }
+
         function cleanupAllMiniGames() {
+            if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.teardownAll === 'function') {
+                MiniGameRegistry.teardownAll({ reason: 'global-reset' });
+            }
             if (typeof fetchState !== 'undefined' && fetchState && typeof endFetchGame === 'function') endFetchGame();
             if (typeof hideSeekState !== 'undefined' && hideSeekState && typeof endHideSeekGame === 'function') endHideSeekGame();
             if (typeof bubblePopState !== 'undefined' && bubblePopState && typeof endBubblePopGame === 'function') endBubblePopGame();
             if (typeof matchingState !== 'undefined' && matchingState && typeof endMatchingGame === 'function') endMatchingGame();
             if (typeof simonState !== 'undefined' && simonState && typeof endSimonSaysGame === 'function') endSimonSaysGame();
             if (typeof coloringState !== 'undefined' && coloringState && typeof endColoringGame === 'function') endColoringGame();
+            cleanupMinigameTransientOverlays();
             // Stop idle animations and earcons during mini-games
             if (typeof stopIdleAnimations === 'function') stopIdleAnimations();
+        }
+
+        function runMiniGameResetSmokeTest() {
+            const hasRegistry = typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.getAllLifecycles === 'function';
+            const entries = hasRegistry ? MiniGameRegistry.getAllLifecycles() : [];
+            const baselineEscapeDepth = (typeof _modalEscapeStack !== 'undefined' && Array.isArray(_modalEscapeStack)) ? _modalEscapeStack.length : 0;
+            const results = [];
+            entries.forEach((entry) => {
+                const id = entry && entry.id;
+                const lifecycle = entry && entry.lifecycle;
+                if (!id || !lifecycle || typeof lifecycle.start !== 'function' || typeof lifecycle.teardown !== 'function') return;
+                try {
+                    lifecycle.teardown({ reason: 'smoke-prep' });
+                } catch (e) {}
+
+                const beforeEscapeDepth = (typeof _modalEscapeStack !== 'undefined' && Array.isArray(_modalEscapeStack)) ? _modalEscapeStack.length : 0;
+                const beforeOverlayCount = MINIGAME_RUNTIME_OVERLAY_SELECTORS.reduce((count, selector) => count + document.querySelectorAll(selector).length, 0);
+                lifecycle.start();
+                const startedState = typeof lifecycle.getState === 'function' ? lifecycle.getState() : null;
+                const duringOverlayCount = MINIGAME_RUNTIME_OVERLAY_SELECTORS.reduce((count, selector) => count + document.querySelectorAll(selector).length, 0);
+                const beforeCleanupSnapshot = (typeof getMiniGameRuntimeTrackingSnapshot === 'function') ? getMiniGameRuntimeTrackingSnapshot(startedState) : null;
+
+                cleanupAllMiniGames();
+
+                const afterState = typeof lifecycle.getState === 'function' ? lifecycle.getState() : null;
+                const overlayLeft = lifecycle.overlaySelector ? !!document.querySelector(lifecycle.overlaySelector) : false;
+                const afterEscapeDepth = (typeof _modalEscapeStack !== 'undefined' && Array.isArray(_modalEscapeStack)) ? _modalEscapeStack.length : 0;
+                const afterOverlayCount = MINIGAME_RUNTIME_OVERLAY_SELECTORS.reduce((count, selector) => count + document.querySelectorAll(selector).length, 0);
+                results.push({
+                    id,
+                    ok: !afterState && !overlayLeft && afterOverlayCount === 0 && afterEscapeDepth <= beforeEscapeDepth,
+                    started: !!startedState || (duringOverlayCount > beforeOverlayCount),
+                    beforeCleanupSnapshot,
+                    afterStatePresent: !!afterState,
+                    overlayLeft,
+                    overlayCount: afterOverlayCount,
+                    escapeDepthDelta: afterEscapeDepth - beforeEscapeDepth
+                });
+            });
+
+            const summary = {
+                ok: results.every((item) => item.ok),
+                baselineEscapeDepth,
+                results
+            };
+            if (typeof window !== 'undefined') {
+                window.__lastMiniGameResetSmokeTest = summary;
+                window.runMiniGameResetSmokeTest = runMiniGameResetSmokeTest;
+            }
+            return summary;
+        }
+
+        if (typeof window !== 'undefined') {
+            window.runMiniGameResetSmokeTest = runMiniGameResetSmokeTest;
         }

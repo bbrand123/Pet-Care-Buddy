@@ -8,7 +8,8 @@
         lazyTotal: 0,
         lazyLoaded: 0,
         ready: false,
-        startedAt: Date.now()
+        startedAt: Date.now(),
+        readyResolved: false
     };
 
     const CRITICAL_IMAGE_ASSETS = [
@@ -67,8 +68,33 @@
     let splashProgressFillEl = null;
     let splashLabelEl = null;
     let pendingSplashDismissArgs = null;
+    let pendingSplashDismissRequested = false;
     let splashDismissPatched = false;
     let splashDismissForceTimer = null;
+
+    function ensurePhase2ReadyPromise() {
+        if (!window.__phase2Ready || typeof window.__phase2Ready.then !== 'function') {
+            window.__phase2Ready = new Promise((resolve) => {
+                window.__resolvePhase2Ready = function resolvePhase2Ready(detail) {
+                    resolve(detail || getState());
+                };
+            });
+            return;
+        }
+        if (typeof window.__resolvePhase2Ready !== 'function') {
+            window.__resolvePhase2Ready = function resolvePhase2Ready() {};
+        }
+    }
+
+    function resolvePhase2Ready() {
+        if (PRELOAD_STATE.readyResolved) return;
+        PRELOAD_STATE.readyResolved = true;
+        try {
+            if (typeof window.__resolvePhase2Ready === 'function') {
+                window.__resolvePhase2Ready(getState());
+            }
+        } catch (e) {}
+    }
 
     function emitProgress(kind, asset, ok) {
         const detail = {
@@ -153,10 +179,12 @@
                 originalDismiss(options);
                 return;
             }
+            pendingSplashDismissRequested = true;
             pendingSplashDismissArgs = options;
             if (!splashDismissForceTimer) {
                 splashDismissForceTimer = setTimeout(() => {
                     const args = pendingSplashDismissArgs;
+                    pendingSplashDismissRequested = false;
                     pendingSplashDismissArgs = null;
                     splashDismissForceTimer = null;
                     originalDismiss(args || {});
@@ -165,12 +193,13 @@
         };
 
         const tryRelease = () => {
-            if (!PRELOAD_STATE.ready || !pendingSplashDismissArgs) return;
+            if (!PRELOAD_STATE.ready || !pendingSplashDismissRequested) return;
             if (splashDismissForceTimer) {
                 clearTimeout(splashDismissForceTimer);
                 splashDismissForceTimer = null;
             }
             const args = pendingSplashDismissArgs;
+            pendingSplashDismissRequested = false;
             pendingSplashDismissArgs = null;
             originalDismiss(args || {});
         };
@@ -186,6 +215,7 @@
             document.documentElement.classList.add('phase2-assets-ready');
             document.documentElement.classList.remove('phase2-assets-preloading');
             emitProgress('ready', null, true);
+            resolvePhase2Ready();
             try {
                 window.dispatchEvent(new CustomEvent('phase2:assets-ready', { detail: getState() }));
             } catch (e) {}
@@ -266,6 +296,7 @@
         if (PRELOAD_STATE.criticalTotal === 0) {
             PRELOAD_STATE.ready = true;
             emitProgress('ready', null, true);
+            resolvePhase2Ready();
             return;
         }
 
@@ -303,6 +334,7 @@
     }
 
     function start() {
+        ensurePhase2ReadyPromise();
         patchSplashDismiss();
         primeLinkPreloads();
         ensureSplashProgressUI();

@@ -23,6 +23,7 @@
                 timerId: null,
                 portraitUri: getSliderPortraitUri()
             };
+            initMiniGameRuntimeTracking(sliderState, { overlaySelector: '.slider-game-overlay' });
             shuffleSliderBoard(sliderState.board, 90);
             renderSliderPuzzleGame();
             announce('Slider puzzle started. Arrange your pet portrait by moving tiles.');
@@ -72,20 +73,20 @@
                 </div>
             `;
             document.body.appendChild(overlay);
-            overlay.querySelector('#slider-done').addEventListener('click', () => endSliderGame(false, false));
+            trackMiniGameOverlay(sliderState, overlay);
+            bindMiniGameEvent(sliderState, overlay.querySelector('#slider-done'), 'click', () => endSliderGame(false, false));
             const grid = overlay.querySelector('#slider-grid');
-            grid.addEventListener('keydown', handleSliderKeyDown);
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(sliderState, grid, 'keydown', handleSliderKeyDown);
+            bindMiniGameEvent(sliderState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(sliderState ? sliderState.moves : 0, () => endSliderGame(false, false));
             });
             function sliderEscapeHandler() {
                 requestMiniGameExit(sliderState ? sliderState.moves : 0, () => endSliderGame(false, false));
             }
-            pushModalEscape(sliderEscapeHandler);
-            sliderState._escapeHandler = sliderEscapeHandler;
+            registerMiniGameEscapeHandler(sliderState, sliderEscapeHandler);
             trapFocus(overlay);
             grid.focus();
-            sliderState.timerId = setInterval(() => {
+            sliderState.timerId = trackMiniGameInterval(sliderState, () => {
                 if (!sliderState) return;
                 sliderState.elapsedSec = Math.floor((Date.now() - sliderState.startedAt) / 1000);
                 const timeEl = document.getElementById('slider-time');
@@ -131,7 +132,7 @@
             grid.innerHTML = tilesHTML;
             grid.querySelectorAll('.slider-tile').forEach((btn) => {
                 const idx = Number(btn.getAttribute('data-idx'));
-                btn.addEventListener('click', () => moveSliderTile(idx));
+                bindMiniGameEvent(sliderState, btn, 'click', () => moveSliderTile(idx));
             });
             const movesEl = document.getElementById('slider-moves');
             if (movesEl) movesEl.textContent = `Moves: ${sliderState.moves}`;
@@ -155,15 +156,15 @@
         }
 
         function endSliderGame(completed, solved) {
-            dismissMiniGameExitDialog();
-            if (!sliderState) return;
-            if (sliderState.timerId) clearInterval(sliderState.timerId);
-            if (sliderState._escapeHandler) popModalEscape(sliderState._escapeHandler);
-            const overlay = document.querySelector('.slider-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!sliderState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = sliderState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.slider-game-overlay' });
 
-            const moves = sliderState.moves;
-            const elapsed = Math.max(1, sliderState.elapsedSec || Math.floor((Date.now() - sliderState.startedAt) / 1000));
+            const moves = finalState.moves;
+            const elapsed = Math.max(1, finalState.elapsedSec || Math.floor((Date.now() - finalState.startedAt) / 1000));
             const solvedScore = solved ? Math.max(8, 140 - moves - Math.floor(elapsed / 2)) : Math.max(0, Math.round(60 - moves));
             if (moves > 0 || completed) {
                 finalizeExpandedMiniGame({
@@ -186,4 +187,23 @@
                 restorePostMiniGameState();
             }
             sliderState = null;
+        }
+
+        function teardownSliderGame() {
+            if (!sliderState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(sliderState, { overlaySelector: '.slider-game-overlay' });
+            sliderState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('slider', {
+                start: startSliderPuzzleGame,
+                teardown: teardownSliderGame,
+                getState: () => sliderState,
+                overlaySelector: '.slider-game-overlay'
+            });
         }

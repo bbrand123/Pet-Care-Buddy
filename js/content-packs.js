@@ -465,91 +465,210 @@
         });
     }
 
+    function getPackApplyStateRecord(packId) {
+        const id = toId(packId);
+        const existing = appliedToGlobals[id];
+        return isObject(existing) ? existing : null;
+    }
+
+    function setPackApplyStateRecord(packId, next) {
+        const id = toId(packId);
+        if (!id) return null;
+        const prev = getPackApplyStateRecord(id);
+        const merged = Object.assign({
+            packId: id,
+            attempted: false,
+            applied: false,
+            skipped: false,
+            deferred: false,
+            reason: '',
+            error: null,
+            attempts: 0
+        }, prev || {}, isObject(next) ? next : {});
+        if (merged.attempted) {
+            const previousAttempts = Number(prev && prev.attempts) || 0;
+            const nextAttempts = Number(isObject(next) && next.attempts) || 0;
+            merged.attempts = Math.max(previousAttempts + (nextAttempts > 0 ? nextAttempts : 1), previousAttempts);
+        }
+        appliedToGlobals[id] = merged;
+        return merged;
+    }
+
     function applyCollectionsPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyCollectionsPack === 'function') {
-            global.ContentPackRegistryService.applyCollectionsPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyCollectionsPack(pack, { global });
         }
+        return false;
     }
 
     function applyTasksPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyTasksPack === 'function') {
-            global.ContentPackRegistryService.applyTasksPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyTasksPack(pack, { global });
         }
+        return false;
     }
 
     function applyLootPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyLootPack === 'function') {
-            global.ContentPackRegistryService.applyLootPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyLootPack(pack, { global });
         }
+        return false;
     }
 
     function applyBiomeEventsPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyBiomeEventsPack === 'function') {
-            global.ContentPackRegistryService.applyBiomeEventsPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyBiomeEventsPack(pack, { global });
         }
+        return false;
     }
 
     function applyRivalsPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyRivalsPack === 'function') {
-            global.ContentPackRegistryService.applyRivalsPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyRivalsPack(pack, { global });
         }
+        return false;
     }
 
     function applyBossesPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyBossesPack === 'function') {
-            global.ContentPackRegistryService.applyBossesPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyBossesPack(pack, { global });
         }
+        return false;
     }
 
     function applyCosmeticsPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyCosmeticsPack === 'function') {
-            global.ContentPackRegistryService.applyCosmeticsPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyCosmeticsPack(pack, { global });
         }
+        return false;
     }
 
     function applyBreedingPack(pack) {
         if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyBreedingPack === 'function') {
-            global.ContentPackRegistryService.applyBreedingPack(pack, { global });
+            return !!global.ContentPackRegistryService.applyBreedingPack(pack, { global });
         }
+        return false;
     }
 
     function applyPackToKnownGlobals(pack) {
-        if (!pack || appliedToGlobals[pack.id]) return;
+        if (!pack || !pack.id) return null;
+        const priorState = getPackApplyStateRecord(pack.id);
+        if (priorState && priorState.applied) return priorState;
+        const hasRegistryService = !!(global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyPack === 'function');
+        if (!hasRegistryService) {
+            return setPackApplyStateRecord(pack.id, {
+                attempted: true,
+                applied: false,
+                skipped: true,
+                deferred: true,
+                reason: 'registry-service-unavailable',
+                error: null
+            });
+        }
         try {
+            let applied = false;
+            let handled = true;
             switch (pack.type) {
                 case 'collections':
-                    applyCollectionsPack(pack);
+                    applied = applyCollectionsPack(pack);
                     break;
                 case 'tasks':
-                    applyTasksPack(pack);
+                    applied = applyTasksPack(pack);
                     break;
                 case 'loot':
-                    applyLootPack(pack);
+                    applied = applyLootPack(pack);
                     break;
                 case 'biomeEvents':
-                    applyBiomeEventsPack(pack);
+                    applied = applyBiomeEventsPack(pack);
                     break;
                 case 'rivals':
-                    applyRivalsPack(pack);
+                    applied = applyRivalsPack(pack);
                     break;
                 case 'bosses':
-                    applyBossesPack(pack);
+                    applied = applyBossesPack(pack);
                     break;
                 case 'cosmetics':
-                    applyCosmeticsPack(pack);
+                    applied = applyCosmeticsPack(pack);
                     break;
                 case 'breeding':
-                    applyBreedingPack(pack);
+                    applied = applyBreedingPack(pack);
                     break;
                 default:
+                    handled = false;
                     break;
             }
-            appliedToGlobals[pack.id] = true;
+            return setPackApplyStateRecord(pack.id, {
+                attempted: true,
+                applied: !!applied,
+                skipped: !applied,
+                deferred: handled && !applied,
+                reason: handled ? (applied ? 'applied' : 'registry-apply-noop') : 'unsupported-pack-type',
+                error: null
+            });
         } catch (err) {
+            setPackApplyStateRecord(pack.id, {
+                attempted: true,
+                applied: false,
+                skipped: false,
+                deferred: false,
+                reason: 'apply-error',
+                error: String(err && err.message ? err.message : err)
+            });
             if (typeof console !== 'undefined' && console.warn) {
                 console.warn('[ContentPacks] Failed applying pack to globals:', pack.id, err);
             }
+            return getPackApplyStateRecord(pack.id);
         }
+    }
+
+    function createKnownIdSetFromObject(sourceObj) {
+        return isObject(sourceObj) ? new Set(Object.keys(sourceObj).map(toId).filter(Boolean)) : null;
+    }
+
+    function addKnownId(set, value) {
+        const id = toId(value);
+        if (set && id) set.add(id);
+    }
+
+    function collectKnownValidationRefs(packs) {
+        const known = {
+            biomeIds: createKnownIdSetFromObject(global.EXPLORATION_BIOMES),
+            roomIds: createKnownIdSetFromObject(global.ROOMS),
+            rewardBundles: createKnownIdSetFromObject(global.REWARD_BUNDLES),
+            rewardModifiers: createKnownIdSetFromObject(global.REWARD_MODIFIERS),
+            stickers: createKnownIdSetFromObject(global.STICKERS),
+            themes: createKnownIdSetFromObject(global.ROOM_THEMES),
+            furniture: createKnownIdSetFromObject(global.ROOM_FURNITURE_ITEMS),
+            decorations: (isObject(global.FURNITURE) && isObject(global.FURNITURE.decorations))
+                ? new Set(Object.keys(global.FURNITURE.decorations).map(toId).filter(Boolean))
+                : null,
+            lootIds: createKnownIdSetFromObject(global.EXPLORATION_LOOT)
+        };
+
+        asArray(packs).forEach((pack) => {
+            asArray(pack && pack.items).forEach((item) => {
+                if (!isObject(item)) return;
+                const itemData = isObject(item.data) ? item.data : item;
+                if (pack.type === 'collections') {
+                    if (item.kind === 'rewardModifier') addKnownId(known.rewardModifiers, itemData.id || item.id);
+                    if (item.kind === 'rewardBundle') addKnownId(known.rewardBundles, itemData.id || item.id);
+                    if (item.kind === 'sticker') addKnownId(known.stickers, itemData.id || item.id);
+                }
+                if (pack.type === 'tasks' && item.kind === 'rewardModifier') {
+                    addKnownId(known.rewardModifiers, itemData.id || item.id);
+                }
+                if (pack.type === 'cosmetics') {
+                    if (item.kind === 'roomTheme') addKnownId(known.themes, itemData.id || item.id);
+                    if (item.kind === 'roomFurniture') addKnownId(known.furniture, itemData.id || item.id);
+                    if (item.kind === 'decoration') addKnownId(known.decorations, itemData.id || item.id);
+                }
+                if (pack.type === 'loot' && item.kind === 'lootItem') {
+                    addKnownId(known.lootIds, itemData.id || item.id);
+                }
+            });
+        });
+
+        return known;
     }
 
     function validateContentPacks(options) {
@@ -558,14 +677,16 @@
         const warnings = [];
         const seenPackIds = new Set();
         const seenItemIdsByType = Object.create(null);
-        const knownBiomeIds = isObject(global.EXPLORATION_BIOMES) ? new Set(Object.keys(global.EXPLORATION_BIOMES)) : null;
-        const knownRoomIds = isObject(global.ROOMS) ? new Set(Object.keys(global.ROOMS)) : null;
-        const knownRewardBundles = isObject(global.REWARD_BUNDLES) ? new Set(Object.keys(global.REWARD_BUNDLES)) : null;
-        const knownRewardModifiers = isObject(global.REWARD_MODIFIERS) ? new Set(Object.keys(global.REWARD_MODIFIERS)) : null;
-        const knownStickers = isObject(global.STICKERS) ? new Set(Object.keys(global.STICKERS)) : null;
-        const knownThemes = isObject(global.ROOM_THEMES) ? new Set(Object.keys(global.ROOM_THEMES)) : null;
-        const knownFurniture = isObject(global.ROOM_FURNITURE_ITEMS) ? new Set(Object.keys(global.ROOM_FURNITURE_ITEMS)) : null;
-        const knownDecorations = (isObject(global.FURNITURE) && isObject(global.FURNITURE.decorations)) ? new Set(Object.keys(global.FURNITURE.decorations)) : null;
+        const knownRefs = collectKnownValidationRefs(registry);
+        const knownBiomeIds = knownRefs.biomeIds;
+        const knownRoomIds = knownRefs.roomIds;
+        const knownRewardBundles = knownRefs.rewardBundles;
+        const knownRewardModifiers = knownRefs.rewardModifiers;
+        const knownStickers = knownRefs.stickers;
+        const knownThemes = knownRefs.themes;
+        const knownFurniture = knownRefs.furniture;
+        const knownDecorations = knownRefs.decorations;
+        const knownLootIds = knownRefs.lootIds;
         const knownSystems = new Set(['care', 'minigame', 'exploration', 'competition', 'crafting', 'economy', 'breeding']);
 
         function validateCombatEntity(entity, itemId, label) {
@@ -740,13 +861,13 @@
                     }
                 });
             }
-            if (pack.type === 'loot' && isObject(global.EXPLORATION_LOOT)) {
+            if (pack.type === 'loot' && knownLootIds) {
                 asArray(pack.items).forEach((item) => {
                     if (!item || item.kind !== 'biomeLootTable') return;
                     asArray(item.entries).forEach((entry) => {
                         const lootId = toId(entry && (entry.id || entry.lootId));
-                        if (lootId && !global.EXPLORATION_LOOT[lootId]) {
-                            warnings.push(`Biome loot table ${item.id} references loot not yet present in EXPLORATION_LOOT: ${lootId}`);
+                        if (lootId && !knownLootIds.has(lootId)) {
+                            warnings.push(`Biome loot table ${item.id} references unknown loot in effective loot pool: ${lootId}`);
                         }
                     });
                 });
@@ -779,6 +900,17 @@
         return validateContentPacks({ log: false });
     }
 
+    function getContentPackApplyState(packId) {
+        if (!packId) {
+            return Object.keys(appliedToGlobals).reduce((acc, id) => {
+                acc[id] = Object.assign({}, appliedToGlobals[id]);
+                return acc;
+            }, {});
+        }
+        const state = getPackApplyStateRecord(packId);
+        return state ? Object.assign({}, state) : null;
+    }
+
     global.registerContentPack = registerContentPack;
     global.getContentPacks = getContentPacks;
     global.getContentPackItems = getPackItems;
@@ -801,6 +933,7 @@
     global.recordContentRotationSelection = recordHistorySelection;
     global.validateContentPacks = validateContentPacks;
     global.reapplyAllContentPacksToGlobals = reapplyAllContentPacksToGlobals;
+    global.getContentPackApplyState = getContentPackApplyState;
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
@@ -811,7 +944,8 @@
             chooseNextFromPool,
             chooseRotatingContentWithHistory,
             validateContentPacks,
-            reapplyAllContentPacksToGlobals
+            reapplyAllContentPacksToGlobals,
+            getContentPackApplyState
         };
     }
 })(typeof globalThis !== 'undefined' ? globalThis : window);

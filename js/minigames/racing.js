@@ -21,6 +21,7 @@
                 obstacleId: 1,
                 timerId: null
             };
+            initMiniGameRuntimeTracking(racingState, { overlaySelector: '.racing-game-overlay' });
             renderRacingGame();
             announce('Lane racing started. Use left and right arrows to dodge obstacles.');
         }
@@ -57,12 +58,13 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            trackMiniGameOverlay(racingState, overlay);
 
             const track = overlay.querySelector('#racing-track');
-            overlay.querySelector('#racing-left').addEventListener('click', () => moveRacingLane(-1));
-            overlay.querySelector('#racing-right').addEventListener('click', () => moveRacingLane(1));
-            overlay.querySelector('#racing-done').addEventListener('click', () => endRacingGame(false));
-            track.addEventListener('keydown', (e) => {
+            bindMiniGameEvent(racingState, overlay.querySelector('#racing-left'), 'click', () => moveRacingLane(-1));
+            bindMiniGameEvent(racingState, overlay.querySelector('#racing-right'), 'click', () => moveRacingLane(1));
+            bindMiniGameEvent(racingState, overlay.querySelector('#racing-done'), 'click', () => endRacingGame(false));
+            bindMiniGameEvent(racingState, track, 'keydown', (e) => {
                 if (e.key === 'ArrowLeft') {
                     e.preventDefault();
                     moveRacingLane(-1);
@@ -74,15 +76,14 @@
             function racingEscapeHandler() {
                 requestMiniGameExit(racingState ? racingState.score : 0, () => endRacingGame(false));
             }
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(racingState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(racingState ? racingState.score : 0, () => endRacingGame(false));
             });
-            pushModalEscape(racingEscapeHandler);
-            racingState._escapeHandler = racingEscapeHandler;
+            registerMiniGameEscapeHandler(racingState, racingEscapeHandler);
             trapFocus(overlay);
             track.focus();
 
-            racingState.timerId = setInterval(stepRacingGame, 90);
+            racingState.timerId = trackMiniGameInterval(racingState, stepRacingGame, 90);
             updateRacingUI();
         }
 
@@ -147,14 +148,14 @@
         }
 
         function endRacingGame(fromTimeout) {
-            dismissMiniGameExitDialog();
-            if (!racingState) return;
-            if (racingState.timerId) clearInterval(racingState.timerId);
-            if (racingState._escapeHandler) popModalEscape(racingState._escapeHandler);
-            const overlay = document.querySelector('.racing-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!racingState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = racingState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.racing-game-overlay' });
 
-            const score = racingState.score;
+            const score = finalState.score;
             if (score > 0 || fromTimeout) {
                 finalizeExpandedMiniGame({
                     gameId: 'racing',
@@ -177,4 +178,23 @@
                 restorePostMiniGameState();
             }
             racingState = null;
+        }
+
+        function teardownRacingGame() {
+            if (!racingState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(racingState, { overlaySelector: '.racing-game-overlay' });
+            racingState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('racing', {
+                start: startRacingGame,
+                teardown: teardownRacingGame,
+                getState: () => racingState,
+                overlaySelector: '.racing-game-overlay'
+            });
         }

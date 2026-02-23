@@ -77,8 +77,13 @@
             const HARD_TIMEOUT_MS = 5000;
             const startedAt = Date.now();
             let dismissed = false;
+            let dismissRequested = false;
+            let pendingDismissOptions = null;
+            let domReady = document.readyState === 'interactive' || document.readyState === 'complete';
+            let phase2Ready = false;
+            let phase2ReadyResolved = false;
 
-            function dismissSplashScreen(options) {
+            function performDismissSplashScreen(options) {
                 if (dismissed) return;
                 const opts = options || {};
                 const splash = document.getElementById('splash-screen');
@@ -99,10 +104,52 @@
                 }, waitMs);
             }
 
-            window.dismissSplashScreen = dismissSplashScreen;
-            document.addEventListener('DOMContentLoaded', () => dismissSplashScreen(), { once: true });
-            window.addEventListener('load', () => dismissSplashScreen(), { once: true });
-            setTimeout(() => dismissSplashScreen({ skipMinDelay: true }), HARD_TIMEOUT_MS);
+            function tryDismissQueued() {
+                if (!dismissRequested || dismissed) return;
+                const opts = pendingDismissOptions || {};
+                const forced = !!opts.force;
+                if (!forced && (!domReady || !phase2Ready)) return;
+                dismissRequested = false;
+                pendingDismissOptions = null;
+                performDismissSplashScreen(opts);
+            }
+
+            function queueSplashDismiss(options) {
+                dismissRequested = true;
+                pendingDismissOptions = options || {};
+                tryDismissQueued();
+            }
+
+            if (!window.__phase2Ready || typeof window.__phase2Ready.then !== 'function') {
+                window.__phase2Ready = new Promise((resolve) => {
+                    window.__resolvePhase2Ready = function resolvePhase2Ready(detail) {
+                        if (phase2ReadyResolved) return;
+                        phase2ReadyResolved = true;
+                        phase2Ready = true;
+                        resolve(detail || true);
+                        tryDismissQueued();
+                    };
+                });
+            } else if (typeof window.__resolvePhase2Ready !== 'function') {
+                window.__resolvePhase2Ready = function noopResolvePhase2Ready() {};
+            }
+
+            window.__phase2Ready.then(() => {
+                phase2Ready = true;
+                phase2ReadyResolved = true;
+                tryDismissQueued();
+            });
+
+            window.dismissSplashScreen = queueSplashDismiss;
+            document.addEventListener('DOMContentLoaded', () => {
+                domReady = true;
+                queueSplashDismiss();
+            }, { once: true });
+            window.addEventListener('load', () => {
+                domReady = true;
+                queueSplashDismiss();
+            }, { once: true });
+            setTimeout(() => queueSplashDismiss({ skipMinDelay: true, force: true }), HARD_TIMEOUT_MS);
         })();
     </script>
 

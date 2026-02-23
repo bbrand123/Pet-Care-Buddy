@@ -49,6 +49,12 @@
                 intervalMs: Math.max(440, Math.round(720 / Math.max(0.75, difficulty))),
                 timerId: null
             };
+            initMiniGameRuntimeTracking(rhythmState, { overlaySelector: '.rhythm-game-overlay' });
+            registerMiniGameAudioStop(rhythmState, () => {
+                try {
+                    if (_rhythmAudioCtx && _rhythmAudioCtx.state === 'running') _rhythmAudioCtx.suspend().catch(() => {});
+                } catch (e) {}
+            });
             renderRhythmGame();
             announce('Rhythm game started. Press Space on the beat.');
         }
@@ -83,28 +89,28 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            trackMiniGameOverlay(rhythmState, overlay);
 
             const beatAction = () => registerRhythmHit();
-            overlay.querySelector('#rhythm-hit').addEventListener('click', beatAction);
-            overlay.querySelector('#rhythm-done').addEventListener('click', () => endRhythmGame(false));
-            overlay.querySelector('#rhythm-lights').addEventListener('keydown', (e) => {
+            bindMiniGameEvent(rhythmState, overlay.querySelector('#rhythm-hit'), 'click', beatAction);
+            bindMiniGameEvent(rhythmState, overlay.querySelector('#rhythm-done'), 'click', () => endRhythmGame(false));
+            bindMiniGameEvent(rhythmState, overlay.querySelector('#rhythm-lights'), 'keydown', (e) => {
                 if (e.key === ' ' || e.key === 'Enter') {
                     e.preventDefault();
                     beatAction();
                 }
             });
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(rhythmState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(rhythmState ? rhythmState.score : 0, () => endRhythmGame(false));
             });
             function rhythmEscapeHandler() {
                 requestMiniGameExit(rhythmState ? rhythmState.score : 0, () => endRhythmGame(false));
             }
-            pushModalEscape(rhythmEscapeHandler);
-            rhythmState._escapeHandler = rhythmEscapeHandler;
+            registerMiniGameEscapeHandler(rhythmState, rhythmEscapeHandler);
             trapFocus(overlay);
             overlay.querySelector('#rhythm-lights').focus();
 
-            rhythmState.timerId = setInterval(stepRhythmBeat, rhythmState.intervalMs);
+            rhythmState.timerId = trackMiniGameInterval(rhythmState, stepRhythmBeat, rhythmState.intervalMs);
             stepRhythmBeat();
         }
 
@@ -156,14 +162,14 @@
         }
 
         function endRhythmGame(completed) {
-            dismissMiniGameExitDialog();
-            if (!rhythmState) return;
-            if (rhythmState.timerId) clearInterval(rhythmState.timerId);
-            if (rhythmState._escapeHandler) popModalEscape(rhythmState._escapeHandler);
-            const overlay = document.querySelector('.rhythm-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!rhythmState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = rhythmState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.rhythm-game-overlay' });
 
-            const score = rhythmState.score;
+            const score = finalState.score;
             if (score > 0 || completed) {
                 finalizeExpandedMiniGame({
                     gameId: 'rhythm',
@@ -172,11 +178,11 @@
                     coinScore: Math.round(score * 0.85),
                     statDelta: {
                         happiness: Math.min(28, Math.round(score / 2.2)),
-                        energy: -Math.min(12, Math.max(4, Math.round(rhythmState.totalBeats / 3)))
+                        energy: -Math.min(12, Math.max(4, Math.round(finalState.totalBeats / 3)))
                     },
                     summaryStats: [
-                        { label: 'Beats', value: rhythmState.totalBeats },
-                        { label: 'Best Combo', value: rhythmState.bestCombo },
+                        { label: 'Beats', value: finalState.totalBeats },
+                        { label: 'Best Combo', value: finalState.bestCombo },
                         { label: 'Happiness', value: Math.min(28, Math.round(score / 2.2)) }
                     ],
                     medalThresholds: { bronze: 20, silver: 42, gold: 72 }
@@ -185,4 +191,23 @@
                 restorePostMiniGameState();
             }
             rhythmState = null;
+        }
+
+        function teardownRhythmGame() {
+            if (!rhythmState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(rhythmState, { overlaySelector: '.rhythm-game-overlay' });
+            rhythmState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('rhythm', {
+                start: startRhythmGame,
+                teardown: teardownRhythmGame,
+                getState: () => rhythmState,
+                overlaySelector: '.rhythm-game-overlay'
+            });
         }

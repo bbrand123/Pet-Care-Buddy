@@ -127,6 +127,139 @@
             }
         }
 
+        function ensureMiniGameRuntimeTracker(state) {
+            if (!state || typeof state !== 'object') return null;
+            if (!state._runtimeTracker || typeof state._runtimeTracker !== 'object') {
+                state._runtimeTracker = {
+                    intervals: new Set(),
+                    timeouts: new Set(),
+                    listeners: [],
+                    overlay: null,
+                    overlaySelector: '',
+                    escapeHandler: null,
+                    audioStops: []
+                };
+            }
+            return state._runtimeTracker;
+        }
+
+        function initMiniGameRuntimeTracking(state, config) {
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (!tracker) return state;
+            const cfg = (config && typeof config === 'object') ? config : {};
+            tracker.overlaySelector = typeof cfg.overlaySelector === 'string' ? cfg.overlaySelector : (tracker.overlaySelector || '');
+            return state;
+        }
+
+        function trackMiniGameOverlay(state, overlay) {
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (tracker) tracker.overlay = overlay || null;
+            return overlay;
+        }
+
+        function bindMiniGameEvent(state, target, type, handler, options) {
+            if (!target || typeof target.addEventListener !== 'function' || typeof handler !== 'function') return handler;
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            target.addEventListener(type, handler, options);
+            if (tracker) tracker.listeners.push({ target, type, handler, options });
+            return handler;
+        }
+
+        function trackMiniGameInterval(state, fn, ms) {
+            const id = setInterval(fn, ms);
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (tracker) tracker.intervals.add(id);
+            return id;
+        }
+
+        function trackMiniGameTimeout(state, fn, ms) {
+            const id = setTimeout(fn, ms);
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (tracker) tracker.timeouts.add(id);
+            return id;
+        }
+
+        function registerMiniGameEscapeHandler(state, closeHandler) {
+            if (typeof closeHandler !== 'function') return null;
+            if (typeof pushModalEscape === 'function') pushModalEscape(closeHandler);
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (tracker) tracker.escapeHandler = closeHandler;
+            state._escapeHandler = closeHandler;
+            return closeHandler;
+        }
+
+        function registerMiniGameAudioStop(state, stopFn) {
+            if (typeof stopFn !== 'function') return;
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (tracker) tracker.audioStops.push(stopFn);
+        }
+
+        function teardownMiniGameRuntime(state, options) {
+            const opts = (options && typeof options === 'object') ? options : {};
+            if (opts.dismissExitDialog !== false) dismissMiniGameExitDialog();
+            if (!state || typeof state !== 'object') return;
+            const tracker = ensureMiniGameRuntimeTracker(state);
+
+            if (tracker) {
+                tracker.intervals.forEach((id) => clearInterval(id));
+                tracker.intervals.clear();
+                tracker.timeouts.forEach((id) => clearTimeout(id));
+                tracker.timeouts.clear();
+                while (tracker.listeners.length > 0) {
+                    const rec = tracker.listeners.pop();
+                    if (!rec || !rec.target || typeof rec.target.removeEventListener !== 'function') continue;
+                    try { rec.target.removeEventListener(rec.type, rec.handler, rec.options); } catch (e) {}
+                }
+                if (tracker.escapeHandler && typeof popModalEscape === 'function') {
+                    popModalEscape(tracker.escapeHandler);
+                    tracker.escapeHandler = null;
+                }
+                while (tracker.audioStops.length > 0) {
+                    const stopFn = tracker.audioStops.pop();
+                    try { stopFn(); } catch (e) {}
+                }
+            }
+
+            if (state.timerId) {
+                clearInterval(state.timerId);
+                state.timerId = null;
+            }
+            if (state.timeoutId) {
+                clearTimeout(state.timeoutId);
+                state.timeoutId = null;
+            }
+            if (state._escapeHandler && typeof popModalEscape === 'function') {
+                popModalEscape(state._escapeHandler);
+            }
+            state._escapeHandler = null;
+
+            let overlay = tracker && tracker.overlay && tracker.overlay.isConnected ? tracker.overlay : null;
+            if (!overlay) {
+                const selector = (tracker && tracker.overlaySelector) || opts.overlaySelector;
+                if (selector && typeof document !== 'undefined' && document.querySelector) {
+                    overlay = document.querySelector(selector);
+                }
+            }
+            if (overlay && overlay.parentNode) {
+                overlay.innerHTML = '';
+                overlay.remove();
+            }
+            if (tracker) tracker.overlay = null;
+        }
+
+        function getMiniGameRuntimeTrackingSnapshot(state) {
+            if (!state || typeof state !== 'object') return null;
+            const tracker = ensureMiniGameRuntimeTracker(state);
+            if (!tracker) return null;
+            return {
+                intervals: tracker.intervals.size,
+                timeouts: tracker.timeouts.size,
+                listeners: tracker.listeners.length,
+                hasEscapeHandler: !!tracker.escapeHandler,
+                hasOverlay: !!(tracker.overlay && tracker.overlay.isConnected)
+            };
+        }
+
         // Confirm exit when the player has made progress to prevent accidental loss
         function requestMiniGameExit(score, onConfirm, options = {}) {
             if (options && typeof options.canExit === 'function' && !options.canExit()) {

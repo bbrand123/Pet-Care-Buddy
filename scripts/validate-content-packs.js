@@ -158,6 +158,38 @@ function runScriptInContext(context, relPath) {
     vm.runInContext(code, context, { filename: relPath });
 }
 
+function bootstrapContentPackValidationRuntime(context) {
+    runScriptInContext(context, 'js/constants.js');
+
+    const conditionalBootstrapFiles = [
+        {
+            relPath: 'js/data/pet-types.js',
+            shouldLoad: (ctx) => typeof ctx.PET_TYPES === 'undefined' || typeof ctx.HYBRID_PET_TYPES === 'undefined'
+        },
+        {
+            relPath: 'js/data/items.js',
+            shouldLoad: (ctx) => typeof ctx.FURNITURE === 'undefined'
+        },
+        {
+            relPath: 'js/data/rooms.js',
+            shouldLoad: (ctx) => typeof ctx.ROOMS === 'undefined' || typeof ctx.ROOM_THEMES === 'undefined' || typeof ctx.ROOM_FURNITURE_ITEMS === 'undefined'
+        },
+        {
+            relPath: 'js/data/achievements.js',
+            shouldLoad: (ctx) => typeof ctx.REWARD_BUNDLES === 'undefined' || typeof ctx.REWARD_MODIFIERS === 'undefined' || typeof ctx.STICKERS === 'undefined'
+        }
+    ];
+    conditionalBootstrapFiles.forEach((entry) => {
+        if (entry && typeof entry.shouldLoad === 'function' && entry.shouldLoad(context)) {
+            runScriptInContext(context, entry.relPath);
+        }
+    });
+
+    runScriptInContext(context, 'js/registries/content-registries.js');
+    runScriptInContext(context, 'js/content-packs.js');
+    runScriptInContext(context, 'js/data/packs/starter-packs.js');
+}
+
 function summarizeRotation(sequence) {
     let immediateRepeats = 0;
     for (let i = 1; i < sequence.length; i++) {
@@ -230,10 +262,7 @@ function runRotationSmoke(context) {
 
 function main() {
     const context = createVmContext();
-
-    runScriptInContext(context, 'js/constants.js');
-    runScriptInContext(context, 'js/content-packs.js');
-    runScriptInContext(context, 'js/data/packs/starter-packs.js');
+    bootstrapContentPackValidationRuntime(context);
 
     if (typeof context.validateContentPacks !== 'function') {
         throw new Error('validateContentPacks() was not registered');

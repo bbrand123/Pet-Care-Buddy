@@ -18,6 +18,7 @@
                 zoneSize: Math.max(20, Math.round(38 / Math.max(difficulty, 0.75))),
                 timerId: null
             };
+            initMiniGameRuntimeTracking(fishingState, { overlaySelector: '.fishing-game-overlay' });
             randomizeFishingZone();
             renderFishingGame();
             announce('Fishing started. Reel in when the bobber enters the fish zone.');
@@ -57,28 +58,28 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            trackMiniGameOverlay(fishingState, overlay);
 
             function catchAction() { attemptFishingCatch(); }
-            overlay.querySelector('#fishing-catch').addEventListener('click', catchAction);
-            overlay.querySelector('#fishing-done').addEventListener('click', () => endFishingGame(false));
-            overlay.querySelector('#fishing-meter').addEventListener('keydown', (e) => {
+            bindMiniGameEvent(fishingState, overlay.querySelector('#fishing-catch'), 'click', catchAction);
+            bindMiniGameEvent(fishingState, overlay.querySelector('#fishing-done'), 'click', () => endFishingGame(false));
+            bindMiniGameEvent(fishingState, overlay.querySelector('#fishing-meter'), 'keydown', (e) => {
                 if (e.key === ' ' || e.key === 'Enter') {
                     e.preventDefault();
                     catchAction();
                 }
             });
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(fishingState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(fishingState ? fishingState.catches : 0, () => endFishingGame(false));
             });
             function fishingEscapeHandler() {
                 requestMiniGameExit(fishingState ? fishingState.catches : 0, () => endFishingGame(false));
             }
-            pushModalEscape(fishingEscapeHandler);
-            fishingState._escapeHandler = fishingEscapeHandler;
+            registerMiniGameEscapeHandler(fishingState, fishingEscapeHandler);
             trapFocus(overlay);
             overlay.querySelector('#fishing-meter').focus();
 
-            fishingState.timerId = setInterval(stepFishingMeter, 45);
+            fishingState.timerId = trackMiniGameInterval(fishingState, stepFishingMeter, 45);
             updateFishingUI();
         }
 
@@ -134,16 +135,16 @@
         }
 
         function endFishingGame(completed) {
-            dismissMiniGameExitDialog();
-            if (!fishingState) return;
-            if (fishingState.timerId) clearInterval(fishingState.timerId);
-            if (fishingState._escapeHandler) popModalEscape(fishingState._escapeHandler);
-            const overlay = document.querySelector('.fishing-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (!fishingState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            const finalState = fishingState;
+            teardownMiniGameRuntime(finalState, { overlaySelector: '.fishing-game-overlay' });
 
-            const catches = fishingState.catches;
+            const catches = finalState.catches;
             if (catches > 0 || completed) {
-                const attempts = catches + fishingState.misses;
+                const attempts = catches + finalState.misses;
                 const accuracy = attempts > 0 ? Math.round((catches / attempts) * 100) : 0;
                 finalizeExpandedMiniGame({
                     gameId: 'fishing',
@@ -152,7 +153,7 @@
                     coinScore: catches * 8,
                     statDelta: {
                         happiness: Math.min(22, catches * 4),
-                        energy: -Math.min(10, Math.max(2, fishingState.misses + 2)),
+                        energy: -Math.min(10, Math.max(2, finalState.misses + 2)),
                         hunger: -Math.min(6, Math.round(attempts / 3))
                     },
                     summaryStats: [
@@ -166,4 +167,23 @@
                 restorePostMiniGameState();
             }
             fishingState = null;
+        }
+
+        function teardownFishingGame() {
+            if (!fishingState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(fishingState, { overlaySelector: '.fishing-game-overlay' });
+            fishingState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('fishing', {
+                start: startFishingGame,
+                teardown: teardownFishingGame,
+                getState: () => fishingState,
+                overlaySelector: '.fishing-game-overlay'
+            });
         }

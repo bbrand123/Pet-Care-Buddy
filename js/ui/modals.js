@@ -1403,6 +1403,7 @@
 
             function doStartOver() {
                 cleanupAllMiniGames();
+                if (typeof cleanupMinigameTransientOverlays === 'function') cleanupMinigameTransientOverlays();
                 stopDecayTimer();
                 stopGardenGrowTimer();
                 _petPhaseTimersRunning = false;
