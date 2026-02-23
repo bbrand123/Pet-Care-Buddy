@@ -794,27 +794,7 @@
         function awardMiniGameCoins(gameId, scoreValue) {
             const score = Math.max(0, Number(scoreValue) || 0);
             if (score <= 0) return 0;
-            const gameBonus = {
-                fetch: 1.0,
-                hideseek: 1.1,
-                bubblepop: 1.0,
-                matching: 1.2,
-                simonsays: 1.35,
-                coloring: 0.95,
-                racing: 1.12,
-                cooking: 1.02,
-                fishing: 1.08,
-                rhythm: 1.1,
-                slider: 1.08,
-                trivia: 1.0,
-                runner: 1.16,
-                tournament: 1.2,
-                coop: 1.08
-            };
-            const multiplier = gameBonus[gameId] || 1;
             const difficulty = typeof getMinigameDifficulty === 'function' ? getMinigameDifficulty(gameId) : 1;
-            const difficultyRewardMult = Math.max(0.9, Math.min(1.22, 0.96 + ((difficulty - 1) * 0.32)));
-            const payout = Math.max(3, Math.round((5 + Math.sqrt(score) * 3.2) * multiplier * difficultyRewardMult));
             const ecoMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.minigameRewardMultiplier === 'number')
                 ? ECONOMY_BALANCE.minigameRewardMultiplier
                 : 1;
@@ -826,12 +806,27 @@
             // 1st game = 1.0x, 2nd = 1.05x, 3rd = 1.1x, cap at 1.15x. Resets on session end.
             if (typeof gameState._sessionMinigameCount !== 'number') gameState._sessionMinigameCount = 0;
             gameState._sessionMinigameCount++;
-            const sessionMult = Math.min(1.15, 1 + (Math.max(0, gameState._sessionMinigameCount - 1) * 0.05));
 
             const cap = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.minigameRewardCap === 'number')
                 ? ECONOMY_BALANCE.minigameRewardCap
                 : 9999;
-            let tuned = Math.max(3, Math.min(cap, Math.round(payout * ecoMult * petStatRewardMult * sessionMult)));
+            let tuned;
+            if (typeof EconomyCalculations !== 'undefined' && EconomyCalculations && typeof EconomyCalculations.computeMinigameCoinPayout === 'function') {
+                tuned = EconomyCalculations.computeMinigameCoinPayout({
+                    gameId,
+                    score,
+                    difficulty,
+                    economyMultiplier: ecoMult,
+                    petStrength,
+                    sessionCount: gameState._sessionMinigameCount,
+                    cap
+                });
+            } else {
+                const difficultyRewardMult = Math.max(0.9, Math.min(1.22, 0.96 + ((difficulty - 1) * 0.32)));
+                const payout = Math.max(3, Math.round((5 + Math.sqrt(score) * 3.2) * difficultyRewardMult));
+                const sessionMult = Math.min(1.15, 1 + (Math.max(0, gameState._sessionMinigameCount - 1) * 0.05));
+                tuned = Math.max(3, Math.min(cap, Math.round(payout * ecoMult * petStatRewardMult * sessionMult)));
+            }
 
             // Rec 1: Enforce daily minigame earnings cap
             const dailyCap = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.dailyMinigameEarningsCap === 'number')
@@ -856,12 +851,17 @@
         function awardHarvestCoins(cropId) {
             const crop = GARDEN_CROPS[cropId];
             if (!crop) return 0;
-            const base = 3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6);
-            const seasonalBoost = (crop.seasonBonus || []).includes(gameState.season || getCurrentSeason()) ? 1.2 : 1.0;
             const ecoMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.harvestRewardMultiplier === 'number')
                 ? ECONOMY_BALANCE.harvestRewardMultiplier
                 : 1;
-            const payout = Math.max(2, Math.round(base * seasonalBoost * ecoMult));
+            const currentSeason = gameState.season || getCurrentSeason();
+            const payout = (typeof EconomyCalculations !== 'undefined' && EconomyCalculations && typeof EconomyCalculations.computeHarvestCoinPayout === 'function')
+                ? EconomyCalculations.computeHarvestCoinPayout({
+                    crop,
+                    currentSeason,
+                    economyMultiplier: ecoMult
+                })
+                : Math.max(2, Math.round((3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6)) * ((crop.seasonBonus || []).includes(currentSeason) ? 1.2 : 1.0) * ecoMult));
             addCoins(payout, 'Harvest', true);
             return payout;
         }

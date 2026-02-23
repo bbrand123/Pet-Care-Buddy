@@ -195,7 +195,10 @@
 
         // Initialize StateManager with the gameState reference
         if (typeof StateManager !== 'undefined') {
-            StateManager.init(gameState);
+            const proxiedState = StateManager.init(gameState, {
+                eventBus: (typeof EventBus !== 'undefined') ? EventBus : null
+            });
+            if (proxiedState) gameState = proxiedState;
         }
 
         function createDefaultCompetitionState() {

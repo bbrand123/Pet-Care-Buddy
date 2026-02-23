@@ -28,23 +28,18 @@
             coop: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="13" cy="14" r="6" fill="#FFCCBC"/><circle cx="27" cy="14" r="6" fill="#B2DFDB"/><path d="M13 20v8M10 24h6" stroke="#FF8A65" stroke-width="2" stroke-linecap="round"/><path d="M27 20v8M24 24h6" stroke="#4DB6AC" stroke-width="2" stroke-linecap="round"/><path d="M17 18q3 4 6 0" stroke="#BDBDBD" stroke-width="1" fill="none"/></svg>'
         };
 
-        const MINI_GAMES = [
-            { id: 'fetch', name: 'Fetch', icon: '🎾', description: 'Throw a ball for your pet! Click or press Enter to throw.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'hideseek', name: 'Hide & Seek', icon: '🍪', description: 'Find hidden treats! Use keyboard (Tab + Enter) or pointer.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'bubblepop', name: 'Bubble Pop', icon: '🫧', description: 'Pop bubbles during bath time! Use pointer or Tab to navigate bubbles.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab to bubbles, Enter to pop' },
-            { id: 'matching', name: 'Matching', icon: '🃏', description: 'Match food & accessory pairs! Use keyboard or click.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'simonsays', name: 'Simon Says', icon: '🎵', description: 'Follow the pattern of colors & sounds! Use keyboard or click.', a11y: 'keyboard', a11yNote: 'Fully keyboard accessible' },
-            { id: 'coloring', name: 'Coloring', icon: '🎨', description: 'Color your pet or backgrounds! Use pointer or keyboard.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab to regions, Enter to color' },
-            { id: 'racing', name: 'Lane Racing', icon: '🏁', description: 'Switch lanes and dodge obstacles on the race track.', a11y: 'keyboard', a11yNote: 'Keyboard: Left/Right arrows to switch lanes' },
-            { id: 'cooking', name: 'Cooking Lab', icon: '🍲', description: 'Combine ingredients to cook special pet food.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab ingredients, Enter to add and cook' },
-            { id: 'fishing', name: 'Pond Fishing', icon: '🎣', description: 'Cast and catch fish in the park pond timing zone.', a11y: 'keyboard', a11yNote: 'Keyboard: Space to cast and reel in' },
-            { id: 'rhythm', name: 'Rhythm Beats', icon: '🥁', description: 'Match procedural beats and keep your combo alive.', a11y: 'keyboard', a11yNote: 'Keyboard: Space on beat to score' },
-            { id: 'slider', name: 'Slider Puzzle', icon: '🧩', description: 'Solve a sliding portrait puzzle of your pet.', a11y: 'keyboard', a11yNote: 'Keyboard: Arrow keys move the blank tile' },
-            { id: 'trivia', name: 'Animal Trivia', icon: '🦉', description: 'Answer real animal fact questions for rewards.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab choices, Enter to answer' },
-            { id: 'runner', name: 'Endless Runner', icon: '🏃', description: 'Jump over endless obstacles and chase distance.', a11y: 'keyboard', a11yNote: 'Keyboard: Space to jump' },
-            { id: 'tournament', name: 'Tournament Cup', icon: '🏆', description: 'Play bracket rounds, climb leaderboard, win the cup.', a11y: 'keyboard', a11yNote: 'Keyboard: Tab actions, Enter to advance round' },
-            { id: 'coop', name: 'Co-op Relay', icon: '🤝', description: 'Control two pets at once in cooperative challenges.', a11y: 'keyboard', a11yNote: 'Keyboard: Alternate A and L for each pet' }
-        ];
+        function getMiniGameDescriptors() {
+            if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.getAll === 'function') {
+                const items = MiniGameRegistry.getAll();
+                if (items.length > 0) return items;
+            }
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[Minigames] MiniGameRegistry is empty; menu metadata is unavailable.');
+            }
+            return [];
+        }
+
+        const MINI_GAMES = getMiniGameDescriptors();
 
         // ==================== CELEBRATION EFFECTS ====================
 
@@ -180,31 +175,13 @@
 
             const highScores = gameState.minigameHighScores || {};
             const scoreHistory = gameState.minigameScoreHistory || {};
-            const scoreLabels = {
-                fetch: 'catches',
-                hideseek: 'treats',
-                bubblepop: 'pops',
-                matching: 'score',
-                simonsays: 'rounds',
-                coloring: 'points',
-                racing: 'dodges',
-                cooking: 'recipes',
-                fishing: 'catches',
-                rhythm: 'beats',
-                slider: 'tiles',
-                trivia: 'facts',
-                runner: 'meters',
-                tournament: 'wins',
-                coop: 'relay'
-            };
-
             const playCounts = gameState.minigamePlayCounts || {};
 
             const startedGames = [];
             const newGames = [];
             MINI_GAMES.forEach(game => {
                 const best = highScores[game.id];
-                const label = scoreLabels[game.id] || '';
+                const label = game.scoreLabel || '';
                 const bestHTML = best ? `<span class="minigame-card-best">Best: ${best}${label ? ' ' + label : ''}</span>` : '';
                 const history = scoreHistory[game.id];
                 let historyHTML = '';

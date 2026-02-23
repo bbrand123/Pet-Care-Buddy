@@ -28,6 +28,8 @@ const EVENTS = Object.freeze({
     COINS_CHANGED: 'economy:coinsChanged',
     ITEM_PURCHASED: 'economy:itemPurchased',
     ITEM_SOLD: 'economy:itemSold',
+    STATE_CHANGED: 'state:changed',
+    STATE_REPLACED: 'state:replaced',
 
     // Achievements & rewards
     ACHIEVEMENT_UNLOCKED: 'reward:achievementUnlocked',
@@ -122,3 +124,12 @@ const EventBus = {
         }
     }
 };
+
+if (typeof globalThis !== 'undefined') {
+    globalThis.EVENTS = EVENTS;
+    globalThis.EventBus = EventBus;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { EVENTS, EventBus };
+}

@@ -466,162 +466,51 @@
     }
 
     function applyCollectionsPack(pack) {
-        pack.items.forEach((item) => {
-            if (!item || !item.kind) return;
-            if (item.kind === 'sticker' && isObject(global.STICKERS)) global.STICKERS[item.id] = Object.assign({}, global.STICKERS[item.id] || {}, item.data || item);
-            if (item.kind === 'badge' && isObject(global.BADGES)) global.BADGES[item.id] = Object.assign({}, global.BADGES[item.id] || {}, item.data || item);
-            if (item.kind === 'trophy' && isObject(global.TROPHIES)) global.TROPHIES[item.id] = Object.assign({}, global.TROPHIES[item.id] || {}, item.data || item);
-            if (item.kind === 'rewardModifier' && isObject(global.REWARD_MODIFIERS)) {
-                const modifierId = toId(item.data && item.data.id || item.id);
-                global.REWARD_MODIFIERS[modifierId] = Object.assign({}, global.REWARD_MODIFIERS[modifierId] || {}, item.data || item, { id: modifierId });
-            }
-            if (item.kind === 'rewardBundle' && isObject(global.REWARD_BUNDLES)) {
-                const bundleId = toId(item.data && item.data.id || item.id);
-                global.REWARD_BUNDLES[bundleId] = Object.assign({}, global.REWARD_BUNDLES[bundleId] || {}, item.data || item, { id: bundleId });
-            }
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyCollectionsPack === 'function') {
+            global.ContentPackRegistryService.applyCollectionsPack(pack, { global });
+        }
     }
 
     function applyTasksPack(pack) {
-        pack.items.forEach((item) => {
-            if (!item || !item.kind) return;
-            if (item.kind === 'dailyTemplate') {
-                const lane = String(item.lane || item.data && item.data.lane || 'mode');
-                const task = Object.assign({}, item.data || item, { id: item.id });
-                if (lane === 'fixed' && Array.isArray(global.DAILY_FIXED_TASKS)) upsertArrayById(global.DAILY_FIXED_TASKS, [task], 'id');
-                else if (lane === 'wildcard' && Array.isArray(global.DAILY_WILDCARD_TASKS)) upsertArrayById(global.DAILY_WILDCARD_TASKS, [task], 'id');
-                else if (lane === 'seasonal' && isObject(global.DAILY_SEASONAL_TASKS)) {
-                    const season = String(item.season || task.season || 'spring');
-                    global.DAILY_SEASONAL_TASKS[season] = task;
-                } else if (Array.isArray(global.DAILY_MODE_TASKS)) upsertArrayById(global.DAILY_MODE_TASKS, [task], 'id');
-            }
-            if (item.kind === 'weeklyArc' && Array.isArray(global.WEEKLY_THEMED_ARCS)) {
-                upsertArrayById(global.WEEKLY_THEMED_ARCS, [Object.assign({}, item.data || item, { id: item.id })], 'id');
-            }
-            if (item.kind === 'rewardModifier' && isObject(global.REWARD_MODIFIERS)) {
-                const modifierId = toId(item.data && item.data.id || item.id);
-                global.REWARD_MODIFIERS[modifierId] = Object.assign({}, global.REWARD_MODIFIERS[modifierId] || {}, item.data || item, { id: modifierId });
-            }
-        });
-        if (Array.isArray(global.DAILY_TASKS)) {
-            global.DAILY_TASKS.length = 0;
-            asArray(global.DAILY_FIXED_TASKS).forEach((t) => global.DAILY_TASKS.push(t));
-            asArray(global.DAILY_MODE_TASKS).forEach((t) => global.DAILY_TASKS.push(t));
-            asArray(global.DAILY_WILDCARD_TASKS).forEach((t) => global.DAILY_TASKS.push(t));
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyTasksPack === 'function') {
+            global.ContentPackRegistryService.applyTasksPack(pack, { global });
         }
     }
 
     function applyLootPack(pack) {
-        pack.items.forEach((item) => {
-            if (!item || !item.kind) return;
-            if (item.kind === 'lootItem' && isObject(global.EXPLORATION_LOOT)) {
-                global.EXPLORATION_LOOT[item.id] = Object.assign({}, global.EXPLORATION_LOOT[item.id] || {}, item.data || item, { id: item.id });
-            }
-            if (item.kind === 'biomeLootTable' && isObject(global.BIOME_LOOT_POOLS)) {
-                const biomeId = toId(item.biomeId);
-                const entries = asArray(item.entries);
-                const ids = entries.map((e) => toId(e && (e.id || e.lootId))).filter(Boolean);
-                const existing = Array.isArray(global.BIOME_LOOT_POOLS[biomeId]) ? global.BIOME_LOOT_POOLS[biomeId].slice() : [];
-                global.BIOME_LOOT_POOLS[biomeId] = Array.from(new Set(existing.concat(ids)));
-            }
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyLootPack === 'function') {
+            global.ContentPackRegistryService.applyLootPack(pack, { global });
+        }
     }
 
     function applyBiomeEventsPack(pack) {
-        const events = ensureGlobalObject('BIOME_EVENT_TEXT_POOLS');
-        const npcs = ensureGlobalObject('BIOME_NPC_ENCOUNTER_TEXT_POOLS');
-        pack.items.forEach((item) => {
-            if (!item || !item.kind) return;
-            const biomeId = toId(item.biomeId);
-            if (!biomeId) return;
-            if (item.kind === 'event') {
-                if (!Array.isArray(events[biomeId])) events[biomeId] = [];
-                upsertArrayById(events[biomeId], [Object.assign({}, item)], 'id');
-            }
-            if (item.kind === 'npc') {
-                if (!Array.isArray(npcs[biomeId])) npcs[biomeId] = [];
-                upsertArrayById(npcs[biomeId], [Object.assign({}, item)], 'id');
-            }
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyBiomeEventsPack === 'function') {
+            global.ContentPackRegistryService.applyBiomeEventsPack(pack, { global });
+        }
     }
 
     function applyRivalsPack(pack) {
-        if (!Array.isArray(global.RIVAL_TRAINERS)) return;
-        const incoming = pack.items.map((item) => {
-            const trainer = Object.assign({}, item.data || item);
-            trainer.id = item.id || trainer.id;
-            if (!trainer.name) trainer.name = item.id || 'Rival';
-            return trainer;
-        });
-        const existingIds = new Set(global.RIVAL_TRAINERS.map((trainer, idx) => toId(trainer && trainer.id || `rival_${idx}`)));
-        incoming.forEach((trainer) => {
-            const id = toId(trainer.id);
-            if (id && existingIds.has(id)) {
-                const idx = global.RIVAL_TRAINERS.findIndex((r, i) => toId(r && r.id || `rival_${i}`) === id);
-                if (idx >= 0) global.RIVAL_TRAINERS[idx] = Object.assign({}, global.RIVAL_TRAINERS[idx], trainer);
-                return;
-            }
-            global.RIVAL_TRAINERS.push(trainer);
-            if (id) existingIds.add(id);
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyRivalsPack === 'function') {
+            global.ContentPackRegistryService.applyRivalsPack(pack, { global });
+        }
     }
 
     function applyBossesPack(pack) {
-        if (!isObject(global.BOSS_ENCOUNTERS)) return;
-        pack.items.forEach((item) => {
-            const boss = Object.assign({}, item.data || item, { id: item.id || (item.data && item.data.id) || item.id });
-            const bossId = toId(item.id || boss.id);
-            if (!bossId) return;
-            global.BOSS_ENCOUNTERS[bossId] = Object.assign({}, global.BOSS_ENCOUNTERS[bossId] || {}, boss);
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyBossesPack === 'function') {
+            global.ContentPackRegistryService.applyBossesPack(pack, { global });
+        }
     }
 
     function applyCosmeticsPack(pack) {
-        const furnitureDecor = isObject(global.FURNITURE) && isObject(global.FURNITURE.decorations) ? global.FURNITURE.decorations : null;
-        const roomFurniture = isObject(global.ROOM_FURNITURE_ITEMS) ? global.ROOM_FURNITURE_ITEMS : null;
-        const roomThemes = isObject(global.ROOM_THEMES) ? global.ROOM_THEMES : null;
-        const sets = ensureGlobalObject('ROOM_COSMETIC_SETS');
-        const bonuses = ensureGlobalObject('ROOM_COSMETIC_BONUSES');
-
-        pack.items.forEach((item) => {
-            if (!item || !item.kind) return;
-            if (item.kind === 'decoration' && furnitureDecor) furnitureDecor[item.id] = Object.assign({}, furnitureDecor[item.id] || {}, item.data || item);
-            if (item.kind === 'roomFurniture' && roomFurniture) roomFurniture[item.id] = Object.assign({}, roomFurniture[item.id] || {}, item.data || item);
-            if (item.kind === 'roomTheme' && roomThemes) roomThemes[item.id] = Object.assign({}, roomThemes[item.id] || {}, item.data || item);
-            if (item.kind === 'roomCosmeticSet') sets[item.id] = Object.assign({}, sets[item.id] || {}, item.data || item);
-            if (item.kind === 'roomCosmeticBonus') bonuses[item.id] = Object.assign({}, bonuses[item.id] || {}, item.data || item);
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyCosmeticsPack === 'function') {
+            global.ContentPackRegistryService.applyCosmeticsPack(pack, { global });
+        }
     }
 
     function applyBreedingPack(pack) {
-        const mutationColors = isObject(global.MUTATION_COLORS) ? global.MUTATION_COLORS : null;
-        const mutationPatterns = isObject(global.MUTATION_PATTERNS) ? global.MUTATION_PATTERNS : null;
-        const hybrids = isObject(global.HYBRID_PET_TYPES) ? global.HYBRID_PET_TYPES : null;
-        const hybridLookup = isObject(global.HYBRID_LOOKUP) ? global.HYBRID_LOOKUP : null;
-        const advantages = isObject(global.PET_TYPE_ADVANTAGES) ? global.PET_TYPE_ADVANTAGES : null;
-        const flavorPool = ensureGlobalArray('BREEDING_OUTCOME_FLAVOR_TEXTS');
-
-        pack.items.forEach((item) => {
-            if (!item || !item.kind) return;
-            if (item.kind === 'mutationColor' && mutationColors) mutationColors[item.id] = Object.assign({}, mutationColors[item.id] || {}, item.data || item);
-            if (item.kind === 'mutationPattern' && mutationPatterns) mutationPatterns[item.id] = Object.assign({}, mutationPatterns[item.id] || {}, item.data || item);
-            if (item.kind === 'hybridType' && hybrids) {
-                const data = Object.assign({}, item.data || item, { id: item.id });
-                hybrids[item.id] = Object.assign({}, hybrids[item.id] || {}, data);
-                const parents = asArray(data.parents);
-                if (parents.length >= 2 && hybridLookup) {
-                    hybridLookup[`${parents[0]}-${parents[1]}`] = item.id;
-                    hybridLookup[`${parents[1]}-${parents[0]}`] = item.id;
-                }
-                if (advantages && parents.length >= 2) {
-                    const combined = new Set([].concat(asArray(advantages[parents[0]]), asArray(advantages[parents[1]])));
-                    advantages[item.id] = Array.from(combined);
-                }
-            }
-            if (item.kind === 'outcomeFlavor') {
-                upsertArrayById(flavorPool, [Object.assign({}, item)], 'id');
-            }
-        });
+        if (global.ContentPackRegistryService && typeof global.ContentPackRegistryService.applyBreedingPack === 'function') {
+            global.ContentPackRegistryService.applyBreedingPack(pack, { global });
+        }
     }
 
     function applyPackToKnownGlobals(pack) {
