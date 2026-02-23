@@ -16,3 +16,10 @@
 
 - Use the **modular runtime files** in `js/` and split CSS sources as the source of truth.
 - Avoid reintroducing monolithic logic from legacy combined files unless explicitly requested.
+
+## Developer Workflow Guidance
+
+- Treat Xcode + the iOS app (`WKWebView`) as the primary validation path for release-affecting changes.
+- Run `npm test` for deterministic JS tests and `npm run test:e2e` for gameplay flow checks when touching gameplay/save/UI flows.
+- Regenerate manifests with `npm run gen:runtime` when runtime file order or manifest-managed files change.
+- Use `RELEASE_CHECKLIST_IOS.md` for every TestFlight/App Store candidate (save persistence, lifecycle resume, audio, haptics, external links, diagnostics).

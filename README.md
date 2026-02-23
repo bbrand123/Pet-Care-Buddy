@@ -1,6 +1,6 @@
 # 🐾 My Little Friend
 
-A fun, interactive virtual pet game built with vanilla JavaScript, HTML, and CSS.
+A virtual pet game built with vanilla JavaScript, HTML, and CSS, shipped primarily as an **iOS app** with an embedded `WKWebView` runtime.
 
 ## 🎮 Features
 
@@ -32,12 +32,12 @@ A fun, interactive virtual pet game built with vanilla JavaScript, HTML, and CSS
 
 ## 📁 Project Structure (Current Runtime)
 
-Production now boots through a single ES module entry:
+The shipped runtime (including the iOS app web view) boots through a single ES module entry:
 
 - `index.html` -> `js/main.js` (only production script tag)
 - `js/main.js` -> bootstraps modular runtime groups via `js/boot/runtime-orchestrators.js`
 - `js/config/runtime-manifest.generated.js` -> generated ordered runtime file manifest
-- `sw.js` + `sw-assets.generated.js` -> generated PWA precache manifest
+- `sw.js` + `sw-assets.generated.js` -> generated legacy web/PWA precache manifest (secondary)
 
 Key runtime areas:
 
@@ -49,17 +49,34 @@ Key runtime areas:
 
 ## 🚀 Getting Started
 
-### Play Online
-Visit the GitHub Pages URL: `https://[your-username].github.io/My-Little-Friend/`
+### Primary: iOS App Development (WKWebView)
+1. Open `My Little Friend/My Little Friend.xcodeproj` in Xcode
+2. Build/run the `My Little Friend` app on an iPhone simulator or device
+3. Validate gameplay and lifecycle behavior in the app (background/foreground, audio, save persistence)
 
-### Run Locally
+### Secondary: Browser Runtime (Local Dev)
 1. Clone the repository
-2. Open `index.html` in a web browser
-3. Start caring for your pet!
+2. Start a local HTTP server (for module boot and legacy service worker support), for example:
 
-No bundler is required. For development, use a local HTTP server so the service worker and module entry load correctly (for example `python3 -m http.server 4173`).
+```bash
+python3 -m http.server 4173
+```
+
+3. Open `http://localhost:4173`
+
+No bundler is required.
+
+### Legacy Web Demo (Optional / Secondary)
+If you maintain a web demo build, GitHub Pages can still be used (`https://[your-username].github.io/My-Little-Friend/`), but it is not the primary shipping target.
 
 ## 🛠️ Development
+
+### iOS-First Workflow (Required Mindset)
+
+- Optimize for touch interactions and `WKWebView` lifecycle reliability first.
+- Treat browser-only polish, keyboard ergonomics, and PWA behavior as secondary unless the task explicitly requires them.
+- Run the iOS regression checklist in `RELEASE_CHECKLIST_IOS.md` for release candidates.
+- Prefer validating save/load, lifecycle suspend/resume, audio resume, and native bridge paths on iOS before browser polish.
 
 ### Runtime Architecture Notes
 
@@ -69,7 +86,7 @@ No bundler is required. For development, use a local HTTP server so the service 
 - Minigame metadata lives in `js/config/minigame-descriptors.js` and is registered through `js/registries/minigame-registry.js`.
 - Content packs apply through `js/registries/content-registries.js` instead of mutating global registries directly in the pack loader.
 
-### Regenerating Runtime / SW Manifests
+### Regenerating Runtime / Legacy Web Manifests
 
 ```bash
 npm run gen:runtime
@@ -78,7 +95,7 @@ npm run gen:runtime
 This regenerates:
 
 - `js/config/runtime-manifest.generated.js`
-- `sw-assets.generated.js`
+- `sw-assets.generated.js` (legacy web/PWA support)
 
 ### Adding New Features
 
@@ -123,7 +140,9 @@ newAccessory: {
 
 Then add rendering logic in `generateAccessoryOverlay()` in `svg.js`.
 
-## 📱 Browser Support
+## 📱 Browser Coverage (Local Dev / Secondary)
+
+Browser validation is primarily for local development and debugging. Shipping quality is determined by iOS app (`WKWebView`) behavior.
 
 - ✅ Chrome/Edge (latest)
 - ✅ Firefox (latest)
@@ -133,25 +152,35 @@ Then add rendering logic in `generateAccessoryOverlay()` in `svg.js`.
 ## ♿ Accessibility
 
 - WCAG AA color contrast compliance
-- Full keyboard navigation
 - Screen reader support with ARIA labels
 - Touch targets minimum 48px
+- Touch-first interaction validation in iOS layouts
+- Keyboard navigation support where practical (secondary to touch UX unless requested)
 - Reduced motion support
 
 ## 📊 Performance
 
 - **Initial Load**: < 500KB total
 - **First Paint**: Fast (minimal HTML)
-- **Browser Caching**: CSS/JS cached separately
+- **WKWebView Runtime Reliability**: Save/load and lifecycle resume correctness are prioritized
+- **Browser Caching**: CSS/JS cached separately (secondary web path)
 - **LocalStorage**: Game saves automatically
 
 ## 🧪 Tests
 
-Run all fast deterministic Node tests:
+Run fast deterministic Node tests:
 
 ```bash
 npm test
 ```
+
+Run browser E2E gameplay flows (touch-oriented):
+
+```bash
+npm run test:e2e
+```
+
+Run iOS app build/test checks (Xcode / `xcodebuild`) for `WKWebView` and native bridge coverage before release.
 
 Coverage includes:
 
@@ -176,6 +205,7 @@ The shipping product is the native iOS app embedding this runtime in `WKWebView`
 ## 🔄 Migration Notes
 
 - Save storage key remains `myLittleFriend` (existing saves should continue to load).
+- Save payloads now include explicit `saveSchemaVersion` and are upgraded through ordered migrations.
 - `StateManager` now emits real structured events through `EventBus`; listeners can subscribe to `state:changed` / `state:replaced`.
 - Production and `test.html` now boot via `js/main.js`; custom scripts/tests that depended on HTML script order should wait for `window.__MLF_RUNTIME_READY__` or the `mlf:runtime-ready` event.
 
