@@ -74,8 +74,9 @@
             };
         }
 
-        let gameState = {
-            phase: 'egg', // 'egg', 'hatching', 'pet'
+	        let gameState = {
+	            saveSchemaVersion: (typeof MLFSaveSchema !== 'undefined' && MLFSaveSchema && MLFSaveSchema.CURRENT_SCHEMA_VERSION) ? MLFSaveSchema.CURRENT_SCHEMA_VERSION : 1,
+	            phase: 'egg', // 'egg', 'hatching', 'pet'
             pet: null,
             eggTaps: 0,
             eggType: null, // Type of egg (furry, feathery, scaly, magical)
@@ -1131,22 +1132,27 @@
             return true;
         }
 
-        function saveGame() {
-            try {
-                ensureExplorationState();
+	        function saveGame() {
+	            try {
+	                ensureExplorationState();
                 ensureEconomyState();
                 ensureMiniGameExpansionState();
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
                 gameState.lastUpdate = Date.now();
                 // Strip transient data that shouldn't persist
-                const offlineChanges = gameState._offlineChanges;
-                const hadOfflineChanges = Object.prototype.hasOwnProperty.call(gameState, '_offlineChanges');
-                if (hadOfflineChanges) delete gameState._offlineChanges;
-                try {
-                    const serialized = JSON.stringify(gameState);
-                    localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
-                    _lastSavedStorageSnapshot = serialized;
+	                const offlineChanges = gameState._offlineChanges;
+	                const hadOfflineChanges = Object.prototype.hasOwnProperty.call(gameState, '_offlineChanges');
+	                if (hadOfflineChanges) delete gameState._offlineChanges;
+	                try {
+	                    if (typeof MLFSaveSchema !== 'undefined' && MLFSaveSchema && typeof MLFSaveSchema.stampSaveSchemaVersion === 'function') {
+	                        MLFSaveSchema.stampSaveSchemaVersion(gameState);
+	                    } else {
+	                        gameState.saveSchemaVersion = 1;
+	                    }
+	                    const serialized = JSON.stringify(gameState);
+	                    localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
+	                    _lastSavedStorageSnapshot = serialized;
                 } finally {
                     if (hadOfflineChanges) gameState._offlineChanges = offlineChanges;
                 }
@@ -1183,23 +1189,37 @@
             }, 1500);
         }
 
-        function loadGame() {
-            let _needsSaveAfterLoad = false;
-            try {
-                const saved = localStorage.getItem(STORAGE_KEYS.gameSave);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
+	        function loadGame() {
+	            let _needsSaveAfterLoad = false;
+	            try {
+	                const saved = localStorage.getItem(STORAGE_KEYS.gameSave);
+	                if (saved) {
+	                    let parsed = JSON.parse(saved);
 
-                    // Validate saved data structure
-                    if (!parsed || typeof parsed !== 'object') {
-                        return null;
-                    }
+	                    if (typeof MLFSaveMigrations !== 'undefined' && MLFSaveMigrations && typeof MLFSaveMigrations.migrateSavePayload === 'function') {
+	                        const migrationResult = MLFSaveMigrations.migrateSavePayload(parsed);
+	                        parsed = migrationResult.payload;
+	                        if (migrationResult && migrationResult.report) {
+	                            if (migrationResult.report.changed || migrationResult.report.toVersion !== migrationResult.report.fromVersion) {
+	                                _needsSaveAfterLoad = true;
+	                            }
+	                            if (migrationResult.report.appliedMigrations && migrationResult.report.appliedMigrations.length > 0) {
+	                                console.info('[MLF][MIGRATE] Applied save migrations:', migrationResult.report);
+	                            }
+	                        }
+	                    } else {
+	                        // Minimal fallback validation if save migration modules are unavailable.
+	                        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+	                            return null;
+	                        }
+	                    }
 
-                    // Handle stuck 'hatching' phase - reset to egg
-                    if (parsed.phase === 'hatching') {
-                        parsed.phase = 'egg';
-                        parsed.eggTaps = 0;
-                    }
+	                    // Schema migration handles legacy hatching-phase repair, but keep a defensive fallback.
+	                    if (parsed.phase === 'hatching') {
+	                        parsed.phase = 'egg';
+	                        parsed.eggTaps = 0;
+	                        _needsSaveAfterLoad = true;
+	                    }
 
                     // Validate pet data if in pet phase
                     if (parsed.phase === 'pet') {

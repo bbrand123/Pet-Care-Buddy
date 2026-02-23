@@ -1,0 +1,18 @@
+{
+  "saveSchemaVersion": 1,
+  "phase": "pet",
+  "lastUpdate": 1700000000000,
+  "activePetIndex": 0,
+  "pet": {
+    "name": "Nova",
+    "type": "furry",
+    "birthdate": 1699990000000
+  },
+  "pets": [
+    {
+      "name": "Nova",
+      "type": "furry",
+      "birthdate": 1699990000000
+    }
+  ]
+}
