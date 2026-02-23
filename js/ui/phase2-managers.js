@@ -522,9 +522,9 @@
         function playSfx(name, throttleKey, throttleMs) {
             if (throttleKey && throttled(`s:${throttleKey}`, throttleMs || 90)) return false;
             try {
-                if (typeof SoundManager === 'undefined' || !SoundManager || typeof SoundManager.playSFXByName !== 'function') return false;
-                if (typeof SoundManager.getEnabled === 'function' && !SoundManager.getEnabled()) return false;
-                SoundManager.playSFXByName(name, (SoundManager.sfx && (SoundManager.sfx[name] || SoundManager.sfx.play)) || null);
+                if (typeof GameAudio === 'undefined' || !GameAudio || typeof GameAudio.playSFXByName !== 'function') return false;
+                if (typeof GameAudio.getEnabled === 'function' && !GameAudio.getEnabled()) return false;
+                GameAudio.playSFXByName(name, (GameAudio.sfx && (GameAudio.sfx[name] || GameAudio.sfx.play)) || null);
                 return true;
             } catch (e) {
                 return false;

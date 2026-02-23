@@ -119,11 +119,11 @@
             if (inZone) {
                 fishingState.catches += 1;
                 if (note) note.textContent = 'Nice catch! Cast again.';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.catch);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.catch);
             } else {
                 fishingState.misses += 1;
                 if (note) note.textContent = 'Missed it! Try timing the next cast.';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
             }
             if (fishingState.roundsLeft <= 0) {
                 endFishingGame(true);

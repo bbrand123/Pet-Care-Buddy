@@ -358,8 +358,8 @@
             const petData = getAllPetTypeData(gameState.pet.type) || PET_TYPES[gameState.pet.type];
 
             // Play pet voice sound
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFXByName('petHappy', (ctx) => SoundManager.sfx.petHappy(ctx, gameState.pet.type));
+            if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFXByName('petHappy', (ctx) => GameAudio.sfx.petHappy(ctx, gameState.pet.type));
             }
 
             // Track daily checklist progress
@@ -376,7 +376,7 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     setTimeout(() => showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700'), 300);
                 });
             }
@@ -397,7 +397,7 @@
 
             if (petContainer) petContainer.classList.add('bounce');
             if (sparkles) createFoodParticles(sparkles);
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.feed);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.feed);
 
             // Build stat change description
             let statChanges = [];
@@ -759,8 +759,8 @@
             trackCareAction('play');
 
             // Play pet voice sound
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFXByName('petExcited', (ctx) => SoundManager.sfx.petExcited(ctx, pet.type));
+            if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFXByName('petExcited', (ctx) => GameAudio.sfx.petExcited(ctx, pet.type));
             }
 
             // Track daily checklist progress
@@ -777,7 +777,7 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     setTimeout(() => showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700'), 300);
                 });
             }

@@ -152,7 +152,7 @@
             instruction.textContent = 'Nice throw!';
             instruction.className = 'fetch-instruction highlight';
             announce('Nice throw!');
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.throw);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.throw);
 
             // Ball arc animation - first goes up, then lands
             ball.style.transition = 'none';
@@ -207,7 +207,7 @@
                 // Show a reward particle
                 showFetchReward(field, targetX);
                 if (typeof hapticBuzz === 'function') hapticBuzz(50);
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.catch);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.catch);
             }, 2000 * fetchSpeed));
 
             // Phase 5: Pet returns to start

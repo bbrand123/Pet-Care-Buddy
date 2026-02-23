@@ -276,7 +276,7 @@
                     instruction.className = 'hideseek-instruction highlight';
                 }
                 if (typeof hapticBuzz === 'function') hapticBuzz(50);
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.hit);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);
 
                 announce(`Found a treat! ${hideSeekState.treatsFound} of ${hideSeekState.totalTreats} found.`);
 
@@ -305,7 +305,7 @@
                     instruction.textContent = 'Nothing here... keep looking!';
                     instruction.className = 'hideseek-instruction';
                 }
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
 
                 announce('Nothing under this one. Keep searching!');
             }

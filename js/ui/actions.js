@@ -328,10 +328,10 @@
                 const last = Number(element.dataset.lastActivate || 0);
                 if (now - last < 200) return;
                 element.dataset.lastActivate = String(now);
-                if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                    SoundManager.playSFXByName('button-tap', SoundManager.sfx.play);
+                if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                    GameAudio.playSFXByName('button-tap', GameAudio.sfx.play);
                     if (element.getAttribute('aria-haspopup') === 'dialog' || element.classList.contains('room-coming-toggle')) {
-                        SoundManager.playSFXByName('menu-open', SoundManager.sfx.roomTransition);
+                        GameAudio.playSFXByName('menu-open', GameAudio.sfx.roomTransition);
                     }
                 }
                 handler(event);
@@ -395,13 +395,13 @@
                 if (soundBtn) {
                     if (event.type === 'touchend') event.preventDefault();
                     safeInvoke(soundBtn, () => {
-                        if (typeof SoundManager !== 'undefined') {
-                            const enabled = SoundManager.toggle();
+                        if (typeof GameAudio !== 'undefined') {
+                            const enabled = GameAudio.toggle();
                             soundBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
                             const iconSpan = soundBtn.querySelector('.top-action-btn-icon');
                             if (iconSpan) iconSpan.textContent = enabled ? '🔊' : '🔇';
                             if (enabled && gameState.currentRoom) {
-                                SoundManager.enterRoom(gameState.currentRoom);
+                                GameAudio.enterRoom(gameState.currentRoom);
                             }
                         }
                     }, event);
@@ -1372,7 +1372,7 @@
             const sparkles = document.getElementById('sparkles');
             if (petContainer) petContainer.classList.add('bounce', 'pet-munch-loop');
             if (sparkles) createFoodParticles(sparkles);
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.feed);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.feed);
             return msg;
         }
 
@@ -1506,7 +1506,7 @@
                     else if (washPref > 1) message = `💕 ${pet.name || 'Pet'} loved that! ${message}`;
                     if (petContainer) petContainer.classList.add('sparkle', 'pet-scrub-shake');
                     if (sparkles) createBubbles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.wash);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.wash);
                     break;
                 }
                 case 'play': {
@@ -1523,7 +1523,7 @@
                     else if (playPref > 1) message = `💕 ${pet.name || 'Pet'} LOVED playing! ${message}`;
                     if (petContainer) petContainer.classList.add('wiggle', 'pet-happy-bounce');
                     if (sparkles) createHearts(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.play);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.play);
                     break;
                 }
                 case 'sleep': {
@@ -1550,7 +1550,7 @@
                     message = sleepAnnounce;
                     if (petContainer) petContainer.classList.add('sleep-anim', 'pet-sleepy-nod');
                     if (sparkles) createZzz(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.sleep);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.sleep);
                     break;
                 }
                 case 'medicine': {
@@ -1569,7 +1569,7 @@
                     if (medPref < 1) message = `😨 ${pet.name || 'Pet'} doesn't like medicine! ${message}`;
                     if (petContainer) petContainer.classList.add('heal-anim');
                     if (sparkles) createMedicineParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.medicine);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.medicine);
                     break;
                 }
                 case 'groom': {
@@ -1591,7 +1591,7 @@
                     else if (groomPref > 1) message = `💕 ${pet.name || 'Pet'} loved the pampering! ${message}`;
                     if (petContainer) petContainer.classList.add('groom-anim');
                     if (sparkles) createGroomParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.groom);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.groom);
                     break;
                 }
                 case 'exercise': {
@@ -1612,7 +1612,7 @@
                     else if (exPref > 1) message = `💕 ${pet.name || 'Pet'} had an amazing workout! ${message}`;
                     if (petContainer) petContainer.classList.add('exercise-anim');
                     if (sparkles) createExerciseParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.exercise);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.exercise);
                     break;
                 }
                 case 'treat': {
@@ -1638,7 +1638,7 @@
                     }
                     if (petContainer) petContainer.classList.add('treat-anim');
                     if (sparkles) createTreatParticles(sparkles, treat.emoji);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.treat);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.treat);
                     break;
                 }
                 case 'cuddle': {
@@ -1657,7 +1657,7 @@
                     else if (cuddleMod > 1.2) message = `💕 ${pet.name || 'Pet'} melted into your arms! ${message}`;
                     if (petContainer) petContainer.classList.add('cuddle-anim');
                     if (sparkles) createCuddleParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.cuddle);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.cuddle);
                     break;
                 }
             }
@@ -1723,10 +1723,10 @@
                 const petType = pet.type;
                 let reactionEmoji = '';
                 if (action === 'feed' || action === 'treat' || action === 'cuddle') {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFXByName('petHappy', (ctx) => SoundManager.sfx.petHappy(ctx, petType));
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFXByName('petHappy', (ctx) => GameAudio.sfx.petHappy(ctx, petType));
                     reactionEmoji = action === 'feed' ? '😋' : action === 'treat' ? '🤤' : '🥰';
                 } else if (action === 'play' || action === 'exercise') {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFXByName('petExcited', (ctx) => SoundManager.sfx.petExcited(ctx, petType));
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFXByName('petExcited', (ctx) => GameAudio.sfx.petExcited(ctx, petType));
                     reactionEmoji = action === 'play' ? '😄' : '💪';
                 } else if (action === 'wash') {
                     reactionEmoji = '✨';
@@ -1769,7 +1769,7 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     if (typeof hapticPattern === 'function') hapticPattern('achievement');
                     setTimeout(() => {
                         showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700');
@@ -2279,8 +2279,8 @@
                     markCoachChecklistProgress('feed');
 
                     // Play pet voice sound
-                    if (typeof SoundManager !== 'undefined') {
-                        SoundManager.playSFXByName('petHappy', (ctx) => SoundManager.sfx.petHappy(ctx, currentPet.type));
+                    if (typeof GameAudio !== 'undefined') {
+                        GameAudio.playSFXByName('petHappy', (ctx) => GameAudio.sfx.petHappy(ctx, currentPet.type));
                     }
 
                     // Track daily checklist progress
@@ -2297,7 +2297,7 @@
                     if (typeof checkAchievements === 'function') {
                         const newAch = checkAchievements();
                         newAch.forEach(ach => {
-                            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                             setTimeout(() => {
                                 showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700');
                                 queueRewardCard('achievement', ach, '#FFD700');

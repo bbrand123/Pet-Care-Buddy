@@ -198,8 +198,8 @@
                     if (lowStats.length > 0) {
                         announce(`Warning: ${petName}'s ${lowStats.join(' and ')} ${lowStats.length === 1 ? 'is' : 'are'} critically low!`, true);
                         // Play sad pet whimper when stats drop critically
-                        if (typeof SoundManager !== 'undefined' && pet.type) {
-                            SoundManager.playSFXByName('petSad', (ctx) => SoundManager.sfx.petSad(ctx, pet.type));
+                        if (typeof GameAudio !== 'undefined' && pet.type) {
+                            GameAudio.playSFXByName('petSad', (ctx) => GameAudio.sfx.petSad(ctx, pet.type));
                         }
                         // Haptic alert for critical stat drop
                         hapticPattern('critical');

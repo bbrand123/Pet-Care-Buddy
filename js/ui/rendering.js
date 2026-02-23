@@ -991,8 +991,8 @@
             }
 
             // Cuddle SFX
-            if (typeof SoundManager !== 'undefined' && SoundManager.sfx) {
-                SoundManager.playSFX(SoundManager.sfx.cuddle);
+            if (typeof GameAudio !== 'undefined' && GameAudio.sfx) {
+                GameAudio.playSFX(GameAudio.sfx.cuddle);
             }
 
             // Quick bounce animation on pet container
@@ -1929,8 +1929,8 @@
                 _petPhaseTimersRunning = true;
             }
 
-            if (roomChanged && typeof SoundManager !== 'undefined') {
-                SoundManager.enterRoom(currentRoom);
+            if (roomChanged && typeof GameAudio !== 'undefined') {
+                GameAudio.enterRoom(currentRoom);
             }
 
             if (roomChanged || needTimerStart) {

@@ -244,8 +244,8 @@
             const unlockResult = unlockRoom(roomId);
             if (!unlockResult.ok) {
                 showToast(`🔒 ${unlockResult.reason}`, '#FFA726');
-                if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                    SoundManager.playSFXByName('error-soft', SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                    GameAudio.playSFXByName('error-soft', GameAudio.sfx.miss);
                 }
                 return;
             }
@@ -284,9 +284,9 @@
             saveGame();
 
             // Play room transition whoosh/chime then start room-specific earcon
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFX(SoundManager.sfx.roomTransition);
-                SoundManager.enterRoom(roomId);
+            if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFX(GameAudio.sfx.roomTransition);
+                GameAudio.enterRoom(roomId);
             }
 
             const room = ROOMS[roomId];

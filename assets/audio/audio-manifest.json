@@ -1,0 +1,512 @@
+{
+  "version": 1,
+  "generatedAt": "2026-02-23T14:51:10.838Z",
+  "channels": [
+    "master",
+    "music",
+    "ambient",
+    "sfx",
+    "ui"
+  ],
+  "preload": [
+    "ui-tap-1",
+    "ui-confirm",
+    "ui-open-modal",
+    "ui-close-modal",
+    "ui-error"
+  ],
+  "sounds": {
+    "ui-tap-1": {
+      "path": "assets/audio/ui/ui-tap-1.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": true,
+      "throttleMs": 40
+    },
+    "ui-tap-2": {
+      "path": "assets/audio/ui/ui-tap-2.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.68,
+      "preload": true,
+      "throttleMs": 40
+    },
+    "ui-back": {
+      "path": "assets/audio/ui/ui-back.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": true,
+      "throttleMs": 0
+    },
+    "ui-confirm": {
+      "path": "assets/audio/ui/ui-confirm.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.8,
+      "preload": true,
+      "throttleMs": 40
+    },
+    "ui-error": {
+      "path": "assets/audio/ui/ui-error.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": true,
+      "throttleMs": 0
+    },
+    "ui-open-modal": {
+      "path": "assets/audio/ui/ui-open-modal.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": true,
+      "throttleMs": 0
+    },
+    "ui-close-modal": {
+      "path": "assets/audio/ui/ui-close-modal.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": true,
+      "throttleMs": 0
+    },
+    "ui-focus": {
+      "path": "assets/audio/ui/ui-focus.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.55,
+      "preload": false,
+      "throttleMs": 30
+    },
+    "ui-toggle": {
+      "path": "assets/audio/ui/ui-toggle.ogg",
+      "category": "ui",
+      "channel": "ui",
+      "loop": false,
+      "defaultVolume": 0.6,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-happy-chirp": {
+      "path": "assets/audio/pet/pet-happy-chirp.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.8,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-sad-whimper": {
+      "path": "assets/audio/pet/pet-sad-whimper.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.65,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-eating": {
+      "path": "assets/audio/pet/pet-eating.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-sleeping-zzz": {
+      "path": "assets/audio/pet/pet-sleeping-zzz.ogg",
+      "category": "pet",
+      "channel": "ambient",
+      "loop": false,
+      "defaultVolume": 0.45,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-bath-splash": {
+      "path": "assets/audio/pet/pet-bath-splash.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-level-up-sparkle": {
+      "path": "assets/audio/pet/pet-level-up-sparkle.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.85,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-affection-heart": {
+      "path": "assets/audio/pet/pet-affection-heart.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.8,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-excited": {
+      "path": "assets/audio/pet/pet-excited.ogg",
+      "category": "pet",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.85,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "coin-collect": {
+      "path": "assets/audio/sfx/coin-collect.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.8,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "reward-treasure": {
+      "path": "assets/audio/sfx/reward-treasure.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.85,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "achievement": {
+      "path": "assets/audio/sfx/achievement.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.85,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "fail-gentle": {
+      "path": "assets/audio/sfx/fail-gentle.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "minigame-start-stinger": {
+      "path": "assets/audio/sfx/minigame-start-stinger.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.8,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "minigame-end-stinger": {
+      "path": "assets/audio/sfx/minigame-end-stinger.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.8,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "match-success": {
+      "path": "assets/audio/sfx/match-success.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "bubble-pop": {
+      "path": "assets/audio/sfx/bubble-pop.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "hit-soft": {
+      "path": "assets/audio/sfx/hit-soft.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "catch-soft": {
+      "path": "assets/audio/sfx/catch-soft.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "throw-soft": {
+      "path": "assets/audio/sfx/throw-soft.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.75,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "groom-soft": {
+      "path": "assets/audio/sfx/groom-soft.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.65,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "medicine-soft": {
+      "path": "assets/audio/sfx/medicine-soft.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.65,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "room-transition": {
+      "path": "assets/audio/sfx/room-transition.ogg",
+      "category": "sfx",
+      "channel": "sfx",
+      "loop": false,
+      "defaultVolume": 0.7,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "cozy-room-ambience": {
+      "path": "assets/audio/ambient/cozy-room-ambience.mp3",
+      "category": "ambient",
+      "channel": "ambient",
+      "loop": true,
+      "defaultVolume": 0.55,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "outdoor-garden-ambience": {
+      "path": "assets/audio/ambient/outdoor-garden-ambience.mp3",
+      "category": "ambient",
+      "channel": "ambient",
+      "loop": true,
+      "defaultVolume": 0.5,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "nighttime-ambience": {
+      "path": "assets/audio/ambient/nighttime-ambience.mp3",
+      "category": "ambient",
+      "channel": "ambient",
+      "loop": true,
+      "defaultVolume": 0.52,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-theme-day": {
+      "path": "assets/audio/music/pet-theme-day.ogg",
+      "category": "music",
+      "channel": "music",
+      "loop": true,
+      "defaultVolume": 0.45,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "pet-theme-night": {
+      "path": "assets/audio/music/pet-theme-night.ogg",
+      "category": "music",
+      "channel": "music",
+      "loop": true,
+      "defaultVolume": 0.4,
+      "preload": false,
+      "throttleMs": 0
+    },
+    "tap": {
+      "alias": "ui-tap-1"
+    },
+    "tap-1": {
+      "alias": "ui-tap-1"
+    },
+    "tap-2": {
+      "alias": "ui-tap-2"
+    },
+    "click": {
+      "alias": "ui-tap-1"
+    },
+    "click-2": {
+      "alias": "ui-tap-2"
+    },
+    "back": {
+      "alias": "ui-back"
+    },
+    "cancel": {
+      "alias": "ui-back"
+    },
+    "confirm": {
+      "alias": "ui-confirm"
+    },
+    "error": {
+      "alias": "ui-error"
+    },
+    "open-modal": {
+      "alias": "ui-open-modal"
+    },
+    "close-modal": {
+      "alias": "ui-close-modal"
+    },
+    "happy-chirp": {
+      "alias": "pet-happy-chirp"
+    },
+    "sad-whimper": {
+      "alias": "pet-sad-whimper"
+    },
+    "eating": {
+      "alias": "pet-eating"
+    },
+    "sleeping-zzz": {
+      "alias": "pet-sleeping-zzz"
+    },
+    "bath-splash": {
+      "alias": "pet-bath-splash"
+    },
+    "level-up-sparkle": {
+      "alias": "pet-level-up-sparkle"
+    },
+    "affection-heart": {
+      "alias": "pet-affection-heart"
+    },
+    "cozy-room": {
+      "alias": "cozy-room-ambience"
+    },
+    "outdoor-garden": {
+      "alias": "outdoor-garden-ambience"
+    },
+    "nighttime": {
+      "alias": "nighttime-ambience"
+    },
+    "garden": {
+      "alias": "outdoor-garden-ambience"
+    },
+    "feed": {
+      "alias": "pet-eating"
+    },
+    "wash": {
+      "alias": "pet-bath-splash"
+    },
+    "play": {
+      "alias": "pet-excited"
+    },
+    "sleep": {
+      "alias": "pet-sleeping-zzz"
+    },
+    "cuddle": {
+      "alias": "pet-affection-heart"
+    },
+    "medicine": {
+      "alias": "medicine-soft"
+    },
+    "groom": {
+      "alias": "groom-soft"
+    },
+    "exercise": {
+      "alias": "hit-soft"
+    },
+    "treat": {
+      "alias": "pet-eating"
+    },
+    "hit": {
+      "alias": "hit-soft"
+    },
+    "miss": {
+      "alias": "fail-gentle"
+    },
+    "celebration": {
+      "alias": "reward-treasure"
+    },
+    "bubblePop": {
+      "alias": "bubble-pop"
+    },
+    "match": {
+      "alias": "match-success"
+    },
+    "catch": {
+      "alias": "catch-soft"
+    },
+    "throw": {
+      "alias": "throw-soft"
+    },
+    "roomTransition": {
+      "alias": "room-transition"
+    },
+    "petHappy": {
+      "alias": "pet-happy-chirp"
+    },
+    "petSad": {
+      "alias": "pet-sad-whimper"
+    },
+    "petExcited": {
+      "alias": "pet-excited"
+    },
+    "achievement-old": {
+      "alias": "achievement"
+    },
+    "menu-open": {
+      "alias": "ui-open-modal"
+    },
+    "button-tap": {
+      "alias": "ui-tap-1"
+    },
+    "reward-pop": {
+      "alias": "reward-treasure"
+    },
+    "error-soft": {
+      "alias": "ui-error"
+    },
+    "coin-jingle": {
+      "alias": "coin-collect"
+    },
+    "combo-rise": {
+      "alias": "achievement"
+    },
+    "reward": {
+      "alias": "reward-treasure"
+    },
+    "success": {
+      "alias": "achievement"
+    },
+    "fail": {
+      "alias": "fail-gentle"
+    },
+    "minigame-start": {
+      "alias": "minigame-start-stinger"
+    },
+    "minigame-end": {
+      "alias": "minigame-end-stinger"
+    },
+    "day": {
+      "alias": "pet-theme-day"
+    },
+    "night": {
+      "alias": "pet-theme-night"
+    }
+  }
+}

@@ -172,6 +172,6 @@
             }
             stopDecayTimer();
             stopGardenGrowTimer();
-            if (typeof SoundManager !== 'undefined') SoundManager.stopAll();
+            if (typeof GameAudio !== 'undefined') GameAudio.stopAll();
             if (typeof stopIdleAnimations === 'function') stopIdleAnimations();
         });

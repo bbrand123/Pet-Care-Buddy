@@ -19,7 +19,7 @@
     <script src="js/constants.js"></script>
     <script src="js/garden-features-core.js"></script>
     <script src="js/svg.js"></script>
-    <script src="js/sound.js"></script>
+    <script src="js/audio/audio-manager.js"></script>
     <script src="js/game.js"></script>
     <script src="js/ui.js"></script>
     <script src="js/minigames.js"></script>
@@ -125,12 +125,12 @@
             }
 
             // Test 9: Sound manager loaded
-            if (typeof SoundManager !== 'undefined') {
-                log('SoundManager loaded');
-                const hasSFX = typeof SoundManager.playSFX === 'function';
-                log(`SoundManager has playSFX: ${hasSFX}`, hasSFX);
+            if (typeof GameAudio !== 'undefined') {
+                log('GameAudio loaded');
+                const hasSFX = typeof GameAudio.playSFX === 'function';
+                log(`GameAudio has playSFX: ${hasSFX}`, hasSFX);
             } else {
-                log('SoundManager not found', false);
+                log('GameAudio not found', false);
             }
 
             // Test 10: Game logic functions (game.js)

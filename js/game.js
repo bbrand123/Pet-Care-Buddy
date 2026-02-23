@@ -1068,10 +1068,10 @@
             ambient.transitionStartedAt = Date.now();
             ambient.transitionDurationMs = Math.max(10000, Math.min(20000, Number(durationMs) || 15000));
             ambient.reason = reason || 'state-change';
-            if (typeof SoundManager !== 'undefined' && SoundManager.enterRoom && gameState.currentRoom) {
+            if (typeof GameAudio !== 'undefined' && GameAudio.enterRoom && gameState.currentRoom) {
                 // Existing sound system crossfades room earcons; spacing this call helps transitions feel less abrupt.
                 setTimeout(() => {
-                    if (gameState.currentRoom) SoundManager.enterRoom(gameState.currentRoom);
+                    if (gameState.currentRoom) GameAudio.enterRoom(gameState.currentRoom);
                 }, 120);
             }
         }
@@ -8711,8 +8711,8 @@
                 const room = ROOMS[roomId];
                 const cue = room && room.unlockCue && room.unlockCue.uiHint ? ` ${room.unlockCue.uiHint}` : '';
                 showToast(`🔒 ${unlockResult.reason}${cue}`, '#FFA726', { tier: 'moment' });
-                if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                    SoundManager.playSFXByName('error-soft', SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                    GameAudio.playSFXByName('error-soft', GameAudio.sfx.miss);
                 }
                 return;
             }
@@ -8741,9 +8741,9 @@
             saveGame();
 
             // Play room transition whoosh/chime then start room-specific earcon
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFX(SoundManager.sfx.roomTransition);
-                SoundManager.enterRoom(roomId);
+            if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFX(GameAudio.sfx.roomTransition);
+                GameAudio.enterRoom(roomId);
             }
 
             const room = ROOMS[roomId];
@@ -9754,8 +9754,8 @@
             const petData = getAllPetTypeData(gameState.pet.type) || PET_TYPES[gameState.pet.type];
 
             // Play pet voice sound
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFXByName('petHappy', (ctx) => SoundManager.sfx.petHappy(ctx, gameState.pet.type));
+            if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFXByName('petHappy', (ctx) => GameAudio.sfx.petHappy(ctx, gameState.pet.type));
             }
 
             // Track daily checklist progress
@@ -9772,7 +9772,7 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     setTimeout(() => showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700'), 300);
                 });
             }
@@ -9793,7 +9793,7 @@
 
             if (petContainer) petContainer.classList.add('bounce');
             if (sparkles) createFoodParticles(sparkles);
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.feed);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.feed);
 
             // Build stat change description
             let statChanges = [];
@@ -10582,8 +10582,8 @@
             trackCareAction('play');
 
             // Play pet voice sound
-            if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFXByName('petExcited', (ctx) => SoundManager.sfx.petExcited(ctx, pet.type));
+            if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFXByName('petExcited', (ctx) => GameAudio.sfx.petExcited(ctx, pet.type));
             }
 
             // Track daily checklist progress
@@ -10600,7 +10600,7 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     setTimeout(() => showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700'), 300);
                 });
             }
@@ -10753,8 +10753,8 @@
                     if (lowStats.length > 0) {
                         announce(`Warning: ${petName}'s ${lowStats.join(' and ')} ${lowStats.length === 1 ? 'is' : 'are'} critically low!`, true);
                         // Play sad pet whimper when stats drop critically
-                        if (typeof SoundManager !== 'undefined' && pet.type) {
-                            SoundManager.playSFXByName('petSad', (ctx) => SoundManager.sfx.petSad(ctx, pet.type));
+                        if (typeof GameAudio !== 'undefined' && pet.type) {
+                            GameAudio.playSFXByName('petSad', (ctx) => GameAudio.sfx.petSad(ctx, pet.type));
                         }
                         // Haptic alert for critical stat drop
                         hapticPattern('critical');
@@ -11793,6 +11793,6 @@
             }
             stopDecayTimer();
             stopGardenGrowTimer();
-            if (typeof SoundManager !== 'undefined') SoundManager.stopAll();
+            if (typeof GameAudio !== 'undefined') GameAudio.stopAll();
             if (typeof stopIdleAnimations === 'function') stopIdleAnimations();
         });

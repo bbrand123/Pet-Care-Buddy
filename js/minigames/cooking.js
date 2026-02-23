@@ -150,11 +150,11 @@
             if (pick === target) {
                 cookingState.successes += 1;
                 grantSpecialPetFood(1);
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
                 if (noteEl) noteEl.textContent = 'Perfect mix! Special pet food crafted.';
             } else {
                 cookingState.failures += 1;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
                 if (noteEl) noteEl.textContent = 'Recipe mismatch. Try the next order.';
             }
             cookingState.round += 1;

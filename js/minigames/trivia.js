@@ -107,9 +107,9 @@
             triviaState.answered = true;
             if (choice === q.answer) {
                 triviaState.correct += 1;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
-            } else if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
+            } else if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFX(GameAudio.sfx.miss);
             }
             updateTriviaUI();
         }

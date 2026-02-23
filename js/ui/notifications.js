@@ -492,8 +492,8 @@
             card.title = 'Click to dismiss';
             card.setAttribute('aria-label', `${escapeHTML(cardData.title)}: ${escapeHTML(cardData.name)}. Click to dismiss.`);
             document.body.appendChild(card);
-            if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
             }
             requestAnimationFrame(() => card.classList.add('show'));
 

@@ -7,14 +7,14 @@
         let simonState = null;
 
         function simonGetAudioCtx() {
-            if (typeof SoundManager !== 'undefined' && SoundManager.getContext) {
-                return SoundManager.getContext();
+            if (typeof GameAudio !== 'undefined' && GameAudio.getContext) {
+                return GameAudio.getContext();
             }
             return null;
         }
 
         function simonPlayTone(color, duration) {
-            if (typeof SoundManager !== 'undefined' && !SoundManager.getEnabled()) return;
+            if (typeof GameAudio !== 'undefined' && !GameAudio.getEnabled()) return;
             try {
                 const ctx = simonGetAudioCtx();
                 if (!ctx) return;
@@ -25,7 +25,7 @@
                 gain.gain.setValueAtTime(0.3, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
                 osc.connect(gain);
-                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain()) || ctx.destination;
+                const dest = (typeof GameAudio !== 'undefined' && GameAudio.getMasterGain && GameAudio.getMasterGain()) || ctx.destination;
                 gain.connect(dest);
                 osc.start();
                 osc.stop(ctx.currentTime + duration / 1000);
@@ -36,7 +36,7 @@
         }
 
         function simonPlayErrorTone() {
-            if (typeof SoundManager !== 'undefined' && !SoundManager.getEnabled()) return;
+            if (typeof GameAudio !== 'undefined' && !GameAudio.getEnabled()) return;
             try {
                 const ctx = simonGetAudioCtx();
                 if (!ctx) return;
@@ -47,7 +47,7 @@
                 gain.gain.setValueAtTime(0.25, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
                 osc.connect(gain);
-                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain()) || ctx.destination;
+                const dest = (typeof GameAudio !== 'undefined' && GameAudio.getMasterGain && GameAudio.getMasterGain()) || ctx.destination;
                 gain.connect(dest);
                 osc.start();
                 osc.stop(ctx.currentTime + 0.6);
@@ -390,7 +390,7 @@
                 restorePostMiniGameState();
             }
 
-            // Audio context is shared via SoundManager — no cleanup needed here
+            // Audio context is shared via GameAudio — no cleanup needed here
 
             simonState = null;
         }

@@ -113,7 +113,7 @@
                 const collided = obs.lane === racingState.lane && obs.y > 74 && obs.y < 92;
                 if (collided) {
                     racingState.lives -= 1;
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.hit);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);
                     if (typeof screenShake === 'function') screenShake(2, 200);
                     return;
                 }

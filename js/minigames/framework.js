@@ -91,8 +91,8 @@
                 if (typeof startIdleAnimations === 'function') {
                     startIdleAnimations();
                 }
-                if (typeof SoundManager !== 'undefined' && gameState.currentRoom) {
-                    SoundManager.enterRoom(gameState.currentRoom);
+                if (typeof GameAudio !== 'undefined' && gameState.currentRoom) {
+                    GameAudio.enterRoom(gameState.currentRoom);
                 }
                 // Return focus to the mini-games button so keyboard/screen reader
                 // users don't lose their place after a game ends
@@ -353,10 +353,10 @@
                 </div>
             `;
             document.body.appendChild(overlay);
-            if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
                 if (coinReward > 0) {
-                    SoundManager.playSFXByName('coin-jingle', SoundManager.sfx.celebration);
+                    GameAudio.playSFXByName('coin-jingle', GameAudio.sfx.celebration);
                 }
             }
 

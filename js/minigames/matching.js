@@ -183,7 +183,7 @@
                     card2.matched = true;
                     matchingState.matchesFound++;
                     if (typeof hapticBuzz === 'function') hapticBuzz(50);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
 
                     const scoreEl = document.getElementById('matching-score');
                     if (scoreEl) scoreEl.textContent = `Pairs found: ${matchingState.matchesFound} / ${matchingState.totalPairs}`;
@@ -225,7 +225,7 @@
                     }
                 } else {
                     // No match - flip back after a delay
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
                     matchingState._timeouts.push(setTimeout(() => {
                         if (!matchingState) return;
                         card1.flipped = false;

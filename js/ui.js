@@ -300,8 +300,38 @@
                 </div>
             `;
             document.body.appendChild(overlay);
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.playUiCue === 'function') {
-                SoundManager.playUiCue('open', { gain: 0.85 });
+
+            function renderAudioCreditsList(items) {
+                const container = document.getElementById('settings-audio-credits-list');
+                if (!container) return;
+                if (!Array.isArray(items) || !items.length) {
+                    container.textContent = 'No audio credits available in this build.';
+                    return;
+                }
+                container.innerHTML = items.map((item) => {
+                    const file = escapeHTML(item.path || item.file || '');
+                    const author = escapeHTML(item.author || 'Unknown');
+                    const title = escapeHTML(item.title || '');
+                    const licenseName = escapeHTML(item.license_name || item.licenseName || 'Unknown');
+                    const sourceUrl = escapeHTML(item.source_url || item.sourceUrl || '#');
+                    const licenseUrl = escapeHTML(item.license_url || item.licenseUrl || '#');
+                    return `<div class=\"settings-audio-credit-item\" style=\"padding:6px 0;border-top:1px solid rgba(0,0,0,0.06);\">
+                        <div><strong>${file}</strong></div>
+                        <div>By ${author}${title ? ` • ${title}` : ''}</div>
+                        <div><a href=\"${sourceUrl}\" target=\"_blank\" rel=\"noopener\">Source</a> • <a href=\"${licenseUrl}\" target=\"_blank\" rel=\"noopener\">${licenseName}</a></div>
+                    </div>`;
+                }).join('');
+            }
+
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.getAudioCredits === 'function') {
+                Promise.resolve(GameAudio.getAudioCredits())
+                    .then((items) => renderAudioCreditsList(items))
+                    .catch(() => renderAudioCreditsList([]));
+            } else {
+                renderAudioCreditsList([]);
+            }
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playUiCue === 'function') {
+                GameAudio.playUiCue('open', { gain: 0.85 });
             }
 
             const close = () => {
@@ -1149,10 +1179,10 @@
                 const last = Number(element.dataset.lastActivate || 0);
                 if (now - last < 200) return;
                 element.dataset.lastActivate = String(now);
-                if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                    SoundManager.playSFXByName('button-tap', SoundManager.sfx.play);
+                if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                    GameAudio.playSFXByName('button-tap', GameAudio.sfx.play);
                     if (element.getAttribute('aria-haspopup') === 'dialog' || element.classList.contains('room-coming-toggle')) {
-                        SoundManager.playSFXByName('menu-open', SoundManager.sfx.roomTransition);
+                        GameAudio.playSFXByName('menu-open', GameAudio.sfx.roomTransition);
                     }
                 }
                 handler(event);
@@ -1216,13 +1246,13 @@
                 if (soundBtn) {
                     if (event.type === 'touchend') event.preventDefault();
                     safeInvoke(soundBtn, () => {
-                        if (typeof SoundManager !== 'undefined') {
-                            const enabled = SoundManager.toggle();
+                        if (typeof GameAudio !== 'undefined') {
+                            const enabled = GameAudio.toggle();
                             soundBtn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
                             const iconSpan = soundBtn.querySelector('.top-action-btn-icon');
                             if (iconSpan) iconSpan.textContent = enabled ? '🔊' : '🔇';
                             if (enabled && gameState.currentRoom) {
-                                SoundManager.enterRoom(gameState.currentRoom);
+                                GameAudio.enterRoom(gameState.currentRoom);
                             }
                         }
                     }, event);
@@ -3243,8 +3273,8 @@
                 _petPhaseTimersRunning = true;
             }
 
-            if (roomChanged && typeof SoundManager !== 'undefined') {
-                SoundManager.enterRoom(currentRoom);
+            if (roomChanged && typeof GameAudio !== 'undefined') {
+                GameAudio.enterRoom(currentRoom);
             }
 
             if (roomChanged || needTimerStart) {
@@ -4128,12 +4158,12 @@
             `;
             card.style.setProperty('--reward-card-accent', cardData.color);
             document.body.appendChild(card);
-            if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                if (typeof SoundManager.playRewardCue === 'function') {
+            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                if (typeof GameAudio.playRewardCue === 'function') {
                     const tier = (cardData.type === 'achievement' || cardData.type === 'trophy') ? 'milestone' : 'big';
-                    SoundManager.playRewardCue(tier);
+                    GameAudio.playRewardCue(tier);
                 } else {
-                    SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+                    GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
                 }
             }
             requestAnimationFrame(() => card.classList.add('show'));
@@ -4209,8 +4239,8 @@
                 actionCooldown = false;
                 actionCooldownTimer = null;
                 restoreActionButtonsFromCooldown();
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                    SoundManager.emitAccessibilityCue('cooldownComplete', { playSound: false, caption: 'Actions ready' });
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                    GameAudio.emitAccessibilityCue('cooldownComplete', { playSound: false, caption: 'Actions ready' });
                 }
             }, ACTION_COOLDOWN_MS);
         }
@@ -4408,7 +4438,7 @@
             const sparkles = document.getElementById('sparkles');
             if (petContainer) petContainer.classList.add('bounce', 'pet-munch-loop');
             if (sparkles) createFoodParticles(sparkles);
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.feed);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.feed);
             return msg;
         }
 
@@ -4526,8 +4556,8 @@
                 actionCooldownTimer = null;
                 // Re-query current buttons in case renderPetPhase() rebuilt the DOM.
                 restoreActionButtonsFromCooldown();
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                    SoundManager.emitAccessibilityCue('cooldownComplete', { playSound: false, caption: 'Actions ready' });
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                    GameAudio.emitAccessibilityCue('cooldownComplete', { playSound: false, caption: 'Actions ready' });
                 }
             }, ACTION_COOLDOWN_MS);
 
@@ -4588,7 +4618,7 @@
                     else if (washPref > 1) message = `💕 ${pet.name || 'Pet'} loved that! ${message}`;
                     if (petContainer) petContainer.classList.add('sparkle', 'pet-scrub-shake');
                     if (sparkles) createBubbles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.wash);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.wash);
                     break;
                 }
                 case 'play': {
@@ -4604,7 +4634,7 @@
                     else if (playPref > 1) message = `💕 ${pet.name || 'Pet'} LOVED playing! ${message}`;
                     if (petContainer) petContainer.classList.add('wiggle', 'pet-happy-bounce');
                     if (sparkles) createHearts(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.play);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.play);
                     break;
                 }
                 case 'sleep': {
@@ -4630,7 +4660,7 @@
                     message = sleepAnnounce;
                     if (petContainer) petContainer.classList.add('sleep-anim', 'pet-sleepy-nod');
                     if (sparkles) createZzz(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.sleep);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.sleep);
                     break;
                 }
                 case 'medicine': {
@@ -4648,7 +4678,7 @@
                     if (medPref < 1) message = `😨 ${pet.name || 'Pet'} doesn't like medicine! ${message}`;
                     if (petContainer) petContainer.classList.add('heal-anim');
                     if (sparkles) createMedicineParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.medicine);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.medicine);
                     break;
                 }
                 case 'groom': {
@@ -4669,7 +4699,7 @@
                     else if (groomPref > 1) message = `💕 ${pet.name || 'Pet'} loved the pampering! ${message}`;
                     if (petContainer) petContainer.classList.add('groom-anim');
                     if (sparkles) createGroomParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.groom);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.groom);
                     break;
                 }
                 case 'exercise': {
@@ -4689,7 +4719,7 @@
                     else if (exPref > 1) message = `💕 ${pet.name || 'Pet'} had an amazing workout! ${message}`;
                     if (petContainer) petContainer.classList.add('exercise-anim');
                     if (sparkles) createExerciseParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.exercise);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.exercise);
                     break;
                 }
                 case 'treat': {
@@ -4715,7 +4745,7 @@
                     }
                     if (petContainer) petContainer.classList.add('treat-anim');
                     if (sparkles) createTreatParticles(sparkles, treat.emoji);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.treat);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.treat);
                     break;
                 }
                 case 'cuddle': {
@@ -4733,7 +4763,7 @@
                     else if (cuddleMod > 1.2) message = `💕 ${pet.name || 'Pet'} melted into your arms! ${message}`;
                     if (petContainer) petContainer.classList.add('cuddle-anim');
                     if (sparkles) createCuddleParticles(sparkles);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.cuddle);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.cuddle);
                     break;
                 }
             }
@@ -4806,10 +4836,10 @@
                 const petType = pet.type;
                 let reactionEmoji = '';
                 if (action === 'feed' || action === 'treat' || action === 'cuddle') {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFXByName('petHappy', (ctx) => SoundManager.sfx.petHappy(ctx, petType));
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFXByName('petHappy', (ctx) => GameAudio.sfx.petHappy(ctx, petType));
                     reactionEmoji = action === 'feed' ? '😋' : action === 'treat' ? '🤤' : '🥰';
                 } else if (action === 'play' || action === 'exercise') {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFXByName('petExcited', (ctx) => SoundManager.sfx.petExcited(ctx, petType));
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFXByName('petExcited', (ctx) => GameAudio.sfx.petExcited(ctx, petType));
                     reactionEmoji = action === 'play' ? '😄' : '💪';
                 } else if (action === 'wash') {
                     reactionEmoji = '✨';
@@ -4852,7 +4882,7 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     if (typeof hapticPattern === 'function') hapticPattern('achievement');
                     setTimeout(() => {
                         showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700');
@@ -5713,8 +5743,8 @@
                     markCoachChecklistProgress('feed');
 
                     // Play pet voice sound
-                    if (typeof SoundManager !== 'undefined') {
-                        SoundManager.playSFXByName('petHappy', (ctx) => SoundManager.sfx.petHappy(ctx, currentPet.type));
+                    if (typeof GameAudio !== 'undefined') {
+                        GameAudio.playSFXByName('petHappy', (ctx) => GameAudio.sfx.petHappy(ctx, currentPet.type));
                     }
 
                     // Track daily checklist progress
@@ -5731,7 +5761,7 @@
                     if (typeof checkAchievements === 'function') {
                         const newAch = checkAchievements();
                         newAch.forEach(ach => {
-                            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.achievement);
+                            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                             setTimeout(() => {
                                 showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700');
                                 queueRewardCard('achievement', ach, '#FFD700');
@@ -5830,7 +5860,7 @@
             createConfetti();
             createConfetti(); // Double confetti for extra impact
             createMilestoneFireworks();
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
             // Trigger pet size-up animation
             const petContainer = document.getElementById('pet-container');
@@ -5946,7 +5976,7 @@
             createConfetti();
             createConfetti();
             createMilestoneFireworks();
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
             // Trigger pet size-up animation
             const petContainer = document.getElementById('pet-container');
@@ -6679,7 +6709,7 @@
                             <button class="modal-btn confirm" id="ceremony-done" style="width:100%;margin-top:12px;">🕊️ Rest well, ${petName}</button>
                         `;
                         if (typeof createConfetti === 'function') createConfetti();
-                        if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+                        if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
                         overlay.querySelector('#ceremony-done').focus();
                         overlay.querySelector('#ceremony-done').addEventListener('click', () => {
@@ -7428,7 +7458,7 @@
                 stopGardenGrowTimer();
                 _petPhaseTimersRunning = false;
                 _petPhaseLastRoom = null;
-                if (typeof SoundManager !== 'undefined') SoundManager.stopAll();
+                if (typeof GameAudio !== 'undefined') GameAudio.stopAll();
                 if (typeof stopIdleAnimations === 'function') stopIdleAnimations();
                 actionAnimating = false;
                 actionCooldown = false;
@@ -10096,21 +10126,27 @@
                 existing.remove();
             }
 
-            const soundEnabled = typeof SoundManager !== 'undefined' && SoundManager.getEnabled();
-            const samplePackEnabled = typeof SoundManager !== 'undefined' && typeof SoundManager.getSamplePackEnabled === 'function'
-                ? SoundManager.getSamplePackEnabled()
+            const soundEnabled = typeof GameAudio !== 'undefined' && GameAudio.getEnabled();
+            const masterVolumeSetting = typeof GameAudio !== 'undefined' && typeof GameAudio.getMasterVolumeSetting === 'function'
+                ? GameAudio.getMasterVolumeSetting()
+                : 1;
+            const uiVolumeSetting = typeof GameAudio !== 'undefined' && typeof GameAudio.getUiVolumeSetting === 'function'
+                ? GameAudio.getUiVolumeSetting()
+                : 1;
+            const samplePackEnabled = typeof GameAudio !== 'undefined' && typeof GameAudio.getSamplePackEnabled === 'function'
+                ? GameAudio.getSamplePackEnabled()
                 : true;
-            const sfxVolumeSetting = typeof SoundManager !== 'undefined' && typeof SoundManager.getSfxVolumeSetting === 'function'
-                ? SoundManager.getSfxVolumeSetting()
+            const sfxVolumeSetting = typeof GameAudio !== 'undefined' && typeof GameAudio.getSfxVolumeSetting === 'function'
+                ? GameAudio.getSfxVolumeSetting()
                 : 1;
-            const ambientVolumeSetting = typeof SoundManager !== 'undefined' && typeof SoundManager.getAmbientVolumeSetting === 'function'
-                ? SoundManager.getAmbientVolumeSetting()
+            const ambientVolumeSetting = typeof GameAudio !== 'undefined' && typeof GameAudio.getAmbientVolumeSetting === 'function'
+                ? GameAudio.getAmbientVolumeSetting()
                 : 1;
-            const musicVolumeSetting = typeof SoundManager !== 'undefined' && typeof SoundManager.getMusicVolumeSetting === 'function'
-                ? SoundManager.getMusicVolumeSetting()
+            const musicVolumeSetting = typeof GameAudio !== 'undefined' && typeof GameAudio.getMusicVolumeSetting === 'function'
+                ? GameAudio.getMusicVolumeSetting()
                 : 1;
-            const audioPresetSelection = (typeof SoundManager !== 'undefined' && typeof SoundManager.getAudioPreset === 'function')
-                ? SoundManager.getAudioPreset()
+            const audioPresetSelection = (typeof GameAudio !== 'undefined' && typeof GameAudio.getAudioPreset === 'function')
+                ? GameAudio.getAudioPreset()
                 : (localStorage.getItem('myLittleFriend_audioPreset') || 'silent');
             const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
                 (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -10118,11 +10154,11 @@
             const ttsEnabled = !(localStorage.getItem(STORAGE_KEYS.ttsOff) === 'true');
             const reducedMotionEnabled = document.documentElement.getAttribute('data-reduced-motion') === 'true';
             const calmModeEnabled = document.body.classList.contains('calm-mode') || localStorage.getItem(STORAGE_KEYS.calmMode) === 'true';
-            const soundCueCaptionsEnabled = (typeof SoundManager !== 'undefined' && typeof SoundManager.getSoundCueCaptionsEnabled === 'function')
-                ? SoundManager.getSoundCueCaptionsEnabled()
+            const soundCueCaptionsEnabled = (typeof GameAudio !== 'undefined' && typeof GameAudio.getSoundCueCaptionsEnabled === 'function')
+                ? GameAudio.getSoundCueCaptionsEnabled()
                 : localStorage.getItem(STORAGE_KEYS.soundCueCaptions) === 'true';
-            const soundCueLegend = (typeof SoundManager !== 'undefined' && typeof SoundManager.getAccessibilityCueLegend === 'function')
-                ? SoundManager.getAccessibilityCueLegend()
+            const soundCueLegend = (typeof GameAudio !== 'undefined' && typeof GameAudio.getAccessibilityCueLegend === 'function')
+                ? GameAudio.getAccessibilityCueLegend()
                 : [
                     { id: 'room', label: 'Room chime', description: 'Plays when entering a room.' },
                     { id: 'error', label: 'Error', description: 'Plays when an action is unavailable.' },
@@ -10148,18 +10184,25 @@
                     <h2 class="settings-title">⚙️ Settings</h2>
                     <div class="settings-list">
                         <div class="settings-row">
-                            <span class="settings-row-label">🔊 Sound</span>
+                            <span class="settings-row-label">🔊 Master Audio</span>
                             <button class="settings-toggle ${soundEnabled ? 'on' : ''}" id="setting-sound" role="switch" aria-checked="${soundEnabled}" aria-label="Sound">
                                 <span class="settings-toggle-knob"></span>
                             </button>
                             <span class="settings-toggle-state" id="state-setting-sound">${soundEnabled ? 'On' : 'Off'}</span>
                         </div>
+                        <div class="settings-row settings-volume-row">
+                            <div class="settings-volume-head">
+                                <span class="settings-row-label">🎚️ Master Volume</span>
+                                <span class="settings-volume-value" id="setting-master-volume-value">${Math.round(masterVolumeSetting * 100)}%</span>
+                            </div>
+                            <input type="range" class="settings-volume-slider" id="setting-master-volume" min="0" max="100" step="5" value="${Math.round(masterVolumeSetting * 100)}" aria-label="Master volume">
+                        </div>
                         <div class="settings-row">
                             <span class="settings-row-label">🎵 Music</span>
-                            <button class="settings-toggle ${typeof SoundManager !== 'undefined' && SoundManager.getMusicEnabled() ? 'on' : ''}" id="setting-music" role="switch" aria-checked="${typeof SoundManager !== 'undefined' && SoundManager.getMusicEnabled()}" aria-label="Background Music">
+                            <button class="settings-toggle ${typeof GameAudio !== 'undefined' && GameAudio.getMusicEnabled() ? 'on' : ''}" id="setting-music" role="switch" aria-checked="${typeof GameAudio !== 'undefined' && GameAudio.getMusicEnabled()}" aria-label="Background Music">
                                 <span class="settings-toggle-knob"></span>
                             </button>
-                            <span class="settings-toggle-state" id="state-setting-music">${(typeof SoundManager !== 'undefined' && SoundManager.getMusicEnabled()) ? 'On' : 'Off'}</span>
+                            <span class="settings-toggle-state" id="state-setting-music">${(typeof GameAudio !== 'undefined' && GameAudio.getMusicEnabled()) ? 'On' : 'Off'}</span>
                         </div>
                         <div class="settings-row">
                             <span class="settings-row-label">🎧 Sample Audio Pack</span>
@@ -10197,6 +10240,13 @@
                         </div>
                         <div class="settings-row settings-volume-row">
                             <div class="settings-volume-head">
+                                <span class="settings-row-label">🖱️ UI Volume</span>
+                                <span class="settings-volume-value" id="setting-ui-volume-value">${Math.round(uiVolumeSetting * 100)}%</span>
+                            </div>
+                            <input type="range" class="settings-volume-slider" id="setting-ui-volume" min="0" max="100" step="5" value="${Math.round(uiVolumeSetting * 100)}" aria-label="User interface volume">
+                        </div>
+                        <div class="settings-row settings-volume-row">
+                            <div class="settings-volume-head">
                                 <span class="settings-row-label">🌿 Ambient Volume</span>
                                 <span class="settings-volume-value" id="setting-ambient-volume-value">${Math.round(ambientVolumeSetting * 100)}%</span>
                             </div>
@@ -10208,6 +10258,15 @@
                                 <span class="settings-volume-value" id="setting-music-volume-value">${Math.round(musicVolumeSetting * 100)}%</span>
                             </div>
                             <input type="range" class="settings-volume-slider" id="setting-music-volume" min="0" max="100" step="5" value="${Math.round(musicVolumeSetting * 100)}" aria-label="Music volume">
+                        </div>
+                        <div class="settings-row">
+                            <div class="settings-sound-cue-meta" style="width:100%;">
+                                <span class="settings-row-label">🎙️ Audio Credits</span>
+                                <details class="settings-audio-credits-panel" id="settings-audio-credits-panel" style="margin-top:6px;">
+                                    <summary style="cursor:pointer;">View source and license details</summary>
+                                    <div id="settings-audio-credits-list" class="settings-row-help" style="margin-top:8px; max-height:220px; overflow:auto;">Loading audio credits…</div>
+                                </details>
+                            </div>
                         </div>
                         <div class="settings-row">
                             <span class="settings-row-label">${isDark ? '🌙' : '☀️'} Dark Mode</span>
@@ -10317,11 +10376,13 @@
             }
 
             function syncVolumeControlAvailability() {
-                const soundOn = typeof SoundManager !== 'undefined' ? SoundManager.getEnabled() : false;
-                const musicOn = typeof SoundManager !== 'undefined' ? SoundManager.getMusicEnabled() : false;
+                const soundOn = typeof GameAudio !== 'undefined' ? GameAudio.getEnabled() : false;
+                const musicOn = typeof GameAudio !== 'undefined' ? GameAudio.getMusicEnabled() : false;
+                const uiSlider = document.getElementById('setting-ui-volume');
                 const sfxSlider = document.getElementById('setting-sfx-volume');
                 const ambientSlider = document.getElementById('setting-ambient-volume');
                 const musicSlider = document.getElementById('setting-music-volume');
+                if (uiSlider) uiSlider.disabled = !soundOn;
                 if (sfxSlider) sfxSlider.disabled = !soundOn;
                 if (ambientSlider) ambientSlider.disabled = !soundOn;
                 if (musicSlider) musicSlider.disabled = !(soundOn && musicOn);
@@ -10329,20 +10390,20 @@
 
             // Sound toggle
             document.getElementById('setting-sound').addEventListener('click', function() {
-                if (typeof SoundManager !== 'undefined') {
-                    const enabled = SoundManager.toggle();
+                if (typeof GameAudio !== 'undefined') {
+                    const enabled = GameAudio.toggle();
                     this.classList.toggle('on', enabled);
                     this.setAttribute('aria-checked', String(enabled));
                     setSwitchStateText('setting-sound', enabled);
                     syncVolumeControlAvailability();
-                    if (enabled && gameState.currentRoom) SoundManager.enterRoom(gameState.currentRoom);
+                    if (enabled && gameState.currentRoom) GameAudio.enterRoom(gameState.currentRoom);
                 }
             });
 
             // Music toggle
             document.getElementById('setting-music').addEventListener('click', function() {
-                if (typeof SoundManager !== 'undefined') {
-                    const enabled = SoundManager.toggleMusic();
+                if (typeof GameAudio !== 'undefined') {
+                    const enabled = GameAudio.toggleMusic();
                     this.classList.toggle('on', enabled);
                     this.setAttribute('aria-checked', String(enabled));
                     setSwitchStateText('setting-music', enabled);
@@ -10352,8 +10413,8 @@
 
             // Sample-pack toggle
             document.getElementById('setting-sample-pack').addEventListener('click', function() {
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.toggleSamplePack === 'function') {
-                    const enabled = SoundManager.toggleSamplePack();
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.toggleSamplePack === 'function') {
+                    const enabled = GameAudio.toggleSamplePack();
                     this.classList.toggle('on', enabled);
                     this.setAttribute('aria-checked', String(enabled));
                     setSwitchStateText('setting-sample-pack', enabled);
@@ -10378,8 +10439,8 @@
                     const isOn = this.classList.toggle('on');
                     this.setAttribute('aria-checked', String(isOn));
                     setSwitchStateText('setting-sound-captions', isOn);
-                    if (typeof SoundManager !== 'undefined' && typeof SoundManager.setSoundCueCaptionsEnabled === 'function') {
-                        SoundManager.setSoundCueCaptionsEnabled(isOn);
+                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.setSoundCueCaptionsEnabled === 'function') {
+                        GameAudio.setSoundCueCaptionsEnabled(isOn);
                     } else {
                         try { localStorage.setItem(STORAGE_KEYS.soundCueCaptions, isOn ? 'true' : 'false'); } catch (e) {}
                     }
@@ -10395,11 +10456,11 @@
                 btn.addEventListener('click', () => {
                     const cueId = btn.getAttribute('data-sound-cue');
                     const cue = soundCueLegendById[cueId] || { label: 'Sound cue', description: '' };
-                    if (typeof SoundManager === 'undefined' || typeof SoundManager.playAccessibilityCue !== 'function') {
+                    if (typeof GameAudio === 'undefined' || typeof GameAudio.playAccessibilityCue !== 'function') {
                         showToast('Sound testing is unavailable in this build.', '#FFA726', { announce: true });
                         return;
                     }
-                    const result = SoundManager.playAccessibilityCue(cueId);
+                    const result = GameAudio.playAccessibilityCue(cueId);
                     if (!result || !result.ok) {
                         const reason = result && result.reason ? result.reason : 'unavailable';
                         if (reason === 'sound-disabled') {
@@ -10413,8 +10474,8 @@
                         showToast('Could not play that cue right now.', '#FFA726', { announce: true });
                         return;
                     }
-                    const captionsOn = (typeof SoundManager.getSoundCueCaptionsEnabled === 'function')
-                        ? SoundManager.getSoundCueCaptionsEnabled()
+                    const captionsOn = (typeof GameAudio.getSoundCueCaptionsEnabled === 'function')
+                        ? GameAudio.getSoundCueCaptionsEnabled()
                         : localStorage.getItem(STORAGE_KEYS.soundCueCaptions) === 'true';
                     const label = result.label || cue.label || 'Sound cue';
                     if (!captionsOn) {
@@ -10423,16 +10484,24 @@
                 });
             });
             bindVolumeSlider(
+                'setting-master-volume',
+                (value) => { if (typeof GameAudio !== 'undefined' && typeof GameAudio.setMasterVolumeSetting === 'function') GameAudio.setMasterVolumeSetting(value); }
+            );
+            bindVolumeSlider(
                 'setting-sfx-volume',
-                (value) => { if (typeof SoundManager !== 'undefined' && typeof SoundManager.setSfxVolumeSetting === 'function') SoundManager.setSfxVolumeSetting(value); }
+                (value) => { if (typeof GameAudio !== 'undefined' && typeof GameAudio.setSfxVolumeSetting === 'function') GameAudio.setSfxVolumeSetting(value); }
+            );
+            bindVolumeSlider(
+                'setting-ui-volume',
+                (value) => { if (typeof GameAudio !== 'undefined' && typeof GameAudio.setUiVolumeSetting === 'function') GameAudio.setUiVolumeSetting(value); }
             );
             bindVolumeSlider(
                 'setting-ambient-volume',
-                (value) => { if (typeof SoundManager !== 'undefined' && typeof SoundManager.setAmbientVolumeSetting === 'function') SoundManager.setAmbientVolumeSetting(value); }
+                (value) => { if (typeof GameAudio !== 'undefined' && typeof GameAudio.setAmbientVolumeSetting === 'function') GameAudio.setAmbientVolumeSetting(value); }
             );
             bindVolumeSlider(
                 'setting-music-volume',
-                (value) => { if (typeof SoundManager !== 'undefined' && typeof SoundManager.setMusicVolumeSetting === 'function') SoundManager.setMusicVolumeSetting(value); }
+                (value) => { if (typeof GameAudio !== 'undefined' && typeof GameAudio.setMusicVolumeSetting === 'function') GameAudio.setMusicVolumeSetting(value); }
             );
             syncVolumeControlAvailability();
 
@@ -10581,8 +10650,8 @@
             }
 
             function closeSettings() {
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playUiCue === 'function') {
-                    SoundManager.playUiCue('close', { gain: 0.75 });
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playUiCue === 'function') {
+                    GameAudio.playUiCue('close', { gain: 0.75 });
                 }
                 popModalEscape(closeSettings);
                 overlay.remove();
@@ -10628,8 +10697,8 @@
                 indicator.innerHTML = `<span class="low-stat-pulse">${lowStats.join('')} Needs care now</span>`;
                 roomNav.appendChild(indicator);
                 const now = Date.now();
-                if (now - updateLowStatWarnings._lastCueAt > 10000 && typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                    SoundManager.emitAccessibilityCue('lowStatUrgency', { playSound: false, caption: 'Pet needs care now' });
+                if (now - updateLowStatWarnings._lastCueAt > 10000 && typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                    GameAudio.emitAccessibilityCue('lowStatUrgency', { playSound: false, caption: 'Pet needs care now' });
                     updateLowStatWarnings._lastCueAt = now;
                 }
             } else if (!hasLowStat && indicator) {
@@ -10708,8 +10777,8 @@
             } catch (e) {}
             closeAudioOnboardingModal();
 
-            const currentPreset = (typeof SoundManager !== 'undefined' && typeof SoundManager.getAudioPreset === 'function')
-                ? (SoundManager.getAudioPreset() || 'silent')
+            const currentPreset = (typeof GameAudio !== 'undefined' && typeof GameAudio.getAudioPreset === 'function')
+                ? (GameAudio.getAudioPreset() || 'silent')
                 : (localStorage.getItem('myLittleFriend_audioPreset') || 'silent');
 
             const choices = [
@@ -10749,8 +10818,8 @@
             document.body.appendChild(overlay);
 
             function applyChoice(choiceId) {
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.applyAudioPreset === 'function') {
-                    SoundManager.applyAudioPreset(choiceId, { persist: true });
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.applyAudioPreset === 'function') {
+                    GameAudio.applyAudioPreset(choiceId, { persist: true });
                 } else {
                     try { localStorage.setItem('myLittleFriend_audioPreset', choiceId); } catch (e) {}
                 }
@@ -10763,8 +10832,8 @@
             overlay.querySelectorAll('[data-audio-preview]').forEach((btn) => {
                 btn.addEventListener('click', () => {
                     const choiceId = btn.getAttribute('data-audio-preview');
-                    if (typeof SoundManager !== 'undefined' && typeof SoundManager.previewAudioPreset === 'function') {
-                        SoundManager.previewAudioPreset(choiceId);
+                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.previewAudioPreset === 'function') {
+                        GameAudio.previewAudioPreset(choiceId);
                     } else {
                         showToast('Audio preview unavailable in this build.', '#FFA726', { announce: true });
                     }
@@ -10809,10 +10878,10 @@
                 const calmMode = localStorage.getItem(STORAGE_KEYS.calmMode) === 'true';
                 document.documentElement.setAttribute('data-calm-mode', calmMode ? 'true' : 'false');
                 if (document.body) document.body.classList.toggle('calm-mode', calmMode);
-                if (shouldApplyFirstRunDefaults && typeof SoundManager !== 'undefined') {
-                    if (typeof SoundManager.getEnabled === 'function' && SoundManager.getEnabled()) SoundManager.toggle();
-                    if (typeof SoundManager.getMusicEnabled === 'function' && SoundManager.getMusicEnabled()) SoundManager.toggleMusic();
-                    if (typeof SoundManager.getSamplePackEnabled === 'function' && typeof SoundManager.toggleSamplePack === 'function' && SoundManager.getSamplePackEnabled()) SoundManager.toggleSamplePack();
+                if (shouldApplyFirstRunDefaults && typeof GameAudio !== 'undefined') {
+                    if (typeof GameAudio.getEnabled === 'function' && GameAudio.getEnabled()) GameAudio.toggle();
+                    if (typeof GameAudio.getMusicEnabled === 'function' && GameAudio.getMusicEnabled()) GameAudio.toggleMusic();
+                    if (typeof GameAudio.getSamplePackEnabled === 'function' && typeof GameAudio.toggleSamplePack === 'function' && GameAudio.getSamplePackEnabled()) GameAudio.toggleSamplePack();
                 }
                 if (shouldApplyFirstRunDefaults) {
                     setTimeout(() => {

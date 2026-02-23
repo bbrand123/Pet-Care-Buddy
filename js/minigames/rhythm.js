@@ -139,7 +139,7 @@
                 rhythmState.bestCombo = Math.max(rhythmState.bestCombo, rhythmState.combo);
                 rhythmState.score += 3 + Math.floor(rhythmState.combo / 4);
                 if (note) note.textContent = 'Perfect beat!';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
             } else if (delta <= 190) {
                 rhythmState.combo = Math.max(0, rhythmState.combo - 1);
                 rhythmState.score += 1;
@@ -147,7 +147,7 @@
             } else {
                 rhythmState.combo = 0;
                 if (note) note.textContent = 'Missed beat. Get back in sync.';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
             }
             const scoreEl = document.getElementById('rhythm-score');
             const comboEl = document.getElementById('rhythm-combo');

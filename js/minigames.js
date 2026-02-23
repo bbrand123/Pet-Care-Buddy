@@ -156,8 +156,8 @@
                 if (typeof startIdleAnimations === 'function') {
                     startIdleAnimations();
                 }
-                if (typeof SoundManager !== 'undefined' && gameState.currentRoom) {
-                    SoundManager.enterRoom(gameState.currentRoom);
+                if (typeof GameAudio !== 'undefined' && gameState.currentRoom) {
+                    GameAudio.enterRoom(gameState.currentRoom);
                 }
                 // Return focus to the mini-games button so keyboard/screen reader
                 // users don't lose their place after a game ends
@@ -415,15 +415,15 @@
                 </div>
             `;
             document.body.appendChild(overlay);
-            if (typeof SoundManager !== 'undefined' && SoundManager.playSFXByName) {
-                if (typeof SoundManager.playRewardCue === 'function') {
-                    SoundManager.playRewardCue(personalBest ? 'milestone' : 'big');
+            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
+                if (typeof GameAudio.playRewardCue === 'function') {
+                    GameAudio.playRewardCue(personalBest ? 'milestone' : 'big');
                 } else {
-                    SoundManager.playSFXByName('reward-pop', SoundManager.sfx.achievement);
+                    GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
                 }
                 if (coinReward > 0) {
-                    if (typeof SoundManager.playRewardCue === 'function') SoundManager.playRewardCue('medium');
-                    else SoundManager.playSFXByName('coin-jingle', SoundManager.sfx.celebration);
+                    if (typeof GameAudio.playRewardCue === 'function') GameAudio.playRewardCue('medium');
+                    else GameAudio.playSFXByName('coin-jingle', GameAudio.sfx.celebration);
                 }
             }
 
@@ -701,7 +701,7 @@
             instruction.textContent = 'Nice throw!';
             instruction.className = 'fetch-instruction highlight';
             announce('Nice throw!');
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.throw);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.throw);
 
             // Ball arc animation - first goes up, then lands
             ball.style.transition = 'none';
@@ -756,7 +756,7 @@
                 // Show a reward particle
                 showFetchReward(field, targetX);
                 if (typeof hapticBuzz === 'function') hapticBuzz(50);
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.catch);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.catch);
             }, 2000 * fetchSpeed));
 
             // Phase 5: Pet returns to start
@@ -1167,7 +1167,7 @@
                     instruction.className = 'hideseek-instruction highlight';
                 }
                 if (typeof hapticBuzz === 'function') hapticBuzz(50);
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.hit);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);
 
                 announce(`Found a treat! ${hideSeekState.treatsFound} of ${hideSeekState.totalTreats} found.`);
 
@@ -1196,7 +1196,7 @@
                     instruction.textContent = 'Nothing here... keep looking!';
                     instruction.className = 'hideseek-instruction';
                 }
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
 
                 announce('Nothing under this one. Keep searching!');
             }
@@ -1583,7 +1583,7 @@
 
             bubblePopState.score += points;
             if (typeof hapticBuzz === 'function') hapticBuzz(30);
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.bubblePop);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.bubblePop);
 
             // Update score display
             const scoreEl = document.getElementById('bubblepop-score');
@@ -1952,7 +1952,7 @@
                     card2.matched = true;
                     matchingState.matchesFound++;
                     if (typeof hapticBuzz === 'function') hapticBuzz(50);
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
 
                     const scoreEl = document.getElementById('matching-score');
                     if (scoreEl) scoreEl.textContent = `Pairs found: ${matchingState.matchesFound} / ${matchingState.totalPairs}`;
@@ -1994,7 +1994,7 @@
                     }
                 } else {
                     // No match - flip back after a delay
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
                     matchingState._timeouts.push(setTimeout(() => {
                         if (!matchingState) return;
                         card1.flipped = false;
@@ -2141,17 +2141,17 @@
         let simonState = null;
 
         function simonGetAudioCtx() {
-            if (typeof SoundManager !== 'undefined' && SoundManager.getContext) {
-                return SoundManager.getContext();
+            if (typeof GameAudio !== 'undefined' && GameAudio.getContext) {
+                return GameAudio.getContext();
             }
             return null;
         }
 
         function simonPlayTone(color, duration) {
-            if (typeof SoundManager !== 'undefined' && !SoundManager.getEnabled()) return;
+            if (typeof GameAudio !== 'undefined' && !GameAudio.getEnabled()) return;
             try {
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playMiniGameTone === 'function') {
-                    SoundManager.playMiniGameTone({
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                    GameAudio.playMiniGameTone({
                         bus: 'gameplay',
                         type: 'sine',
                         frequency: SIMON_FREQUENCIES[color],
@@ -2169,8 +2169,8 @@
                 gain.gain.setValueAtTime(0.3, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
                 osc.connect(gain);
-                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getBusInputNode && SoundManager.getBusInputNode('gameplay')) ||
-                    (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain());
+                const dest = (typeof GameAudio !== 'undefined' && GameAudio.getBusInputNode && GameAudio.getBusInputNode('gameplay')) ||
+                    (typeof GameAudio !== 'undefined' && GameAudio.getMasterGain && GameAudio.getMasterGain());
                 if (!dest) return;
                 gain.connect(dest);
                 osc.start();
@@ -2182,18 +2182,18 @@
         }
 
         function simonPlayErrorTone() {
-            if (typeof SoundManager !== 'undefined' && !SoundManager.getEnabled()) return;
+            if (typeof GameAudio !== 'undefined' && !GameAudio.getEnabled()) return;
             try {
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playMiniGameTone === 'function') {
-                    SoundManager.playMiniGameTone({
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                    GameAudio.playMiniGameTone({
                         bus: 'gameplay',
                         type: 'sawtooth',
                         frequency: 150,
                         durationMs: 600,
                         gain: 0.2
                     });
-                    if (typeof SoundManager.emitAccessibilityCue === 'function') {
-                        SoundManager.emitAccessibilityCue('error', { playSound: false });
+                    if (typeof GameAudio.emitAccessibilityCue === 'function') {
+                        GameAudio.emitAccessibilityCue('error', { playSound: false });
                     }
                     return;
                 }
@@ -2206,8 +2206,8 @@
                 gain.gain.setValueAtTime(0.25, ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
                 osc.connect(gain);
-                const dest = (typeof SoundManager !== 'undefined' && SoundManager.getBusInputNode && SoundManager.getBusInputNode('gameplay')) ||
-                    (typeof SoundManager !== 'undefined' && SoundManager.getMasterGain && SoundManager.getMasterGain());
+                const dest = (typeof GameAudio !== 'undefined' && GameAudio.getBusInputNode && GameAudio.getBusInputNode('gameplay')) ||
+                    (typeof GameAudio !== 'undefined' && GameAudio.getMasterGain && GameAudio.getMasterGain());
                 if (!dest) return;
                 gain.connect(dest);
                 osc.start();
@@ -2246,8 +2246,8 @@
             renderSimonSaysGame();
             if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
             simonState._roundTransitionTimer = setTimeout(() => simonNextRound(), 800);
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                SoundManager.emitAccessibilityCue('objectiveStart', { playSound: false, caption: 'Simon Says started' });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('objectiveStart', { playSound: false, caption: 'Simon Says started' });
             }
 
             announce('Simon Says! Watch the pattern, then repeat it!');
@@ -2288,8 +2288,8 @@
             `;
 
             document.body.appendChild(overlay);
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                SoundManager.emitAccessibilityCue('focusPlayfield', { playSound: false, caption: 'Focus on Simon game board' });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('focusPlayfield', { playSound: false, caption: 'Focus on Simon game board' });
             }
 
             // Pad click listeners
@@ -2510,8 +2510,8 @@
 
             const overlay = document.querySelector('.simonsays-game-overlay');
             if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                SoundManager.emitAccessibilityCue('objectiveEnd', { playSound: false, caption: 'Simon Says ended' });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('objectiveEnd', { playSound: false, caption: 'Simon Says ended' });
             }
 
             incrementMinigamePlayCount('simonsays', simonState ? simonState.score : 0);
@@ -2558,7 +2558,7 @@
                 restorePostMiniGameState();
             }
 
-            // Audio context is shared via SoundManager — no cleanup needed here
+            // Audio context is shared via GameAudio — no cleanup needed here
 
             simonState = null;
         }
@@ -3280,7 +3280,7 @@
                 const collided = obs.lane === racingState.lane && obs.y > 74 && obs.y < 92;
                 if (collided) {
                     racingState.lives -= 1;
-                    if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.hit);
+                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);
                     return;
                 }
                 if (obs.y > 108) {
@@ -3529,11 +3529,11 @@
                 cookingState.successes += 1;
                 const rewardFood = Math.max(1, Math.floor(Number(cookingState.recipeMeta && cookingState.recipeMeta.rewardProfile && cookingState.recipeMeta.rewardProfile.specialFood) || 1));
                 grantSpecialPetFood(rewardFood);
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
                 if (noteEl) noteEl.textContent = `Perfect mix! ${cookingState.recipeMeta && cookingState.recipeMeta.name ? escapeHTML(cookingState.recipeMeta.name) + ' crafted. ' : ''}Special pet food +${rewardFood}.`;
             } else {
                 cookingState.failures += 1;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
                 if (noteEl) noteEl.textContent = 'Recipe mismatch. Try the next order.';
             }
             cookingState.round += 1;
@@ -3756,11 +3756,11 @@
                 } else if (note) {
                     note.textContent = 'Nice catch! Cast again.';
                 }
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.catch);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.catch);
             } else {
                 fishingState.misses += 1;
                 if (note) note.textContent = 'Missed it! Try timing the next cast.';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
             }
             if (fishingState.roundsLeft <= 0) {
                 endFishingGame(true);
@@ -3813,8 +3813,8 @@
         let rhythmState = null;
 
         function playProceduralBeat(accent) {
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.playMiniGameTone === 'function') {
-                SoundManager.playMiniGameTone({
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                GameAudio.playMiniGameTone({
                     bus: 'gameplay',
                     type: accent ? 'square' : 'triangle',
                     frequency: accent ? 220 : 160,
@@ -3823,7 +3823,7 @@
                 });
                 return;
             }
-            const ctx = (typeof SoundManager !== 'undefined' && SoundManager.getContext) ? SoundManager.getContext() : null;
+            const ctx = (typeof GameAudio !== 'undefined' && GameAudio.getContext) ? GameAudio.getContext() : null;
             if (!ctx) return;
             if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const now = ctx.currentTime;
@@ -3835,7 +3835,7 @@
             gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
             gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
             osc.connect(gain);
-            const dest = (typeof SoundManager !== 'undefined' && SoundManager.getBusInputNode && SoundManager.getBusInputNode('gameplay'));
+            const dest = (typeof GameAudio !== 'undefined' && GameAudio.getBusInputNode && GameAudio.getBusInputNode('gameplay'));
             if (!dest) return;
             gain.connect(dest);
             osc.start(now);
@@ -3861,8 +3861,8 @@
                 timerId: null
             };
             renderRhythmGame();
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                SoundManager.emitAccessibilityCue('objectiveStart', { playSound: false, caption: 'Rhythm game started' });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('objectiveStart', { playSound: false, caption: 'Rhythm game started' });
             }
             announce(miniGameTouchMode()
                 ? 'Rhythm game started. Tap Hit Beat on each pulse.'
@@ -3924,8 +3924,8 @@
             rhythmState._escapeHandler = rhythmEscapeHandler;
             trapFocus(overlay);
             overlay.querySelector('#rhythm-lights').focus();
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                SoundManager.emitAccessibilityCue('focusPlayfield', { playSound: false, caption: 'Focus on rhythm playfield' });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('focusPlayfield', { playSound: false, caption: 'Focus on rhythm playfield' });
             }
 
             rhythmState.timerId = setInterval(stepRhythmBeat, rhythmState.intervalMs);
@@ -3943,9 +3943,9 @@
             rhythmState.lastRegisteredBeat = -1;
             const accent = rhythmState.beat % 4 === 1;
             playProceduralBeat(accent);
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
                 if (rhythmState.totalBeats - rhythmState.beat <= 3) {
-                    SoundManager.emitAccessibilityCue('countdownDanger', { playSound: false, caption: 'Rhythm game ending soon' });
+                    GameAudio.emitAccessibilityCue('countdownDanger', { playSound: false, caption: 'Rhythm game ending soon' });
                 }
             }
             const lights = document.querySelectorAll('.rhythm-light');
@@ -3968,12 +3968,12 @@
                 rhythmState.bestCombo = Math.max(rhythmState.bestCombo, rhythmState.combo);
                 rhythmState.score += 3 + Math.floor(rhythmState.combo / 4);
                 if (note) note.textContent = 'Perfect beat!';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.playRewardCue === 'function') {
-                    SoundManager.playRewardCue(rhythmState.combo >= 8 ? 'medium' : 'small', { comboCount: rhythmState.combo, gain: rhythmState.combo >= 8 ? 0.8 : 0.55 });
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playRewardCue === 'function') {
+                    GameAudio.playRewardCue(rhythmState.combo >= 8 ? 'medium' : 'small', { comboCount: rhythmState.combo, gain: rhythmState.combo >= 8 ? 0.8 : 0.55 });
                 }
-                if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function' && rhythmState.combo >= 3 && rhythmState.combo % 3 === 0) {
-                    SoundManager.emitAccessibilityCue('comboRise', { playSound: false, caption: `Combo ${rhythmState.combo}` });
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function' && rhythmState.combo >= 3 && rhythmState.combo % 3 === 0) {
+                    GameAudio.emitAccessibilityCue('comboRise', { playSound: false, caption: `Combo ${rhythmState.combo}` });
                 }
             } else if (delta <= 190) {
                 rhythmState.combo = Math.max(0, rhythmState.combo - 1);
@@ -3982,7 +3982,7 @@
             } else {
                 rhythmState.combo = 0;
                 if (note) note.textContent = 'Missed beat. Get back in sync.';
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
             }
             const scoreEl = document.getElementById('rhythm-score');
             const comboEl = document.getElementById('rhythm-combo');
@@ -3997,8 +3997,8 @@
             if (rhythmState._escapeHandler) popModalEscape(rhythmState._escapeHandler);
             const overlay = document.querySelector('.rhythm-game-overlay');
             if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
-            if (typeof SoundManager !== 'undefined' && typeof SoundManager.emitAccessibilityCue === 'function') {
-                SoundManager.emitAccessibilityCue('objectiveEnd', { playSound: false, caption: 'Rhythm game ended' });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('objectiveEnd', { playSound: false, caption: 'Rhythm game ended' });
             }
 
             const score = rhythmState.score;
@@ -4346,9 +4346,9 @@
             triviaState.answered = true;
             if (choice === q.answer) {
                 triviaState.correct += 1;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
-            } else if (typeof SoundManager !== 'undefined') {
-                SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
+            } else if (typeof GameAudio !== 'undefined') {
+                GameAudio.playSFX(GameAudio.sfx.miss);
             }
             updateTriviaUI();
         }
@@ -4485,7 +4485,7 @@
             if (!runnerState) return;
             if (runnerState.y === 0) {
                 runnerState.velocity = 12;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.play);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.play);
             }
         }
 
@@ -4519,7 +4519,7 @@
             runnerState.score += Math.max(1, Math.round(runnerState.speed));
             updateRunnerUI();
             if (hit) {
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.hit);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);
                 endRunnerGame(true, true);
             }
         }
@@ -4986,14 +4986,14 @@
                 if (note) note.textContent = miniGameTouchMode()
                     ? `Great teamwork! Next: ${coopState.expected === 'a' ? 'Left' : 'Right'}`
                     : `Great teamwork! Next key: ${coopState.expected.toUpperCase()}`;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
             } else {
                 coopState.combo = 0;
                 coopState.score = Math.max(0, coopState.score - 3);
                 if (note) note.textContent = miniGameTouchMode()
                     ? `Out of sync. Tap ${coopState.expected === 'a' ? 'Left' : 'Right'} next.`
                     : `Out of sync. Press ${coopState.expected.toUpperCase()} next.`;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
             }
             updateCoopUI();
         }

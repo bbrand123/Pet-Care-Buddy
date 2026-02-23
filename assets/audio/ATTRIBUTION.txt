@@ -1,7 +1,0 @@
-Audio Attribution
-=================
-
-No new third-party audio assets were added in this change.
-Adaptive music/ambient and several cues are generated procedurally in Web Audio at runtime.
-
-Existing bundled audio files remain in use under assets/audio/music and assets/audio/sfx.

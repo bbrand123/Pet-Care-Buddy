@@ -261,7 +261,7 @@
 
             bubblePopState.score += points;
             if (typeof hapticBuzz === 'function') hapticBuzz(30);
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.bubblePop);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.bubblePop);
 
             // Update score display
             const scoreEl = document.getElementById('bubblepop-score');

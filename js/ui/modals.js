@@ -25,7 +25,7 @@
             createConfetti();
             createConfetti(); // Double confetti for extra impact
             createMilestoneFireworks();
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
             // Trigger pet size-up animation
             const petContainer = document.getElementById('pet-container');
@@ -141,7 +141,7 @@
             createConfetti();
             createConfetti();
             createMilestoneFireworks();
-            if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
             // Trigger pet size-up animation
             const petContainer = document.getElementById('pet-container');
@@ -862,7 +862,7 @@
                             <button class="modal-btn confirm" id="ceremony-done" style="width:100%;margin-top:12px;">🕊️ Rest well, ${petName}</button>
                         `;
                         if (typeof createConfetti === 'function') createConfetti();
-                        if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.celebration);
+                        if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
                         overlay.querySelector('#ceremony-done').focus();
                         overlay.querySelector('#ceremony-done').addEventListener('click', () => {
@@ -1407,7 +1407,7 @@
                 stopGardenGrowTimer();
                 _petPhaseTimersRunning = false;
                 _petPhaseLastRoom = null;
-                if (typeof SoundManager !== 'undefined') SoundManager.stopAll();
+                if (typeof GameAudio !== 'undefined') GameAudio.stopAll();
                 if (typeof stopIdleAnimations === 'function') stopIdleAnimations();
                 actionAnimating = false;
                 actionCooldown = false;

@@ -105,12 +105,12 @@
                     coopState.expected = 'a';
                 }
                 if (note) note.textContent = `Great teamwork! Next key: ${coopState.expected.toUpperCase()}`;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.match);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
             } else {
                 coopState.combo = 0;
                 coopState.score = Math.max(0, coopState.score - 3);
                 if (note) note.textContent = `Out of sync. Press ${coopState.expected.toUpperCase()} next.`;
-                if (typeof SoundManager !== 'undefined') SoundManager.playSFX(SoundManager.sfx.miss);
+                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
             }
             updateCoopUI();
         }
