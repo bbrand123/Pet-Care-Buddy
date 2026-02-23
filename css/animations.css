@@ -709,8 +709,8 @@
     gap: 3px;
     font-size: 0.82rem;
     font-weight: 700;
-    color: #FF6D00;
-    background: rgba(255, 109, 0, 0.08);
+    color: #8a3200;
+    background: rgba(255, 109, 0, 0.12);
     min-height: 44px;
     min-width: 44px;
     padding: 8px 12px;
@@ -719,7 +719,7 @@
     transition: transform 0.2s, background 0.2s;
     vertical-align: middle;
     position: relative;
-    border: 1px solid rgba(255, 109, 0, 0.24);
+    border: 1px solid rgba(138, 50, 0, 0.22);
     font-family: inherit;
 }
 
@@ -731,6 +731,14 @@
 .streak-hud .streak-flame-icon {
     font-size: 0.85rem;
     animation: none;
+}
+
+.streak-hud .streak-bonus-label {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1;
 }
 
 .streak-hud.has-bonus .streak-flame-icon {
@@ -759,7 +767,9 @@
 }
 
 [data-theme="dark"] .streak-hud {
-    background: rgba(255, 109, 0, 0.12);
+    color: #FFCCB3;
+    background: rgba(255, 109, 0, 0.2);
+    border-color: rgba(255, 204, 179, 0.28);
 }
 
 [data-theme="dark"] .streak-hud .streak-bonus-dot {

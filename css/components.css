@@ -1989,18 +1989,19 @@
         .tts-button {
             margin-top: 8px;
             padding: var(--btn-pad-sm);
-            border: 2px solid #4ECDC4;
+            border: 2px solid #0f766e;
             border-radius: var(--radius-sm);
             background: white;
-            color: #4ECDC4;
+            color: #0f766e;
             font-size: 1rem;
             cursor: pointer;
             font-family: inherit;
             transition: all 0.2s ease;
         }
 
-        .tts-button:hover {
-            background: #4ECDC4;
+        .tts-button:hover,
+        .tts-button:focus-visible {
+            background: #0f766e;
             color: white;
         }
 

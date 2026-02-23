@@ -169,6 +169,14 @@
             return el.getClientRects().length > 0;
         }
 
+        function isTextEntryElement(el) {
+            if (!el || !(el instanceof HTMLElement)) return false;
+            if (el.isContentEditable) return true;
+            return !!el.closest('input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"]):not([type="reset"]):not([type="file"]), textarea, [contenteditable="true"]');
+        }
+
+        let _focusContinuityLastTextEntryAt = 0;
+
         function setupRovingTabindex(container, itemSelector) {
             if (!container) return;
             const items = Array.from(container.querySelectorAll(itemSelector))
@@ -178,31 +186,51 @@
             if (activeIdx < 0) activeIdx = 0;
             items.forEach((el, idx) => el.setAttribute('tabindex', idx === activeIdx ? '0' : '-1'));
 
-            container.addEventListener('keydown', (e) => {
-                if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
-                const enabledItems = Array.from(container.querySelectorAll(itemSelector))
-                    .filter((el) => !el.disabled && isElementKeyboardVisible(el));
-                if (enabledItems.length === 0) return;
-                const current = enabledItems.indexOf(document.activeElement);
-                let next = current >= 0 ? current : 0;
-                if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (next - 1 + enabledItems.length) % enabledItems.length;
-                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (next + 1) % enabledItems.length;
-                if (e.key === 'Home') next = 0;
-                if (e.key === 'End') next = enabledItems.length - 1;
-                e.preventDefault();
-                enabledItems.forEach((el, idx) => el.setAttribute('tabindex', idx === next ? '0' : '-1'));
-                enabledItems[next].focus();
-            });
+            container.__mlfRovingItemSelector = itemSelector;
+            if (!container.__mlfRovingKeydownBound) {
+                container.__mlfRovingKeydownBound = true;
+                container.addEventListener('keydown', (e) => {
+                    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+                    const selector = container.__mlfRovingItemSelector || itemSelector;
+                    const enabledItems = Array.from(container.querySelectorAll(selector))
+                        .filter((el) => !el.disabled && isElementKeyboardVisible(el));
+                    if (enabledItems.length === 0) return;
+                    const current = enabledItems.indexOf(document.activeElement);
+                    let next = current >= 0 ? current : 0;
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (next - 1 + enabledItems.length) % enabledItems.length;
+                    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (next + 1) % enabledItems.length;
+                    if (e.key === 'Home') next = 0;
+                    if (e.key === 'End') next = enabledItems.length - 1;
+                    e.preventDefault();
+                    enabledItems.forEach((el, idx) => el.setAttribute('tabindex', idx === next ? '0' : '-1'));
+                    enabledItems[next].focus();
+                });
+            }
         }
 
         function ensureContinuousTabFocus() {
-            if (document.querySelector('.modal-overlay, [role="dialog"], [role="alertdialog"], .settings-overlay')) return;
+            if ((typeof isDialogOpen === 'function' && isDialogOpen()) || document.querySelector('.modal-overlay, [role="dialog"], [role="alertdialog"], .settings-overlay')) return;
             const active = document.activeElement;
             if (active && active !== document.body && active !== document.documentElement) return;
-            const firstFocusable = document.querySelector('.skip-link:not([hidden]), .top-action-btn:not([disabled]), .room-btn:not([disabled]), .core-care-btn:not([disabled]), .action-btn:not([disabled]):not([aria-hidden="true"])');
+            if (Date.now() - _focusContinuityLastTextEntryAt < 250) return;
+            const firstFocusable = Array.from(document.querySelectorAll('.skip-link, .top-action-btn, .room-btn, .core-care-btn, .action-btn:not(.duplicate-core-action)'))
+                .find((el) => !el.disabled && isElementKeyboardVisible(el));
             if (firstFocusable && typeof firstFocusable.focus === 'function') {
                 firstFocusable.focus({ preventScroll: true });
             }
+        }
+
+        if (!window.__mlfFocusContinuityListener) {
+            window.__mlfFocusContinuityListener = true;
+            document.addEventListener('focusin', () => {
+                const active = document.activeElement;
+                if (isTextEntryElement(active)) {
+                    _focusContinuityLastTextEntryAt = Date.now();
+                    return;
+                }
+                if (active !== document.body && active !== document.documentElement) return;
+                setTimeout(() => ensureContinuousTabFocus(), 0);
+            });
         }
 
         function setUiBusyState() {

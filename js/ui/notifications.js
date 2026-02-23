@@ -222,6 +222,7 @@
             /joined your family/i
         ];
         const _toastAnnounceLastByText = new Map();
+        const _audioCaptionToastLastByText = new Map();
         const _toastQueue = [];
         let _toastQueueTimer = null;
         const _deferredToastBatch = [];
@@ -422,6 +423,17 @@
             }
         }
 
+        function soundCueCaptionsEnabled() {
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.getSoundCueCaptionsEnabled === 'function') {
+                return !!GameAudio.getSoundCueCaptionsEnabled();
+            }
+            try {
+                return !!(typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.soundCueCaptions && localStorage.getItem(STORAGE_KEYS.soundCueCaptions) === 'true');
+            } catch (e) {
+                return false;
+            }
+        }
+
         // ==================== EVENT BUS SUBSCRIPTIONS ====================
         // Wire EventBus to UI notification functions so game logic
         // can emit events instead of calling UI functions directly.
@@ -437,6 +449,21 @@
                 }
             });
         }
+        window.addEventListener('mlf-audio-caption', (event) => {
+            if (!soundCueCaptionsEnabled()) return;
+            const detail = event && event.detail ? event.detail : null;
+            if (!detail || !detail.text) return;
+            const captionText = String(detail.text).trim();
+            if (!captionText) return;
+            const category = detail.category ? String(detail.category).trim() : '';
+            const dedupeKey = `${category.toLowerCase()}|${captionText.toLowerCase()}`;
+            const now = Date.now();
+            const last = _audioCaptionToastLastByText.get(dedupeKey) || 0;
+            if (now - last < 1000) return;
+            _audioCaptionToastLastByText.set(dedupeKey, now);
+            const categoryPrefix = category ? `[${category}] ` : '';
+            showToast(`🔊 ${categoryPrefix}${captionText}`, '#90A4AE', { announce: true });
+        });
 
         const REWARD_CARD_META = {
             achievement: { title: 'Achievement Unlocked', fallbackIcon: '🏆' },
@@ -511,4 +538,3 @@
             if (_rewardCardTimer) clearTimeout(_rewardCardTimer);
             _rewardCardTimer = setTimeout(dismissRewardCard, 3500);
         }
-

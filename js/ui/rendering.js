@@ -203,6 +203,7 @@
             return `<button class="streak-hud ${hasBonus ? 'has-bonus' : ''}" id="streak-hud" type="button" title="${streak.current}-day streak${hasBonus ? ' (bonus available!)' : ''}" aria-label="${streak.current} day streak${hasBonus ? ', bonus available' : ''}">
                 <span class="streak-flame-icon" aria-hidden="true">🔥</span>
                 <span>${streak.current}</span>
+                ${hasBonus ? '<span class="streak-bonus-label" aria-hidden="true">Bonus</span>' : ''}
                 ${hasBonus ? '<span class="streak-bonus-dot" aria-hidden="true"></span>' : ''}
             </button>`;
         }
@@ -895,7 +896,7 @@
             tip.id = 'roving-nav-tip';
             tip.setAttribute('role', 'note');
             tip.innerHTML = `
-                <span class="roving-nav-tip-text">Tip: Use arrow keys to move between toolbar and room buttons.</span>
+                <span class="roving-nav-tip-text" id="roving-nav-tip-text">Tip: Use arrow keys to move within toolbar, rooms, and care actions.</span>
                 <button class="roving-nav-tip-dismiss" id="roving-nav-tip-dismiss" type="button" aria-label="Dismiss keyboard navigation tip">Dismiss</button>
             `;
             if (roomNav && roomNav.parentNode) {
@@ -1905,6 +1906,16 @@
             setupRovingTabindex(document.querySelector('.core-care-dock'), '.core-care-btn');
             document.querySelectorAll('.action-group-buttons').forEach((group) => {
                 setupRovingTabindex(group, '.action-btn:not(.duplicate-core-action)');
+            });
+            ['.top-action-buttons', '.room-nav', '.core-care-dock'].forEach((sel) => {
+                const el = document.querySelector(sel);
+                const tipText = document.getElementById('roving-nav-tip-text');
+                if (!el) return;
+                if (tipText) {
+                    el.setAttribute('aria-describedby', 'roving-nav-tip-text');
+                } else if (el.getAttribute('aria-describedby') === 'roving-nav-tip-text') {
+                    el.removeAttribute('aria-describedby');
+                }
             });
             ensureContinuousTabFocus();
             setUiBusyState();

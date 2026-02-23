@@ -56,10 +56,10 @@
     // Assumption: pets are largely generated SVG/DOM, so there are no heavy sprite sheets to preload.
     // We focus on UI iconography + room art that visibly pops in on early renders.
     const CRITICAL_AUDIO_HINTS = [
-        'assets/audio/sfx/roomTransition.wav',
-        'assets/audio/sfx/play.wav',
-        'assets/audio/sfx/feed.wav',
-        'assets/audio/sfx/achievement.wav'
+        'assets/audio/sfx/room-transition.ogg',
+        'assets/audio/sfx/achievement.ogg',
+        'assets/audio/ui/ui-confirm.ogg',
+        'assets/audio/ui/ui-error.ogg'
     ];
 
     const listeners = new Set();

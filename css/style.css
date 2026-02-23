@@ -4661,18 +4661,19 @@
         .tts-button {
             margin-top: 8px;
             padding: var(--btn-pad-sm);
-            border: 2px solid #4ECDC4;
+            border: 2px solid #0f766e;
             border-radius: var(--radius-sm);
             background: white;
-            color: #4ECDC4;
+            color: #0f766e;
             font-size: 1rem;
             cursor: pointer;
             font-family: inherit;
             transition: all 0.2s ease;
         }
 
-        .tts-button:hover {
-            background: #4ECDC4;
+        .tts-button:hover,
+        .tts-button:focus-visible {
+            background: #0f766e;
             color: white;
         }
 
@@ -5800,7 +5801,7 @@
         .growth-compact-pct {
             font-size: 0.85rem;
             font-weight: bold;
-            color: #66BB6A;
+            color: #2e7d32;
             min-width: 32px;
             text-align: right;
         }
@@ -7956,12 +7957,12 @@
     position: absolute;
     top: -2px;
     right: -2px;
-    background: #FF6D00;
+    background: #b34700;
     color: white;
-    font-size: 0.55rem;
+    font-size: 0.65rem;
     font-weight: 700;
-    min-width: 14px;
-    height: 14px;
+    min-width: 16px;
+    height: 16px;
     border-radius: 7px;
     display: flex;
     align-items: center;
@@ -12886,7 +12887,7 @@ body.beginner-ui #explore-btn {
 .favorite-slot.favorite-slot-empty {
     border-color: #D7DDE2;
     background: rgba(255, 255, 255, 0.45);
-    color: #86929C;
+    color: #5f6c76;
 }
 
 .favorite-slot.favorite-slot-empty:hover,
@@ -12902,14 +12903,14 @@ body.beginner-ui #explore-btn {
 
 .fav-remove {
     position: absolute;
-    top: -4px;
-    right: -4px;
-    width: 16px;
-    height: 16px;
+    top: -8px;
+    right: -8px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: #FF5252;
     color: white;
-    font-size: 0.55rem;
+    font-size: 0.75rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -12923,6 +12924,12 @@ body.beginner-ui #explore-btn {
     pointer-events: none;
 }
 
+.fav-remove::before {
+    content: '';
+    position: absolute;
+    inset: -10px;
+}
+
 .fav-remove:focus-visible {
     outline: var(--focus-outline);
     outline-offset: 2px;
@@ -12932,6 +12939,13 @@ body.beginner-ui #explore-btn {
 .favorite-slot-wrap:focus-within .fav-remove {
     opacity: 1;
     pointer-events: auto;
+}
+
+@media (hover: none) {
+    .favorite-slot-wrap.filled .fav-remove {
+        opacity: 1;
+        pointer-events: auto;
+    }
 }
 
 .favorites-label {
@@ -13188,8 +13202,8 @@ body.beginner-ui #explore-btn {
     gap: 3px;
     font-size: 0.82rem;
     font-weight: 700;
-    color: #FF6D00;
-    background: rgba(255, 109, 0, 0.08);
+    color: #8a3200;
+    background: rgba(255, 109, 0, 0.12);
     min-height: 44px;
     min-width: 44px;
     padding: 8px 12px;
@@ -13198,7 +13212,7 @@ body.beginner-ui #explore-btn {
     transition: transform 0.2s, background 0.2s;
     vertical-align: middle;
     position: relative;
-    border: 1px solid rgba(255, 109, 0, 0.24);
+    border: 1px solid rgba(138, 50, 0, 0.22);
     font-family: inherit;
 }
 
@@ -13210,6 +13224,14 @@ body.beginner-ui #explore-btn {
 .streak-hud .streak-flame-icon {
     font-size: 0.85rem;
     animation: none;
+}
+
+.streak-hud .streak-bonus-label {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    line-height: 1;
 }
 
 .streak-hud.has-bonus .streak-flame-icon {
@@ -13238,7 +13260,9 @@ body.beginner-ui #explore-btn {
 }
 
 [data-theme="dark"] .streak-hud {
-    background: rgba(255, 109, 0, 0.12);
+    color: #FFCCB3;
+    background: rgba(255, 109, 0, 0.2);
+    border-color: rgba(255, 204, 179, 0.28);
 }
 
 [data-theme="dark"] .streak-hud .streak-bonus-dot {

@@ -539,11 +539,12 @@ body {
 }
 
 .offline-update-banner.phase2-world-banner button {
-    min-height: 40px;
+    min-height: 44px;
+    min-width: 44px;
     border-radius: 12px;
     border: 1px solid rgba(118, 140, 176, 0.2);
     background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(239,247,255,0.86));
-    padding: 6px 12px;
+    padding: 8px 12px;
     font-weight: 700;
 }
 
