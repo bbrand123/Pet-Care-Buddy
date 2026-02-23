@@ -2098,11 +2098,23 @@
             }, remaining);
         }
 
-        // Start the game when page loads
-        document.addEventListener('DOMContentLoaded', () => {
+        // Start the game when page loads (or immediately if loaded after DOMContentLoaded).
+        let _coreBootStarted = false;
+        function bootCoreRuntime() {
+            if (_coreBootStarted) return;
+            if (typeof window !== 'undefined' && window.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ === false) return;
+            _coreBootStarted = true;
             init();
             dismissSplash();
-        });
+        }
+        if (typeof window !== 'undefined') {
+            window.addEventListener('mlf:runtime-scripts-loaded', bootCoreRuntime, { once: true });
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', bootCoreRuntime, { once: true });
+        } else {
+            bootCoreRuntime();
+        }
 
         // ==================== OFFLINE INDICATOR (Item 42) ====================
         function updateOnlineStatus() {

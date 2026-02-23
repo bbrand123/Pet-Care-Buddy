@@ -3,6 +3,7 @@
 
     if (global.__MLF_RUNTIME_BOOTSTRAPPED__) return;
     global.__MLF_RUNTIME_BOOTSTRAPPED__ = true;
+    global.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ = false;
 
     function loadScript(url) {
         return new Promise(function(resolve, reject) {
@@ -15,15 +16,16 @@
         });
     }
 
-    function toAbsoluteUrl(baseUrl, relPath) {
+    function resolveRuntimeScriptUrl(relPath) {
+        var clean = String(relPath || '').replace(/^\.\//, '');
         try {
-            return new URL(relPath, baseUrl).toString();
+            return new URL('js/' + clean, document.baseURI).toString();
         } catch (e) {
-            return relPath;
+            return 'js/' + clean;
         }
     }
 
-    function loadSequential(paths, baseUrl) {
+    function loadSequential(paths) {
         var list = Array.isArray(paths) ? paths : [];
         var chain = Promise.resolve();
         var loaded = global.__MLF_LOADED_SCRIPTS__;
@@ -33,7 +35,7 @@
         }
         list.forEach(function(path) {
             chain = chain.then(function() {
-                var href = toAbsoluteUrl(baseUrl, path);
+                var href = resolveRuntimeScriptUrl(path);
                 if (loaded.has(href)) return;
                 return loadScript(href).then(function() { loaded.add(href); });
             });
@@ -45,9 +47,11 @@
         .then(function() {
             var manifest = global.MLFRuntimeManifest || {};
             var files = manifest.RUNTIME_SCRIPT_FILES || [];
-            return loadSequential(files, 'js/');
+            return loadSequential(files);
         })
         .then(function() {
+            global.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ = true;
+            global.dispatchEvent(new Event('mlf:runtime-scripts-loaded'));
             global.__MLF_RUNTIME_READY__ = true;
             global.dispatchEvent(new Event('mlf:runtime-ready'));
         })
