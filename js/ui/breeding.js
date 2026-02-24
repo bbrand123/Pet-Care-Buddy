@@ -20,6 +20,16 @@
                 const typeData = getAllPetTypeData(egg.offspringType);
                 const typeName = typeData ? typeData.name : egg.offspringType;
                 const roomBonus = INCUBATION_ROOM_BONUSES[gameState.currentRoom || 'bedroom'];
+                const careBonusTicks = Math.max(0, Math.round(Number(egg.careBonuses) || 0));
+                const roomBonusSummary = Object.entries(egg.roomBonuses || {})
+                    .filter(([, bonus]) => Number(bonus) > 0)
+                    .slice(0, 3)
+                    .map(([stat, bonus]) => {
+                        const statData = GENETIC_STATS[stat];
+                        const amount = Math.round(Number(bonus) * 10) / 10;
+                        return `+${amount} ${(statData && statData.label) || stat}`;
+                    })
+                    .join(', ');
                 html += `
                     <div class="breeding-egg-card incubating" aria-label="Incubating egg: ${typeName}, ${Math.round(progress)}% done">
                         <div class="breeding-egg-icon">🥚</div>
@@ -34,7 +44,9 @@
                                 const estMins = Math.ceil(remaining * 0.5);
                                 return remaining > 0 ? `<div class="breeding-egg-timer"><span class="timer-icon" aria-hidden="true">⏱️</span> ~${estMins}m remaining</div>` : '';
                             })()}
+                            ${careBonusTicks > 0 ? `<div class="breeding-egg-room-bonus">🤗 Care bonus: +${careBonusTicks} incubation ticks</div>` : ''}
                             ${roomBonus ? `<div class="breeding-egg-room-bonus">${roomBonus.label}</div>` : ''}
+                            ${roomBonusSummary ? `<div class="breeding-egg-room-bonus">🏠 Room trait boosts: ${escapeHTML(roomBonusSummary)}</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -306,15 +318,32 @@
                     const rel = getRelationship(p1.id, p2.id);
                     const level = getRelationshipLevel(rel.points);
                     const levelData = RELATIONSHIP_LEVELS[level];
+                    const requiredRelKey = (BREEDING_CONFIG && BREEDING_CONFIG.minRelationship) || 'friend';
+                    const requiredRelData = RELATIONSHIP_LEVELS[requiredRelKey] || RELATIONSHIP_LEVELS.friend;
+                    const requiredPoints = Math.max(0, Number(requiredRelData.minPoints) || 0);
+                    const relPoints = Math.max(0, Number(rel.points) || 0);
+                    const relProgressPct = requiredPoints > 0 ? Math.min(100, Math.round((Math.min(relPoints, requiredPoints) / requiredPoints) * 100)) : 100;
+                    const relPointsToGate = Math.max(0, requiredPoints - relPoints);
                     const hybridId = getHybridForParents(p1.type, p2.type);
                     const hybridData = hybridId ? HYBRID_PET_TYPES[hybridId] : null;
+                    const roomId = gameState.currentRoom || 'bedroom';
+                    const incubRoomBonus = INCUBATION_ROOM_BONUSES[roomId] || null;
+                    const careBonusSummary = Object.entries(INCUBATION_CARE_BONUSES || {})
+                        .map(([actionId, info]) => `${actionId} +${Math.max(0, Number(info && info.tickBonus) || 0)}`)
+                        .join(' • ');
 
                     compatHTML = `
                         <div class="breeding-preview">
                             <div class="breeding-preview-title">Compatibility</div>
                             <div class="breeding-preview-rel">${levelData.emoji} ${levelData.label} (${rel.points} pts)</div>
+                            <div class="breeding-egg-progress-bar" aria-hidden="true">
+                                <div class="breeding-egg-progress-fill" style="width:${relProgressPct}%"></div>
+                            </div>
+                            <div class="breeding-preview-mutation">${requiredRelData.emoji} ${requiredRelData.label} gate: ${Math.min(relPoints, requiredPoints)}/${requiredPoints}${relPointsToGate > 0 ? ` (${relPointsToGate} pts to go)` : ' (ready)'}</div>
                             ${hybridData ? `<div class="breeding-preview-hybrid">🧬 Possible Hybrid: ${hybridData.name} (${Math.round(BREEDING_CONFIG.hybridChance * 100)}% chance)</div>` : ''}
                             <div class="breeding-preview-mutation">🌈 Mutation chance: ${Math.round(BREEDING_CONFIG.mutationChance * 100)}%</div>
+                            ${incubRoomBonus ? `<div class="breeding-preview-mutation">🏠 Incubation room bonus (${escapeHTML(roomId)}): ${escapeHTML(incubRoomBonus.label)}</div>` : ''}
+                            ${careBonusSummary ? `<div class="breeding-preview-mutation">🤗 Care boosts: ${escapeHTML(careBonusSummary)}</div>` : ''}
                             ${!pairCheck.eligible ? `<div class="breeding-preview-error">${escapeHTML(pairCheck.reason || '')}</div>` : ''}
                         </div>
                     `;
@@ -442,4 +471,3 @@
             const initialCancel = overlay.querySelector('#breeding-cancel');
             if (initialCancel) initialCancel.focus();
         }
-

@@ -51,29 +51,29 @@ const STAGE_BALANCE = {
         growthCareWeight: 0.95
     },
     child: {
-        needDecayMultiplier: 1.08,
-        neglectThreshold: 21,
-        neglectGainMultiplier: 1.15,
-        neglectRecoveryMultiplier: 0.95,
-        focusedCareBonus: 0.18,
+        needDecayMultiplier: 1.1,
+        neglectThreshold: 22,
+        neglectGainMultiplier: 1.18,
+        neglectRecoveryMultiplier: 0.94,
+        focusedCareBonus: 0.2,
         dailyTaskMultiplier: 1.1,
         growthCareWeight: 1.0
     },
     adult: {
-        needDecayMultiplier: 1.18,
-        neglectThreshold: 24,
-        neglectGainMultiplier: 1.28,
-        neglectRecoveryMultiplier: 0.88,
-        focusedCareBonus: 0.24,
+        needDecayMultiplier: 1.24,
+        neglectThreshold: 26,
+        neglectGainMultiplier: 1.38,
+        neglectRecoveryMultiplier: 0.84,
+        focusedCareBonus: 0.3,
         dailyTaskMultiplier: 1.22,
         growthCareWeight: 1.1
     },
     elder: {
-        needDecayMultiplier: 1.22,
-        neglectThreshold: 25,
-        neglectGainMultiplier: 1.35,
-        neglectRecoveryMultiplier: 0.82,
-        focusedCareBonus: 0.3,
+        needDecayMultiplier: 1.32,
+        neglectThreshold: 30,
+        neglectGainMultiplier: 1.48,
+        neglectRecoveryMultiplier: 0.78,
+        focusedCareBonus: 0.38,
         dailyTaskMultiplier: 1.35,
         growthCareWeight: 1.18
     }
@@ -103,8 +103,8 @@ const GAMEPLAY_TUNING_PROFILES = {
             repeatStepPenalty: 0.09,
             repeatMaxStack: 4,
             repeatMinMultiplier: 0.52,
-            focusStageWeight: 0.82,
-            extraFocusedBonus: 0.1,
+            focusStageWeight: 0.9,
+            extraFocusedBonus: 0.12,
             offTargetMultiplier: 0.88,
             minTotalMultiplier: 0.5,
             maxTotalMultiplier: 1.6,
@@ -1415,8 +1415,8 @@ const EXPEDITION_DURATIONS = [
 
 const EXPEDITION_BALANCE = {
     // Report #2: EV control levers (diminishing scaling, rarity smoothing, upkeep).
-    durationDiminishingThreshold: 1.9,
-    durationDiminishingExponent: 0.68,
+    durationDiminishingThreshold: 1.95,
+    durationDiminishingExponent: 0.72,
     biomeRarityWeightMultiplier: {
         forest: 1.0,
         beach: 0.98,
@@ -1426,52 +1426,52 @@ const EXPEDITION_BALANCE = {
         underwater: 0.9,
         skyZone: 0.88
     },
-    upkeepBaseCoins: 8,
-    upkeepPerMinute: 7,
+    upkeepBaseCoins: 7,
+    upkeepPerMinute: 6,
     biomeUpkeepMultiplier: {
         forest: 1.0,
-        beach: 1.04,
-        mountain: 1.1,
-        cave: 1.12,
-        skyIsland: 1.18,
-        underwater: 1.2,
-        skyZone: 1.22
+        beach: 1.03,
+        mountain: 1.08,
+        cave: 1.1,
+        skyIsland: 1.15,
+        underwater: 1.17,
+        skyZone: 1.19
     }
 };
 
 const MINIGAME_BALANCE = {
     // Active source of truth for mini-game rewards/caps. (ECONOMY_BALANCE minigame cap knobs are deprecated.)
     // Report #3/#4: Soft cap and skill/streak reward scaling.
-    perRunCapBase: 94,
-    perRunCapByStage: { baby: 90, child: 96, adult: 104, elder: 112 },
-    dailySoftCapBase: 380,
-    dailySoftCapByStage: { baby: 360, child: 400, adult: 460, elder: 520 },
+    perRunCapBase: 92,
+    perRunCapByStage: { baby: 88, child: 94, adult: 102, elder: 110 },
+    dailySoftCapBase: 370,
+    dailySoftCapByStage: { baby: 350, child: 390, adult: 450, elder: 510 },
     dailyCapFromPrestigeStep: 40,
-    softCapFalloffPerCoin: 0.0042,
-    softCapMinMultiplier: 0.2,
+    softCapFalloffPerCoin: 0.005,
+    softCapMinMultiplier: 0.24,
     highSkillThreshold: 82,
     highSkillPerPoint: 0.011,
-    highSkillMaxBonus: 0.35,
-    streakBonusPerRun: 0.045,
-    streakBonusMax: 0.38
+    highSkillMaxBonus: 0.28,
+    streakBonusPerRun: 0.04,
+    streakBonusMax: 0.32
 };
 
 const COMPETITION_ECONOMY_BALANCE = {
     // Report #5: Coin rewards by mode, tuned below expedition dominance.
-    battleWinBaseCoins: 14,
+    battleWinBaseCoins: 15,
     battleLoseConsolationCoins: 4,
-    bossWinBaseCoins: 40,
-    showBaseCoins: 18,
-    obstacleBaseCoins: 16,
-    rivalWinBaseCoins: 22,
+    bossWinBaseCoins: 42,
+    showBaseCoins: 19,
+    obstacleBaseCoins: 17,
+    rivalWinBaseCoins: 23,
     rankStepCoins: 4,
     difficultyCoinScale: 0.24,
     maxCoinMultiplier: 2.4,
     victoryLootDropChance: 0.18,
     // Exploit hardening: competition reward controls (shared cap + repeat DR + repeat clear reductions).
-    dailySoftCapCoins: 220,
-    dailySoftCapFalloffPerCoin: 0.0075,
-    dailySoftCapMinMultiplier: 0.15,
+    dailySoftCapCoins: 230,
+    dailySoftCapFalloffPerCoin: 0.0068,
+    dailySoftCapMinMultiplier: 0.18,
     repeatWindowMs: 15 * 60 * 1000,
     repeatPenaltyPerStack: 0.18,
     repeatMinMultiplier: 0.35,

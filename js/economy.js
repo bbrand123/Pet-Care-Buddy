@@ -791,10 +791,93 @@
             return { ok: true, recipe, craftedLabel, craftedEmoji };
         }
 
+        function getMinigameTaskTrackLabel(trackKey) {
+            const labels = {
+                expeditionCount: 'expedition',
+                battleCount: 'arena battle',
+                harvestCount: 'harvest',
+                parkVisits: 'park visit'
+            };
+            return labels[trackKey] || 'activity';
+        }
+
+        function getMinigameDiminishingRedirectHint() {
+            const supportedTracks = new Set(['expeditionCount', 'battleCount', 'harvestCount']);
+            if (typeof initDailyChecklist === 'function') {
+                try {
+                    const checklist = initDailyChecklist();
+                    const progress = (checklist && checklist.progress) || {};
+                    const tasks = Array.isArray(checklist && checklist.tasks) ? checklist.tasks : [];
+                    const pending = tasks.filter((task) => task && !task.done && supportedTracks.has(task.trackKey));
+                    pending.sort((a, b) => {
+                        const aTarget = Math.max(1, Number(a.target) || 1);
+                        const bTarget = Math.max(1, Number(b.target) || 1);
+                        const aProg = Math.min(aTarget, Number(progress[a.trackKey]) || 0);
+                        const bProg = Math.min(bTarget, Number(progress[b.trackKey]) || 0);
+                        const aRatio = aProg / aTarget;
+                        const bRatio = bProg / bTarget;
+                        return aRatio - bRatio;
+                    });
+                    const next = pending[0];
+                    if (next) {
+                        const target = Math.max(1, Number(next.target) || 1);
+                        const done = Math.min(target, Number(progress[next.trackKey]) || 0);
+                        return {
+                            short: `Try ${getMinigameTaskTrackLabel(next.trackKey)} (${done}/${target})`,
+                            detail: `Daily task: ${next.name} (${done}/${target})`
+                        };
+                    }
+                } catch (e) {
+                    // Do not block rewards on checklist issues.
+                }
+            }
+            if (typeof getGoalLadder === 'function') {
+                try {
+                    const ladder = getGoalLadder();
+                    const next = ladder && ladder.next;
+                    if (next && typeof next.label === 'string') {
+                        const label = next.label.toLowerCase();
+                        if (/(expedition|arena|battle|harvest|garden|competition)/.test(label)) {
+                            return {
+                                short: 'Check your Goal Ladder',
+                                detail: `Goal Ladder next: ${next.label}${next.progress ? ` (${next.progress})` : ''}`
+                            };
+                        }
+                    }
+                } catch (e) {
+                    // Safe fallback below.
+                }
+            }
+            return {
+                short: 'Rotate to expedition, garden, or arena',
+                detail: 'Try an expedition, harvest, or arena battle to keep momentum.'
+            };
+        }
+
         function awardMiniGameCoins(gameId, scoreValue) {
             const score = Math.max(0, Number(scoreValue) || 0);
             if (score <= 0) return 0;
+            const gameBonus = {
+                fetch: 1.0,
+                hideseek: 1.1,
+                bubblepop: 1.0,
+                matching: 1.2,
+                simonsays: 1.35,
+                coloring: 0.95,
+                racing: 1.12,
+                cooking: 1.02,
+                fishing: 1.08,
+                rhythm: 1.1,
+                slider: 1.08,
+                trivia: 1.0,
+                runner: 1.16,
+                tournament: 1.2,
+                coop: 1.08
+            };
+            const multiplier = gameBonus[gameId] || 1;
             const difficulty = typeof getMinigameDifficulty === 'function' ? getMinigameDifficulty(gameId) : 1;
+            const difficultyRewardMult = Math.max(0.92, Math.min(1.52, 0.96 + ((difficulty - 1) * 0.52)));
+            const payout = Math.max(3, Math.round((6 + Math.pow(score, 0.52) * 4.3) * multiplier * difficultyRewardMult));
             const ecoMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.minigameRewardMultiplier === 'number')
                 ? ECONOMY_BALANCE.minigameRewardMultiplier
                 : 1;
@@ -806,43 +889,114 @@
             // 1st game = 1.0x, 2nd = 1.05x, 3rd = 1.1x, cap at 1.15x. Resets on session end.
             if (typeof gameState._sessionMinigameCount !== 'number') gameState._sessionMinigameCount = 0;
             gameState._sessionMinigameCount++;
-
-            const cap = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.minigameRewardCap === 'number')
-                ? ECONOMY_BALANCE.minigameRewardCap
-                : 9999;
-            let tuned;
-            if (typeof EconomyCalculations !== 'undefined' && EconomyCalculations && typeof EconomyCalculations.computeMinigameCoinPayout === 'function') {
-                tuned = EconomyCalculations.computeMinigameCoinPayout({
-                    gameId,
-                    score,
-                    difficulty,
-                    economyMultiplier: ecoMult,
-                    petStrength,
-                    sessionCount: gameState._sessionMinigameCount,
-                    cap
-                });
-            } else {
-                const difficultyRewardMult = Math.max(0.9, Math.min(1.22, 0.96 + ((difficulty - 1) * 0.32)));
-                const payout = Math.max(3, Math.round((5 + Math.sqrt(score) * 3.2) * difficultyRewardMult));
-                const sessionMult = Math.min(1.15, 1 + (Math.max(0, gameState._sessionMinigameCount - 1) * 0.05));
-                tuned = Math.max(3, Math.min(cap, Math.round(payout * ecoMult * petStatRewardMult * sessionMult)));
-            }
-
-            // Rec 1: Enforce daily minigame earnings cap
-            const dailyCap = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.dailyMinigameEarningsCap === 'number')
-                ? ECONOMY_BALANCE.dailyMinigameEarningsCap : 350;
+            const sessionMult = Math.min(1.15, 1 + (Math.max(0, gameState._sessionMinigameCount - 1) * 0.05));
             const today = typeof getTodayString === 'function' ? getTodayString() : '';
             if (!gameState._dailyMinigameEarnings || gameState._dailyMinigameEarningsDay !== today) {
                 gameState._dailyMinigameEarnings = 0;
                 gameState._dailyMinigameEarningsDay = today;
+                gameState._minigameWinStreak = 0;
             }
-            const remaining = Math.max(0, dailyCap - gameState._dailyMinigameEarnings);
-            if (remaining <= 0) {
-                if (typeof showToast === 'function') showToast('Daily minigame coin cap reached! Play for fun or try again tomorrow.', '#90A4AE');
-                return 0;
+
+            const stage = (gameState.pet && GROWTH_STAGES[gameState.pet.growthStage]) ? gameState.pet.growthStage : 'baby';
+            const prestigeRunMult = (typeof getPrestigeEffectValue === 'function')
+                ? (Number(getPrestigeEffectValue('cosmeticChest', 'minigameCoinMultiplier', 1)) || 1)
+                : 1;
+            const streakBonusPerRun = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.streakBonusPerRun) || 0.045);
+            const streakBonusMax = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.streakBonusMax) || 0.38);
+            gameState._minigameWinStreak = Math.max(0, Number(gameState._minigameWinStreak) || 0) + 1;
+            const streakMult = 1 + Math.min(streakBonusMax, Math.max(0, gameState._minigameWinStreak - 1) * streakBonusPerRun);
+            const highSkillThreshold = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.highSkillThreshold) || 82);
+            const highSkillPerPoint = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.highSkillPerPoint) || 0.011);
+            const highSkillMax = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.highSkillMaxBonus) || 0.35);
+            const highSkillBonus = score >= highSkillThreshold
+                ? Math.min(highSkillMax, (score - highSkillThreshold) * highSkillPerPoint)
+                : 0;
+            const capBase = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.perRunCapBase) || 94);
+            const capStage = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.perRunCapByStage && MINIGAME_BALANCE.perRunCapByStage[stage]) || capBase);
+            const cap = Math.max(3, Math.floor(capStage));
+            const rawTuned = Math.max(3, Math.round(payout * ecoMult * petStatRewardMult * sessionMult * streakMult * (1 + highSkillBonus) * prestigeRunMult));
+            let tuned = Math.max(3, Math.min(cap, rawTuned));
+            const perRunCapHit = tuned < rawTuned;
+
+            const stageSoftCapBase = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.dailySoftCapBase) || 380);
+            const stageSoftCap = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.dailySoftCapByStage && MINIGAME_BALANCE.dailySoftCapByStage[stage]) || stageSoftCapBase);
+            const prestigeSoftCap = (typeof getPrestigeEffectValue === 'function')
+                ? (Number(getPrestigeEffectValue('cosmeticChest', 'minigameDailySoftCapBonus', 0)) || 0)
+                : 0;
+            const dailySoftCap = Math.max(50, Math.floor(stageSoftCap + prestigeSoftCap));
+            const earnedBefore = Math.max(0, Number(gameState._dailyMinigameEarnings) || 0);
+            const overCap = Math.max(0, earnedBefore - dailySoftCap);
+            let diminishingMult = 1;
+            let inDiminishingRewards = false;
+            if (overCap > 0) {
+                const falloff = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.softCapFalloffPerCoin) || 0.0042);
+                const minMult = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.softCapMinMultiplier) || 0.2);
+                diminishingMult = Math.max(minMult, 1 / (1 + (overCap * falloff)));
+                tuned = Math.max(1, Math.round(tuned * diminishingMult));
+                inDiminishingRewards = true;
             }
-            tuned = Math.min(tuned, remaining);
             gameState._dailyMinigameEarnings += tuned;
+
+            const redirectHint = inDiminishingRewards ? getMinigameDiminishingRedirectHint() : null;
+            gameState._lastMinigameRewardContext = {
+                at: Date.now(),
+                source: 'minigame',
+                gameId,
+                score,
+                tuned,
+                payoutBase: payout,
+                perRunCap: cap,
+                perRunCapHit,
+                dailySoftCap,
+                dailyEarnedBefore: earnedBefore,
+                dailyEarnedAfter: gameState._dailyMinigameEarnings,
+                overCap,
+                inDiminishingRewards,
+                diminishingMult,
+                summaryHint: inDiminishingRewards
+                    ? `Diminishing rewards active (${Math.round(diminishingMult * 100)}% payout). ${redirectHint && redirectHint.detail ? redirectHint.detail : 'Rotate to expedition, harvest, or arena.'}`
+                    : ''
+            };
+
+            if (inDiminishingRewards && typeof showToast === 'function') {
+                const now = Date.now();
+                if ((now - (Number(gameState._lastMinigameSoftCapToastAt) || 0)) > 45000) {
+                    gameState._lastMinigameSoftCapToastAt = now;
+                    const redirectText = redirectHint && redirectHint.short ? ` ${redirectHint.short}.` : '';
+                    showToast(`🎮 Diminishing rewards active (${Math.round(diminishingMult * 100)}% payout).${redirectText}`, '#90A4AE');
+                }
+            }
+
+            if (typeof balanceDebugLog === 'function') {
+                balanceDebugLog('MinigameReward', {
+                    gameId,
+                    score,
+                    difficulty,
+                    payoutBase: payout,
+                    tuned,
+                    rawTuned,
+                    perRunCap: cap,
+                    perRunCapHit,
+                    dailySoftCap,
+                    dailyEarned: gameState._dailyMinigameEarnings,
+                    overCap,
+                    inDiminishingRewards,
+                    diminishingMult,
+                    streak: gameState._minigameWinStreak,
+                    highSkillBonus
+                });
+                if (perRunCapHit || inDiminishingRewards) {
+                    balanceDebugLog('MinigameCapEncounter', {
+                        gameId,
+                        perRunCapHit,
+                        inDiminishingRewards,
+                        perRunCap: cap,
+                        dailySoftCap,
+                        earnedBefore,
+                        earnedAfter: gameState._dailyMinigameEarnings
+                    });
+                }
+            }
 
             addCoins(tuned, 'Mini-game', true);
             return tuned;

@@ -197,6 +197,17 @@
                     if (pet.energy < lowThreshold && prevEnergy >= lowThreshold) lowStats.push('energy');
                     if (lowStats.length > 0) {
                         announce(`Warning: ${petName}'s ${lowStats.join(' and ')} ${lowStats.length === 1 ? 'is' : 'are'} critically low!`, true);
+                        if (typeof showToast === 'function') {
+                            const nowMs = Date.now();
+                            const lastCueAt = Number(gameState._lastStagePressureCueAt) || 0;
+                            if ((nowMs - lastCueAt) > 90000) {
+                                gameState._lastStagePressureCueAt = nowMs;
+                                const stageInfo = GROWTH_STAGES[stage] || GROWTH_STAGES.baby;
+                                const focusPct = Math.round((Number(stageBalance.focusedCareBonus) || 0) * 100);
+                                const thresholdText = Math.round(Number(stageBalance.neglectThreshold) || 20);
+                                showToast(`${stageInfo.emoji} ${stageInfo.label} pressure: critical alerts start near ${thresholdText}. Focus bonus is stronger at this stage (+${focusPct}%).`, '#FFB74D');
+                            }
+                        }
                         // Play sad pet whimper when stats drop critically
                         if (typeof GameAudio !== 'undefined' && pet.type) {
                             GameAudio.playSFXByName('petSad', (ctx) => GameAudio.sfx.petSad(ctx, pet.type));

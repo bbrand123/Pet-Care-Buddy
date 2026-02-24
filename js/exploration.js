@@ -423,6 +423,9 @@
                 const roomYieldPct = Math.round(((Number(expedition.roomYieldMultiplier) || 1) - 1) * 100);
                 const roomYieldText = roomYieldPct > 0 ? ` (+${roomYieldPct}% room yield)` : '';
                 showToast(`🧭 Expedition complete in ${biome.icon} ${biome.name}${roomYieldText}! ${rewardPreview}`, '#4ECDC4');
+                if (typeof announce === 'function') {
+                    announce(`Expedition complete in ${biome.name}. Rewards collected.`, { source: 'expedition-ready', dedupeMs: 5000 });
+                }
                 // Show encounter narrative for this biome
                 if (typeof getExplorationNarrative === 'function') {
                     const narrative = getExplorationNarrative(expedition.biomeId, expedition.petName || 'Your pet');

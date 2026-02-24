@@ -73,15 +73,73 @@
             return h >>> 0;
         }
 
+        function getDailyModeUsageCounts() {
+            const minigameCounts = gameState.minigamePlayCounts || {};
+            const minigameTotal = Object.values(minigameCounts).reduce((sum, value) => sum + (Number(value) || 0), 0);
+            const garden = gameState.garden || {};
+            const exploration = gameState.exploration || {};
+            const exStats = exploration.stats || {};
+            const comp = gameState.competition || {};
+            const battleTotal = Math.max(0, Number(comp.battlesWon || 0)) + Math.max(0, Number(comp.battlesLost || 0));
+            return {
+                minigameCount: minigameTotal,
+                harvestCount: Math.max(0, Number(garden.totalHarvests || 0)),
+                parkVisits: Math.max(0, Number(gameState.parkVisitCount || gameState.parkVisits || 0)),
+                expeditionCount: Math.max(0, Number(exStats.expeditionsCompleted || 0)),
+                battleCount: battleTotal
+            };
+        }
+
+        function getRecentDailyModeTaskIds() {
+            const history = Array.isArray(gameState._dailyModeTaskHistory) ? gameState._dailyModeTaskHistory : [];
+            const recent = history.slice(-3);
+            const ids = new Set();
+            recent.forEach((entry) => {
+                (entry && Array.isArray(entry.ids) ? entry.ids : []).forEach((id) => ids.add(id));
+            });
+            return ids;
+        }
+
         function pickDailyModeTasks(dateKey) {
             const pool = Array.isArray(DAILY_MODE_TASKS) ? [...DAILY_MODE_TASKS] : [];
             if (pool.length <= 2) return pool;
+            const usage = getDailyModeUsageCounts();
+            const recentIds = getRecentDailyModeTaskIds();
             const selected = [];
             let seed = hashDailySeed(`mode:${dateKey}`);
             while (pool.length > 0 && selected.length < 2) {
-                const idx = seed % pool.length;
+                const trackValues = pool.map((task) => Math.max(0, Number(usage[task.trackKey]) || 0));
+                const minUsage = trackValues.length > 0 ? Math.min(...trackValues) : 0;
+                const weights = pool.map((task) => {
+                    const count = Math.max(0, Number(usage[task.trackKey]) || 0);
+                    const underuseBoost = 1 + Math.max(0, (minUsage + 8 - count)) * 0.08;
+                    const repeatPenalty = recentIds.has(task.id) ? 0.68 : 1;
+                    return Math.max(0.25, underuseBoost * repeatPenalty);
+                });
+                const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+                let pick = totalWeight > 0 ? ((seed >>> 0) / 4294967296) * totalWeight : 0;
+                let idx = 0;
+                for (; idx < pool.length - 1; idx++) {
+                    pick -= weights[idx];
+                    if (pick <= 0) break;
+                }
                 selected.push(pool.splice(idx, 1)[0]);
                 seed = Math.imul(seed ^ 0x9E3779B9, 1664525) >>> 0;
+            }
+            if (!Array.isArray(gameState._dailyModeTaskHistory)) gameState._dailyModeTaskHistory = [];
+            gameState._dailyModeTaskHistory.push({
+                date: String(dateKey || ''),
+                ids: selected.map((task) => task.id)
+            });
+            if (gameState._dailyModeTaskHistory.length > 14) {
+                gameState._dailyModeTaskHistory = gameState._dailyModeTaskHistory.slice(-14);
+            }
+            if (typeof balanceDebugLog === 'function') {
+                balanceDebugLog('DailyTaskModeSelection', {
+                    dateKey,
+                    selected: selected.map((task) => ({ id: task.id, trackKey: task.trackKey })),
+                    usage
+                });
             }
             return selected;
         }
@@ -424,6 +482,17 @@
             const cl = initDailyChecklist();
             if (!cl.progress[key]) cl.progress[key] = 0;
             cl.progress[key] += (amount ?? 1);
+            if (typeof balanceDebugLog === 'function') {
+                const matchingTasks = (cl.tasks || [])
+                    .filter((task) => task && task.trackKey === key)
+                    .map((task) => ({ id: task.id, lane: task.lane, done: !!task.done, target: task.target }));
+                balanceDebugLog('LaneUsage', {
+                    key,
+                    amount: amount ?? 1,
+                    total: cl.progress[key],
+                    tasks: matchingTasks
+                });
+            }
             // Check completions
             const templates = getDailyTaskTemplateMap();
             const newlyCompleted = [];
@@ -718,22 +787,45 @@
             return true;
         }
 
+        function getHarvestReadyReminderCount() {
+            const garden = gameState.garden;
+            if (!garden || !Array.isArray(garden.plots)) return 0;
+            return garden.plots.filter((plot) => plot && (plot.stage >= 3 || plot.harvestReady)).length;
+        }
+
+        function getNearHatchReminderCount() {
+            const eggs = Array.isArray(gameState.breedingEggs) ? gameState.breedingEggs : [];
+            return eggs.filter((egg) => {
+                const target = Math.max(1, Number(egg && egg.incubationTarget) || 1);
+                const ticks = Math.max(0, Number(egg && egg.incubationTicks) || 0);
+                return (ticks / target) >= 0.8 && (ticks / target) < 1;
+            }).length;
+        }
+
         function checkReminderSignals() {
             const reminders = ensureReminderState();
             if (!reminders.enabled) return;
+            const expedition = ((gameState.exploration || {}).expedition) || null;
+            if (expedition && Date.now() >= (expedition.endAt || 0)) {
+                maybeSendLocalReminder('expeditionReady', '🧭 Expedition ready', 'Collect your expedition rewards.');
+            }
+            const harvestReady = getHarvestReadyReminderCount();
+            if (harvestReady > 0) {
+                maybeSendLocalReminder('harvestReady', '🌾 Harvest ready', 'Crops are ready to collect in the garden.');
+            }
+            const hatched = Array.isArray(gameState.hatchedBreedingEggs) ? gameState.hatchedBreedingEggs.length : 0;
+            if (hatched > 0) {
+                maybeSendLocalReminder('hatchReady', '🥚 Hatch ready', 'A new family member is ready to hatch.');
+            }
+            const nearHatch = getNearHatchReminderCount();
+            if (nearHatch > 0 && hatched <= 0) {
+                maybeSendLocalReminder('eggNearHatch', '🐣 Egg close to hatch', 'An incubating egg is almost ready.');
+            }
             const streak = gameState.streak || {};
             const lastPlay = streak.lastPlayDate;
             const today = getTodayString();
             if (lastPlay && lastPlay !== today) {
                 maybeSendLocalReminder('streakRisk', '🔥 Streak risk!', 'Log in to protect your streak.');
-            }
-            const expedition = ((gameState.exploration || {}).expedition) || null;
-            if (expedition && Date.now() >= (expedition.endAt || 0)) {
-                maybeSendLocalReminder('expeditionReady', '🧭 Expedition ready', 'Collect your expedition rewards.');
-            }
-            const hatched = Array.isArray(gameState.hatchedBreedingEggs) ? gameState.hatchedBreedingEggs.length : 0;
-            if (hatched > 0) {
-                maybeSendLocalReminder('hatchReady', '🥚 Hatch ready', 'A new family member is ready to hatch.');
             }
         }
 

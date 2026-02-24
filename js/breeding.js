@@ -296,11 +296,20 @@
                     egg.roomBonuses[roomBonus.bonusStat] += 0.1;
                 }
 
+                const progressRatio = Math.max(0, Math.min(1, (egg.incubationTicks || 0) / Math.max(1, egg.incubationTarget || 1)));
+                if (!egg._nearHatchAlerted && progressRatio >= 0.85 && progressRatio < 1) {
+                    egg._nearHatchAlerted = true;
+                    const remainingTicks = Math.max(1, Math.ceil((egg.incubationTarget - egg.incubationTicks)));
+                    const nearMsg = `🐣 Egg close to hatch! About ${remainingTicks}m left.`;
+                    if (typeof showToast === 'function') showToast(nearMsg, '#CE93D8');
+                    if (typeof announce === 'function') announce('A breeding egg is close to hatching.', true);
+                }
+
                 // Check if hatched
                 if (egg.incubationTicks >= egg.incubationTarget) {
                     hatched.push(egg);
                     gameState.breedingEggs.splice(i, 1);
-                    announce('A breeding egg is ready to hatch!', true);
+                    announce('Hatch ready: a breeding egg is ready to collect.', true);
                 }
             }
 
@@ -493,4 +502,3 @@
             if (hour >= 18 && hour < 20) return 'sunset';
             return 'night';
         }
-

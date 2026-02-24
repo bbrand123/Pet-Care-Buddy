@@ -34,6 +34,7 @@
             const season = gameState.season || getCurrentSeason();
             const growthMult = SEASONS[season] ? SEASONS[season].gardenGrowthMultiplier : 1;
             let anyGrew = false;
+            const newlyReadyCrops = [];
 
             garden.plots.forEach(plot => {
                 if (plot && plot.cropId && plot.stage < 3) {
@@ -49,11 +50,20 @@
                         plot.stage = newStage;
                         anyGrew = true;
                         if (newStage === 3) {
-                            showToast(`🌱 Your ${crop.name} is ready to harvest!`, '#66BB6A');
+                            newlyReadyCrops.push(crop.name);
                         }
                     }
                 }
             });
+
+            if (newlyReadyCrops.length > 0) {
+                const firstLabel = newlyReadyCrops[0];
+                const extra = newlyReadyCrops.length > 1 ? ` +${newlyReadyCrops.length - 1} more` : '';
+                showToast(`🌾 Harvest ready: ${firstLabel}${extra}. Check the Garden.`, '#66BB6A');
+                if (typeof announce === 'function') {
+                    announce(`Harvest ready in the garden. ${newlyReadyCrops.length} crop${newlyReadyCrops.length > 1 ? 's are' : ' is'} ready.`);
+                }
+            }
 
             garden.lastGrowTick = Date.now();
             if (gameState.currentRoom === 'garden') {
@@ -821,4 +831,3 @@
             updateGrowthDisplay();
             saveGame();
         }
-

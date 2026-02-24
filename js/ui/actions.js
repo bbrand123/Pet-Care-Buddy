@@ -243,6 +243,46 @@
             window.setUiBusyState = setUiBusyState;
         }
 
+        function getAsyncLoopReadinessSummary() {
+            const items = [];
+            const now = Date.now();
+            const expedition = ((gameState.exploration || {}).expedition) || null;
+            if (expedition && now >= (Number(expedition.endAt) || 0)) {
+                items.push({ key: 'expeditionReady', icon: '🧭', text: 'Expedition complete. Rewards ready to collect.' });
+            }
+
+            const garden = gameState.garden;
+            if (garden && Array.isArray(garden.plots)) {
+                const readyCount = garden.plots.filter((plot) => plot && (plot.stage >= 3 || plot.harvestReady)).length;
+                if (readyCount > 0) {
+                    items.push({ key: 'harvestReady', icon: '🌾', text: `${readyCount} harvest${readyCount > 1 ? 's' : ''} ready in the garden.` });
+                }
+            }
+
+            const hatchedCount = Array.isArray(gameState.hatchedBreedingEggs) ? gameState.hatchedBreedingEggs.length : 0;
+            if (hatchedCount > 0) {
+                items.push({ key: 'hatchReady', icon: '🥚', text: `${hatchedCount} baby${hatchedCount > 1 ? 'ies are' : ' is'} ready to collect.` });
+            }
+
+            const incubating = Array.isArray(gameState.breedingEggs) ? gameState.breedingEggs : [];
+            const nearHatchCount = incubating.filter((egg) => {
+                const target = Math.max(1, Number(egg && egg.incubationTarget) || 1);
+                const ticks = Math.max(0, Number(egg && egg.incubationTicks) || 0);
+                const pct = (typeof getIncubationProgress === 'function') ? Number(getIncubationProgress(egg)) || 0 : ((ticks / target) * 100);
+                return pct >= 80 && pct < 100;
+            }).length;
+            if (nearHatchCount > 0) {
+                items.push({ key: 'eggClose', icon: '🐣', text: `${nearHatchCount} incubating egg${nearHatchCount > 1 ? 's are' : ' is'} close to hatching.` });
+            }
+
+            const priorityOrder = { expeditionReady: 0, harvestReady: 1, hatchReady: 2, eggClose: 3 };
+            items.sort((a, b) => (priorityOrder[a.key] || 99) - (priorityOrder[b.key] || 99));
+            return {
+                items,
+                top: items[0] || null
+            };
+        }
+
         // ==================== WELCOME BACK SUMMARY SCREEN (Feature 7) ====================
         function showWelcomeBackModal(offlineChanges, pet) {
             if (!offlineChanges || !pet) return;
@@ -260,6 +300,7 @@
 
             // Generate pet SVG for display
             const petSVGHTML = pet ? (typeof generatePetSVG === 'function' ? generatePetSVG(pet, offlineChanges.minutes >= 720 ? 'sad' : offlineChanges.minutes >= 240 ? 'idle' : 'happy') : '') : '';
+            const readiness = getAsyncLoopReadinessSummary();
 
             function statLine(icon, label, change) {
                 const cls = change > 0 ? 'positive' : change < 0 ? 'negative' : 'neutral';
@@ -276,6 +317,12 @@
             if (garden && garden.plots && garden.plots.some(p => p && p.stage >= 3)) {
                 const readyCount = garden.plots.filter(p => p && p.stage >= 3).length;
                 gardenHTML = `<div class="welcome-back-garden">🌱 ${readyCount} crop${readyCount > 1 ? 's' : ''} ready to harvest!</div>`;
+            }
+
+            let readinessHTML = '';
+            if (readiness.items.length > 0) {
+                const rows = readiness.items.slice(0, 3).map((item) => `<div class="welcome-back-garden">${item.icon} ${escapeHTML(item.text)}</div>`).join('');
+                readinessHTML = `<div class="welcome-back-priority" aria-live="polite"><div class="welcome-back-streak">⏰ Ready Now</div>${rows}</div>`;
             }
 
             let streakHTML = '';
@@ -295,6 +342,7 @@
                     ${safeEmotionalMessage ? `<p class="welcome-back-emotional" style="font-style:italic;color:#5D4037;margin-bottom:10px;font-size:0.92rem;line-height:1.4;">${safeEmotionalMessage}</p>` : ''}
                     <h2 class="welcome-back-title">Welcome Back!</h2>
                     <p class="welcome-back-subtitle">You were away for ${timeStr}</p>
+                    ${readinessHTML}
                     <div class="welcome-back-stats">
                         ${statLine('🍎', 'Hunger', offlineChanges.hunger)}
                         ${statLine('🛁', 'Cleanliness', offlineChanges.cleanliness)}
@@ -1329,12 +1377,23 @@
             treat: 'hunger'
         };
 
+        const CARE_NEED_LABELS = {
+            hunger: 'Hunger',
+            cleanliness: 'Cleanliness',
+            happiness: 'Happiness',
+            energy: 'Energy'
+        };
+
         function getCarePrimaryNeed(action) {
             if (typeof getCareActionPrimaryNeed === 'function') {
                 const key = getCareActionPrimaryNeed(action);
                 if (key) return key;
             }
             return CARE_PRIMARY_NEED_MAP[action] || null;
+        }
+
+        function getCareNeedLabel(key) {
+            return CARE_NEED_LABELS[key] || key || 'Need';
         }
 
         function getCareLoopRuntimeState(pet) {
@@ -1361,7 +1420,21 @@
             const tuning = (typeof getCareLoopTuning === 'function') ? getCareLoopTuning() : null;
             const runtime = getCareLoopRuntimeState(pet);
             if (!tuning || !pet || !runtime) {
-                return { gainMultiplier: 1, repeatApplied: false, focused: false, offTarget: false, repeatChain: 0 };
+                return {
+                    gainMultiplier: 1,
+                    repeatApplied: false,
+                    focused: false,
+                    offTarget: false,
+                    repeatChain: 0,
+                    repeatMultiplier: 1,
+                    focusMultiplier: 1,
+                    repeatPenaltyPct: 0,
+                    focusBonusPct: 0,
+                    offTargetPenaltyPct: 0,
+                    primaryNeed: null,
+                    lowestNeed: null,
+                    stage: (pet && pet.growthStage) || 'baby'
+                };
             }
 
             const now = Date.now();
@@ -1417,7 +1490,25 @@
             runtime.lastAt = now;
             runtime.repeatChain = repeatChain;
 
-            return { gainMultiplier, repeatApplied, focused, offTarget, repeatChain };
+            const repeatPenaltyPct = repeatApplied ? Math.max(0, Math.round((1 - repeatMultiplier) * 100)) : 0;
+            const focusBonusPct = focused ? Math.max(0, Math.round((focusMultiplier - 1) * 100)) : 0;
+            const offTargetPenaltyPct = offTarget ? Math.max(0, Math.round((1 - focusMultiplier) * 100)) : 0;
+
+            return {
+                gainMultiplier,
+                repeatApplied,
+                focused,
+                offTarget,
+                repeatChain,
+                repeatMultiplier,
+                focusMultiplier,
+                repeatPenaltyPct,
+                focusBonusPct,
+                offTargetPenaltyPct,
+                primaryNeed,
+                lowestNeed,
+                stage
+            };
         }
 
         // Shared standard-feed logic used by both careAction('feed') and openFeedMenu
@@ -1740,18 +1831,28 @@
                 }
             }
 
-            if (careDecisionResult && (careDecisionResult.repeatApplied || careDecisionResult.offTarget)) {
+            if (careDecisionResult && (careDecisionResult.repeatApplied || careDecisionResult.offTarget || careDecisionResult.focused)) {
                 const runtime = getCareLoopRuntimeState(pet);
                 const now = Date.now();
                 const hintCooldown = Math.max(8000, Number((typeof getCareLoopTuning === 'function' ? getCareLoopTuning().hintCooldownMs : 0)) || 18000);
                 if (runtime && now - (runtime.lastHintAt || 0) >= hintCooldown) {
                     runtime.lastHintAt = now;
-                    if (careDecisionResult.repeatApplied) {
-                        showToast('🔁 Repeating the same action quickly gives smaller gains. Rotate actions for better results.', '#FFA726', { announce: false });
-                        announce('Tip: repeating the same action too quickly gives reduced gains.');
+                    const stageKey = (careDecisionResult.stage && GROWTH_STAGES[careDecisionResult.stage]) ? careDecisionResult.stage : ((pet && pet.growthStage && GROWTH_STAGES[pet.growthStage]) ? pet.growthStage : 'baby');
+                    const stageData = GROWTH_STAGES[stageKey] || GROWTH_STAGES.baby;
+                    const stageBalance = (typeof getStageBalance === 'function') ? getStageBalance(stageKey) : { neglectThreshold: 20 };
+                    const focusNeedLabel = getCareNeedLabel(careDecisionResult.lowestNeed);
+                    if (careDecisionResult.repeatApplied && careDecisionResult.focused) {
+                        showToast(`🔁 Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. 🎯 Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}.`, '#FFA726', { announce: false });
+                        announce(`Repeat penalty active. Focus bonus on ${focusNeedLabel}.`);
+                    } else if (careDecisionResult.repeatApplied) {
+                        showToast(`🔁 Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. Rotate actions to restore full gains.`, '#FFA726', { announce: false });
+                        announce('Tip: repeat penalty active. Rotate care actions for better gains.');
+                    } else if (careDecisionResult.focused) {
+                        showToast(`🎯 Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}. ${stageData.label} pressure starts near ${Math.round(stageBalance.neglectThreshold || 20)}.`, '#4FC3F7', { announce: false });
+                        announce(`Focus bonus active on ${focusNeedLabel}.`);
                     } else if (careDecisionResult.offTarget) {
-                        showToast('🎯 Focused care works best on your pet\'s lowest need right now.', '#4FC3F7', { announce: false });
-                        announce('Tip: caring for the lowest need is more efficient.');
+                        showToast(`🎯 No focus bonus: ${focusNeedLabel} is the lowest need right now. (${stageData.label} pressure near ${Math.round(stageBalance.neglectThreshold || 20)})`, '#4FC3F7', { announce: false });
+                        announce(`Tip: care the lowest need first for a focus bonus.`);
                     }
                 }
             }

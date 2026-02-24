@@ -77,9 +77,9 @@ const GAME_BALANCE = Object.freeze({
         /** Max expedition history entries */
         maxExpeditionHistory: 15,
         /** Happiness gain from completed expedition */
-        expeditionHappinessGain: 10,
+        expeditionHappinessGain: 12,
         /** Energy cost from completed expedition */
-        expeditionEnergyCost: 6,
+        expeditionEnergyCost: 5,
         /** Minimum energy required for dungeon */
         dungeonMinEnergy: 8,
         /** Score history entries kept per minigame */
@@ -95,9 +95,9 @@ const GAME_BALANCE = Object.freeze({
     },
     minigames: {
         /** Difficulty increase per replay (10% = 0.08 now) */
-        replayDifficultyStep: 0.08,
+        replayDifficultyStep: 0.09,
         /** Max replays that affect difficulty */
-        maxReplayDifficultyPlays: 8,
+        maxReplayDifficultyPlays: 10,
         /** Overall difficulty min cap */
         difficultyMin: 0.65,
         /** Overall difficulty max cap */

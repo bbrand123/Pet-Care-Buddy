@@ -2289,10 +2289,18 @@
                                          'is glad you\'re back!';
                     announce(`Welcome back! Your ${petData.name} ${moodGreeting}`);
                 }
+                const asyncReadiness = (typeof getAsyncLoopReadinessSummary === 'function')
+                    ? getAsyncLoopReadinessSummary()
+                    : { items: [], top: null };
+                if (asyncReadiness && asyncReadiness.top && typeof showToast === 'function') {
+                    setTimeout(() => {
+                        showToast(`${asyncReadiness.top.icon} ${asyncReadiness.top.text}`, '#4ECDC4');
+                    }, 700);
+                }
                 if (gameState.goalLadder && gameState.goalLadder.now && gameState.goalLadder.next) {
                     setTimeout(() => {
                         showToast(`🧭 Now: ${gameState.goalLadder.now.label} · Next: ${gameState.goalLadder.next.label}`, '#42A5F5');
-                    }, 900);
+                    }, (asyncReadiness && asyncReadiness.top) ? 1300 : 900);
                 }
                 // Show welcome-back summary modal if pet was away for a while (Feature 7)
                 if (gameState._offlineChanges) {
@@ -2328,7 +2336,7 @@
                 if (gameState.streak && gameState.streak.current > 0 && !gameState.streak.todayBonusClaimed && !gameState._hadOfflineChangesOnLoad) {
                     setTimeout(() => {
                         showToast(`🔥 ${gameState.streak.current}-day streak! Tap Rewards to claim bonus!`, '#FF6D00');
-                    }, 1500);
+                    }, (asyncReadiness && asyncReadiness.top) ? 2100 : 1500);
                 }
                 delete gameState._hadOfflineChangesOnLoad;
                 checkReminderSignals();

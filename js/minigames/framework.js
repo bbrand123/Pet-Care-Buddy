@@ -457,6 +457,7 @@
             const isNewBest = !!options.isNewBest;
             const personalBest = Number.isFinite(options.personalBest) ? options.personalBest : null;
             const medal = options.medal && options.medal.tier ? options.medal : null;
+            const rewardHint = typeof options.rewardHint === 'string' ? options.rewardHint : '';
 
             const existing = document.querySelector('.minigame-summary-overlay');
             if (existing) existing.remove();
@@ -484,6 +485,7 @@
                     ${medalHTML}
                     ${personalBestHTML}
                     <p class="minigame-summary-scoreline">Score: <strong>${score}</strong> • Coins: <strong>+${coinReward}</strong></p>
+                    ${rewardHint ? `<p class="minigame-summary-scoreline" style="font-size:0.86rem;color:#546E7A;">${escapeHTML(rewardHint)}</p>` : ''}
                     <div class="minigame-summary-grid">${statsHTML}</div>
                     <div class="minigame-summary-actions">
                         <button class="minigame-summary-btn primary" type="button" data-summary-close>Done</button>
@@ -633,6 +635,9 @@
             if (!config.skipPlayCount) incrementMinigamePlayCount(gameId, score);
             const statAggregate = applyMiniGameStatChangesToPets(pets, config.statDelta);
             const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins(gameId, coinScore) : 0;
+            const rewardContext = (gameState && gameState._lastMinigameRewardContext && gameState._lastMinigameRewardContext.source === 'minigame' && gameState._lastMinigameRewardContext.gameId === gameId)
+                ? gameState._lastMinigameRewardContext
+                : null;
             const previousBest = Number((gameState.minigameHighScores || {})[gameId] || 0);
             const isNewBest = updateMinigameHighScore(gameId, score);
 
@@ -671,7 +676,8 @@
                 statChanges,
                 isNewBest,
                 personalBest: isNewBest ? Math.max(score, previousBest) : null,
-                medal: getMiniGameMedal(score, config.medalThresholds || null)
+                medal: getMiniGameMedal(score, config.medalThresholds || null),
+                rewardHint: rewardContext && rewardContext.inDiminishingRewards ? rewardContext.summaryHint : ''
             });
             return { score, coinReward, isNewBest };
         }
