@@ -1049,6 +1049,13 @@
 
         function requestLocalReminderPermission() {
             ensureReminderState();
+            if (typeof MLFNativeNotifications !== 'undefined' && MLFNativeNotifications && typeof MLFNativeNotifications.hasNativeBridge === 'function' && MLFNativeNotifications.hasNativeBridge()) {
+                return MLFNativeNotifications.requestPermission().then((permission) => {
+                    gameState.reminders.permission = permission;
+                    try { saveGame(); } catch (e) {}
+                    return permission;
+                });
+            }
             if (typeof Notification === 'undefined') return Promise.resolve('unsupported');
             if (Notification.permission === 'granted') {
                 gameState.reminders.permission = 'granted';
@@ -1067,6 +1074,26 @@
             const today = getTodayString();
             if (reminders.lastSent && reminders.lastSent[key] === today) return false;
             reminders.lastSent[key] = today;
+            const nativeRouteByKey = {
+                streakRisk: 'streak',
+                expeditionReady: 'explore',
+                harvestReady: 'garden',
+                hatchReady: 'journey',
+                eggNearHatch: 'journey'
+            };
+            if (typeof MLFNativeNotifications !== 'undefined' && MLFNativeNotifications && typeof MLFNativeNotifications.hasNativeBridge === 'function' && MLFNativeNotifications.hasNativeBridge()) {
+                try {
+                    MLFNativeNotifications.scheduleReminder({
+                        id: `mlf.${key}.${today}`,
+                        title,
+                        body,
+                        route: nativeRouteByKey[key] || 'journey',
+                        reminderType: key,
+                        delaySeconds: 3
+                    });
+                } catch (e) {}
+                return true;
+            }
             if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                 try { new Notification(title, { body, icon: 'icon-192.png' }); } catch (e) {}
             } else if (typeof showToast === 'function') {

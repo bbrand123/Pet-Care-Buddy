@@ -218,6 +218,9 @@
             if (typeof getStreakProtectionStatus !== 'function') return '';
             const status = getStreakProtectionStatus();
             if (!status || !Number.isFinite(status.current) || status.current <= 0) return '';
+            const retentionStrings = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.streak)
+                ? MLFRetentionStrings.streak
+                : { quickClaimCta: 'Claim', quickClaimDone: 'Claimed' };
             const nextMilestoneText = status.nextMilestone
                 ? `${status.nextMilestone.label} in ${status.daysToMilestone} day${status.daysToMilestone === 1 ? '' : 's'}`
                 : 'All milestone tiers reached';
@@ -225,6 +228,7 @@
                 ? `Checkpoint: day ${status.checkpoint} (fallback floor ${status.checkpointFloor})`
                 : 'No checkpoint yet (first checkpoint at day 7)';
             const outcomeText = status.lastOutcome ? `<p class="streak-status-outcome">${escapeHTML(status.lastOutcome)}</p>` : '';
+            const canQuickClaim = !!(gameState && gameState.streak && !gameState.streak.todayBonusClaimed && typeof claimStreakBonus === 'function');
 	            return `
 	                <section class="streak-status-panel" id="streak-status-panel" role="region" aria-label="Streak status">
                     <div class="streak-status-head">
@@ -236,6 +240,9 @@
                         <p><strong>${status.freezeTokens}</strong> freeze token${status.freezeTokens === 1 ? '' : 's'}</p>
                         <p>${escapeHTML(nextMilestoneText)}</p>
                         <p>${escapeHTML(checkpointText)}</p>
+                    </div>
+                    <div class="streak-status-actions">
+                        <button class="streak-status-claim" id="streak-quick-claim-btn" type="button" ${canQuickClaim ? '' : 'disabled'} aria-label="${canQuickClaim ? 'Claim streak bonus' : 'Streak bonus already claimed'}">${canQuickClaim ? escapeHTML(retentionStrings.quickClaimCta) : escapeHTML(retentionStrings.quickClaimDone)}</button>
                     </div>
                     ${outcomeText}
                 </section>
@@ -295,45 +302,100 @@
                 });
             }
 
+            function getJourneyHudStatus() {
+                if (typeof Journey !== 'undefined' && Journey && typeof Journey.getCurrentChapter === 'function') {
+                    const current = Journey.getCurrentChapter();
+                    if (current && current.chapter) {
+                        return {
+                            day: current.day,
+                            chapter: current.chapter,
+                            chapterPct: current.chapterPct || 0,
+                            tokens: current.tokens || 0,
+                            nextObjective: current.nextObjective || null,
+                            nextReward: current.nextReward || null,
+                            chapterComplete: !!current.chapterComplete,
+                            trackProgress: { bond: { pct: 0, completed: 0, total: 0 }, mastery: { pct: 0, completed: 0, total: 0 }, collection: { pct: 0, completed: 0, total: 0 } }
+                        };
+                    }
+                }
+                if (typeof getJourneyStatus === 'function') {
+                    try { return getJourneyStatus(); } catch (e) {}
+                }
+                return null;
+            }
+
+            function getJourneyNextRewardLabel(status) {
+                const reward = status && status.nextReward;
+                if (!reward) return '';
+                if (typeof reward.label === 'string' && reward.label) return reward.label;
+                if (Number.isFinite(reward.tokens) && reward.tokens > 0) return `+${Math.floor(reward.tokens)} Journey Tokens`;
+                return 'Journey reward';
+            }
+
+            function getJourneyUiStrings() {
+                const hud = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.hud)
+                    ? MLFRetentionStrings.hud
+                    : null;
+                return hud || {
+                    journeyTitle: '30-Day Journey',
+                    journeyOpen: 'Open',
+                    nextObjectiveLabel: 'Current objective',
+                    nextRewardLabel: 'Next reward',
+                    chapterComplete: 'Chapter complete! Open Journey to review rewards.'
+                };
+            }
+
 	        function generateJourneyStatusPanelHTML() {
-	            if (typeof getJourneyStatus !== 'function') return '';
-	            const status = getJourneyStatus();
+	            const status = getJourneyHudStatus();
 	            if (!status || !status.chapter) return '';
-	            const nextObjective = status.nextObjective
-	                ? `<p class="journey-status-next"><strong>Next:</strong> ${escapeHTML(status.nextObjective.label || 'Objective')}</p>`
-	                : '<p class="journey-status-next"><strong>Next:</strong> Chapter complete! Claim your chapter story reward in Journey.</p>';
-	            const noveltyCopy = status.novelty
-	                ? `<p class="journey-status-novelty">Upcoming unlock: ${escapeHTML(status.novelty.title || status.novelty.label || `Day ${status.novelty.day}`)}</p>`
-	                : '<p class="journey-status-novelty">All scheduled novelty unlocks are claimed.</p>';
-	            const bondTrack = status.trackProgress.bond || { pct: 0, completed: 0, total: 0 };
-	            const masteryTrack = status.trackProgress.mastery || { pct: 0, completed: 0, total: 0 };
-	            const collectionTrack = status.trackProgress.collection || { pct: 0, completed: 0, total: 0 };
+                const uiStrings = getJourneyUiStrings();
+	            const objectiveCopy = status.nextObjective
+	                ? escapeHTML(status.nextObjective.label || 'Objective')
+	                : escapeHTML(uiStrings.chapterComplete);
+                const rewardCopy = escapeHTML(getJourneyNextRewardLabel(status) || 'Chapter reward');
+                const chapterPct = Math.max(0, Math.min(100, Math.floor(Number(status.chapterPct) || 0)));
 	            return `
 	                <section class="journey-status-panel" id="journey-status-panel" role="region" aria-label="30 day journey status">
 	                    <div class="journey-status-head">
-	                        <h3 class="journey-status-title">🧭 30-Day Journey</h3>
-	                        <button class="journey-status-open" id="journey-status-open" type="button" aria-label="Open journey details">Open</button>
+	                        <h3 class="journey-status-title">🧭 ${escapeHTML(uiStrings.journeyTitle)}</h3>
+	                        <button class="journey-status-open" id="journey-status-open" type="button" aria-label="Open journey details">${escapeHTML(uiStrings.journeyOpen)}</button>
 	                    </div>
 	                    <p class="journey-status-meta">Day ${status.day} · ${escapeHTML(status.chapter.label)} · Journey Tokens: ${status.tokens}</p>
-	                    <div class="journey-status-tracks" role="list" aria-label="Journey tracks">
-	                        <div class="journey-track" role="listitem" aria-label="Bond track ${bondTrack.completed} of ${bondTrack.total}">
-	                            <span>💞 Bond</span>
-	                            <div class="journey-track-bar"><span style="width:${bondTrack.pct}%;"></span></div>
-	                        </div>
-	                        <div class="journey-track" role="listitem" aria-label="Mastery track ${masteryTrack.completed} of ${masteryTrack.total}">
-	                            <span>🧠 Mastery</span>
-	                            <div class="journey-track-bar"><span style="width:${masteryTrack.pct}%;"></span></div>
-	                        </div>
-	                        <div class="journey-track" role="listitem" aria-label="Collection track ${collectionTrack.completed} of ${collectionTrack.total}">
-	                            <span>📚 Collection</span>
-	                            <div class="journey-track-bar"><span style="width:${collectionTrack.pct}%;"></span></div>
-	                        </div>
-	                    </div>
-	                    ${nextObjective}
-	                    ${noveltyCopy}
+                        <div class="journey-track" aria-label="Current chapter completion ${chapterPct} percent">
+                            <span>Chapter Progress</span>
+                            <div class="journey-track-bar"><span style="width:${chapterPct}%;"></span></div>
+                        </div>
+	                    <p class="journey-status-next"><strong>${escapeHTML(uiStrings.nextObjectiveLabel)}:</strong> ${objectiveCopy}</p>
+	                    <p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.nextRewardLabel)}:</strong> ${rewardCopy}</p>
 	                </section>
 	            `;
 	        }
+
+            function shouldCollapseLowValuePanelsForNewPlayers() {
+                const journey = getJourneyHudStatus();
+                const journeyDay = Number(journey && journey.day);
+                if (Number.isFinite(journeyDay) && journeyDay > 0) return journeyDay <= 3;
+                try {
+                    if (gameState && gameState.pet && typeof getPetAge === 'function') {
+                        return (Number(getPetAge(gameState.pet)) || 0) <= 72;
+                    }
+                } catch (e) {}
+                return false;
+            }
+
+            function wrapLowValueHudPanelsHTML(contentHTML) {
+                if (!contentHTML) return '';
+                if (!shouldCollapseLowValuePanelsForNewPlayers()) return contentHTML;
+                const uiStrings = getJourneyUiStrings();
+                return `
+                    <details class="hud-secondary-panels" id="hud-secondary-panels">
+                        <summary aria-label="${escapeHTML(uiStrings.beginnerMoreSummary || 'More panels')}">${escapeHTML(uiStrings.beginnerMoreSummary || 'More panels')} <span aria-hidden="true">▾</span></summary>
+                        <div class="hud-secondary-panels-body" aria-label="${escapeHTML(uiStrings.beginnerMoreHint || 'Additional panels')}">
+                            ${contentHTML}
+                        </div>
+                    </details>
+                `;
+            }
 
 		        function generateOnboardingNextPanelHTML() {
 	            if (typeof ensureRetentionMetaState !== 'function') return '';
@@ -457,10 +519,17 @@
 	        }
 
 	        function generateRetentionDebugPanelHTML() {
-	            if (typeof getRetentionDebugSnapshot !== 'function') return '';
-	            if (!(typeof RETENTION_DEV_FLAGS !== 'undefined' && RETENTION_DEV_FLAGS && RETENTION_DEV_FLAGS.showDebugPanel)) return '';
+	            const telemetry = (typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry) ? MLFRetentionTelemetry : null;
+                const devAdmin = !!(telemetry && typeof telemetry.isDevAdminEnabled === 'function' && telemetry.isDevAdminEnabled());
+	            if (typeof getRetentionDebugSnapshot !== 'function' && !devAdmin) return '';
+	            if (!(devAdmin || (typeof RETENTION_DEV_FLAGS !== 'undefined' && RETENTION_DEV_FLAGS && RETENTION_DEV_FLAGS.showDebugPanel))) return '';
 	            const enabled = (typeof isRetentionDebugEnabled === 'function') ? isRetentionDebugEnabled() : false;
-	            const snapshot = getRetentionDebugSnapshot();
+	            const snapshot = (typeof getRetentionDebugSnapshot === 'function')
+                    ? getRetentionDebugSnapshot()
+                    : { streak: { current: 0, freezeTokens: 0 }, journey: { day: 1, chapter: 'chapter1', chapterPct: 0, tokens: 0 }, reminderItems: 0, awayDays: 0, noveltyLastDay: 0 };
+                const telemetrySnapshot = telemetry && typeof telemetry.getDebugSnapshot === 'function' ? telemetry.getDebugSnapshot() : null;
+                const funnels = telemetrySnapshot && telemetrySnapshot.funnels ? telemetrySnapshot.funnels : null;
+                const flags = telemetrySnapshot && telemetrySnapshot.flags ? telemetrySnapshot.flags : null;
 	            const details = enabled ? `
 	                <div class="retention-debug-details">
 	                    <div>Streak: ${snapshot.streak.current} (freeze ${snapshot.streak.freezeTokens})</div>
@@ -469,10 +538,28 @@
 	                    <div>Away days: ${snapshot.awayDays} · Novelty day: ${snapshot.noveltyLastDay}</div>
 	                </div>
 	            ` : '';
+                const telemetryPanel = telemetrySnapshot ? `
+                    <div class="retention-debug-details">
+                        <div>Telemetry queue: ${telemetrySnapshot.queueLength} · Backoff: ${Math.round((telemetrySnapshot.backoffMs || 0) / 1000)}s</div>
+                        <div>Funnels: D1 ${funnels ? funnels.D1.pct : 0}% · D7 ${funnels ? funnels.D7.pct : 0}% · D14 ${funnels ? funnels.D14.pct : 0}% · D30 ${funnels ? funnels.D30.pct : 0}%</div>
+                        <div>Upload: ${flags && flags.telemetryUploadEnabled ? 'on' : 'off'} · Capture: ${flags && flags.telemetryCaptureEnabled ? 'on' : 'off'}</div>
+                    </div>
+                    <div class="retention-debug-admin-actions" role="group" aria-label="Retention feature flags">
+                        <button id="retention-flag-journey" type="button">${flags && flags.journeyEnabled ? 'Journey: on' : 'Journey: off'}</button>
+                        <button id="retention-flag-seasonal" type="button">${flags && flags.seasonalJourneyEnabled ? 'Seasonal: on' : 'Seasonal: off'}</button>
+                        <button id="retention-flag-telemetry-upload" type="button">${flags && flags.telemetryUploadEnabled ? 'Upload: on' : 'Upload: off'}</button>
+                    </div>
+                    ${(telemetrySnapshot.recent || []).length > 0 ? `
+                        <div class="retention-debug-details" aria-label="Recent telemetry events">
+                            ${(telemetrySnapshot.recent || []).slice(-5).map((evt) => `<div>${escapeHTML(evt.event || 'event')} · ${escapeHTML(String(evt.playerId || ''))}</div>`).join('')}
+                        </div>
+                    ` : ''}
+                ` : '';
 	            return `
 	                <section class="retention-debug-panel" id="retention-debug-panel" role="region" aria-label="Retention debug panel">
 	                    <button id="retention-debug-toggle" type="button" aria-pressed="${enabled ? 'true' : 'false'}">${enabled ? 'Disable' : 'Enable'} RETENTION DEV</button>
 	                    ${details}
+                        ${telemetryPanel}
 	                </section>
 	            `;
 	        }
@@ -1519,13 +1606,15 @@
                     </div>
                 </div>
 
-	                ${generateGoalLadderHTML()}
 	                ${generateStreakStatusPanelHTML()}
 	                ${generateJourneyStatusPanelHTML()}
 	                ${generateReminderCenterBannerHTML()}
 		                ${generateOnboardingNextPanelHTML()}
-                        ${generateAdvancedEmptyStateCardsHTML()}
-		                ${generateRetentionDebugPanelHTML()}
+                        ${wrapLowValueHudPanelsHTML([
+                            generateGoalLadderHTML(),
+                            generateAdvancedEmptyStateCardsHTML(),
+                            generateRetentionDebugPanelHTML()
+                        ].join(''))}
 
 	                ${(() => {
                     const careQuality = pet.careQuality || 'average';
@@ -1760,10 +1849,33 @@
 	            safeAddClick('streak-status-open', () => {
 	                if (typeof showStreakModal === 'function') showStreakModal();
 	            });
+                safeAddClick('streak-quick-claim-btn', () => {
+                    const strings = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.streak)
+                        ? MLFRetentionStrings.streak
+                        : { quickClaimSuccess: 'Streak bonus claimed.', quickClaimUnavailable: 'Streak bonus already claimed for today.', quickClaimError: 'Streak claim is not available right now.' };
+                    let result = null;
+                    if (typeof Journey !== 'undefined' && Journey && typeof Journey.claimStreak === 'function') {
+                        result = Journey.claimStreak((gameState && gameState.economy && gameState.economy.playerId) || null);
+                    } else if (typeof claimStreakBonus === 'function') {
+                        const legacy = claimStreakBonus();
+                        result = legacy ? Object.assign({ ok: true }, legacy) : { ok: false, reason: 'already-claimed' };
+                    }
+                    if (!result || !result.ok) {
+                        if (typeof showToast === 'function') showToast(result && result.reason === 'already-claimed' ? strings.quickClaimUnavailable : strings.quickClaimError, '#90A4AE');
+                        return;
+                    }
+                    const bonusLabel = result && result.bonus && result.bonus.label ? ` (${result.bonus.label})` : '';
+                    if (typeof showToast === 'function') showToast(`🔥 ${strings.quickClaimSuccess}${bonusLabel}`, '#FF6D00', { priority: 'low' });
+                    if (typeof updateNeedDisplays === 'function') updateNeedDisplays();
+                    if (typeof updateWellnessBar === 'function') updateWellnessBar();
+                    renderPetPhase();
+                });
 	            safeAddClick('journey-status-open', () => {
+                    if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') Journey.trackJourneyOpen();
 	                if (typeof showJourneyModal === 'function') showJourneyModal();
 	            });
 	            safeAddClick('journey-btn', () => {
+                    if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') Journey.trackJourneyOpen();
 	                if (typeof showJourneyModal === 'function') showJourneyModal();
 	            });
                 safeAddClick('household-btn', () => {
@@ -1821,9 +1933,15 @@
 	                    gameState.reminders = { enabled: false, permission: 'default', lastSent: {} };
 	                }
 	                gameState.reminders.enabled = true;
-	                if (typeof requestLocalReminderPermission === 'function') {
-	                    requestLocalReminderPermission().then((permission) => {
+                    const requestPermission = (typeof MLFNativeNotifications !== 'undefined' && MLFNativeNotifications && typeof MLFNativeNotifications.requestPermission === 'function')
+                        ? MLFNativeNotifications.requestPermission
+                        : (typeof requestLocalReminderPermission === 'function' ? requestLocalReminderPermission : null);
+	                if (typeof requestPermission === 'function') {
+	                    Promise.resolve(requestPermission()).then((permission) => {
 	                        gameState.reminders.permission = permission;
+                            if (typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.recordReminderOptIn === 'function') {
+                                MLFRetentionTelemetry.recordReminderOptIn((typeof MLFNativeNotifications !== 'undefined' && MLFNativeNotifications && MLFNativeNotifications.hasNativeBridge && MLFNativeNotifications.hasNativeBridge()) ? 'ios' : 'web', permission);
+                            }
 	                        if (typeof markReminderPromptSeen === 'function') markReminderPromptSeen();
 	                        if (typeof saveGame === 'function') saveGame();
 	                    });
@@ -1831,7 +1949,10 @@
 	                    if (typeof markReminderPromptSeen === 'function') markReminderPromptSeen();
 	                    if (typeof saveGame === 'function') saveGame();
 	                }
-	                if (typeof showToast === 'function') showToast('🔔 Reminders enabled.', '#66BB6A');
+	                if (typeof showToast === 'function') {
+                        const reminderStrings = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.reminders) ? MLFRetentionStrings.reminders : { enabledToast: 'Reminders enabled.' };
+                        showToast(`🔔 ${reminderStrings.enabledToast}`, '#66BB6A');
+                    }
 	            });
 	            safeAddClick('reminder-optin-later', () => {
 	                if (typeof dismissReminderPrompt === 'function') dismissReminderPrompt();
@@ -1844,6 +1965,24 @@
 	                if (typeof showToast === 'function') showToast(`Retention DEV ${enabled ? 'enabled' : 'disabled'}.`, '#90CAF9');
 	                renderPetPhase();
 	            });
+                safeAddClick('retention-flag-journey', () => {
+                    if (!(typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.getRuntimeFlags === 'function' && typeof MLFRetentionTelemetry.setFlag === 'function')) return;
+                    const flags = MLFRetentionTelemetry.getRuntimeFlags();
+                    MLFRetentionTelemetry.setFlag('journeyEnabled', !flags.journeyEnabled);
+                    renderPetPhase();
+                });
+                safeAddClick('retention-flag-seasonal', () => {
+                    if (!(typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.getRuntimeFlags === 'function' && typeof MLFRetentionTelemetry.setFlag === 'function')) return;
+                    const flags = MLFRetentionTelemetry.getRuntimeFlags();
+                    MLFRetentionTelemetry.setFlag('seasonalJourneyEnabled', !flags.seasonalJourneyEnabled);
+                    renderPetPhase();
+                });
+                safeAddClick('retention-flag-telemetry-upload', () => {
+                    if (!(typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.getRuntimeFlags === 'function' && typeof MLFRetentionTelemetry.setFlag === 'function')) return;
+                    const flags = MLFRetentionTelemetry.getRuntimeFlags();
+                    MLFRetentionTelemetry.setFlag('telemetryUploadEnabled', !flags.telemetryUploadEnabled);
+                    renderPetPhase();
+                });
 	            const reminderCenter = document.getElementById('reminder-center-banner');
 	            if (reminderCenter) {
 	                reminderCenter.addEventListener('click', (event) => {

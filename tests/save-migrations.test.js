@@ -9,6 +9,7 @@ const SaveMigrationRegistry = require('../js/save/migrations/registry.js');
 const SaveMigrationV0ToV1 = require('../js/save/migrations/v0-to-v1.js');
 const SaveMigrationV1ToV2 = require('../js/save/migrations/v1-to-v2.js');
 const SaveMigrationV2ToV3 = require('../js/save/migrations/v2-to-v3.js');
+const SaveMigrationV3ToV4 = require('../js/save/migrations/v3-to-v4.js');
 
 const fixturesDir = path.resolve(__dirname, 'fixtures/saves');
 
@@ -20,19 +21,22 @@ function parseFixtureJson(name) {
     return JSON.parse(readFixture(name));
 }
 
-test('save migration registry is ordered and includes v0->v1, v1->v2, and v2->v3', () => {
+test('save migration registry is ordered and includes v0->v1, v1->v2, v2->v3, and v3->v4', () => {
     const migrations = SaveMigrationRegistry.MIGRATIONS;
     assert.ok(Array.isArray(migrations));
-    assert.equal(migrations.length >= 3, true);
+    assert.equal(migrations.length >= 4, true);
     assert.equal(migrations[0].fromVersion, 0);
     assert.equal(migrations[0].toVersion, 1);
     assert.equal(migrations[1].fromVersion, 1);
     assert.equal(migrations[1].toVersion, 2);
     assert.equal(migrations[2].fromVersion, 2);
     assert.equal(migrations[2].toVersion, 3);
+    assert.equal(migrations[3].fromVersion, 3);
+    assert.equal(migrations[3].toVersion, 4);
     assert.equal(migrations.some((migration) => migration.name === 'legacy-v0-to-v1'), true);
     assert.equal(migrations.some((migration) => migration.name === 'household-v1-to-v2'), true);
     assert.equal(migrations.some((migration) => migration.name === 'pity-counters-v2-to-v3'), true);
+    assert.equal(migrations.some((migration) => migration.name === 'journey-retention-v3-to-v4'), true);
 });
 
 test('v0->v1 migration is unit-tested and records repairs', () => {
@@ -112,6 +116,36 @@ test('v2->v3 migration adds pity counters for economy and exploration', () => {
     assert.equal(changes.some((change) => change.path === 'exploration.pity'), true);
 });
 
+test('v3->v4 migration adds chapter-local journeyRetention without auto-completing chapter objectives', () => {
+    const payload = {
+        saveSchemaVersion: 3,
+        phase: 'pet',
+        lastUpdate: 1700000000000,
+        pet: { id: 'pet-1', name: 'Pip', type: 'cat' },
+        pets: [{ id: 'pet-1', name: 'Pip', type: 'cat' }],
+        household: { activePetId: 'pet-1', petsById: { 'pet-1': { id: 'pet-1' } }, relationships: {}, lastSimulatedAt: 1700000000000, simVersion: 1 },
+        totalFeedCount: 999,
+        totalDailyCompletions: 42,
+        minigamePlayCounts: { matching: 20 }
+    };
+    const changes = [];
+    const migrated = SaveMigrationV3ToV4.apply(payload, {
+        recordChange(change) {
+            changes.push(change);
+        }
+    });
+
+    assert.equal(migrated.saveSchemaVersion, 4);
+    assert.ok(migrated.journeyRetention);
+    assert.equal(migrated.journeyRetention.version, 1);
+    assert.ok(migrated.journeyRetention.chapterProgress);
+    const chapter = migrated.journeyRetention.chapterProgress[migrated.journeyRetention.currentChapterId];
+    assert.ok(chapter);
+    assert.deepEqual(chapter.deltas, {});
+    assert.deepEqual(chapter.completedObjectives, {});
+    assert.equal(changes.some((change) => change.path === 'journeyRetention'), true);
+});
+
 test('parseSavePayloadJSON returns helpful parse errors', () => {
     assert.throws(
         () => SaveMigrations.parseSavePayloadJSON(readFixture('corrupt-invalid-json.json')),
@@ -133,6 +167,11 @@ const validFixtureCases = [
         name: 'legacy-v0-explicit-pet.json',
         expected: 'legacy-v0-explicit-pet.expected.json',
         expectedFromVersion: 0
+    },
+    {
+        name: 'legacy-v3-no-journey-retention.json',
+        expected: 'legacy-v3-no-journey-retention.expected.json',
+        expectedFromVersion: 3
     }
 ];
 
@@ -158,6 +197,18 @@ for (const fixtureCase of validFixtureCases) {
         assert.deepEqual(JSON.parse(serialized1), expected);
     });
 }
+
+test('migrating legacy v3 save keeps journey chapter-local progress sane (not pre-completed)', () => {
+    const parsed = parseFixtureJson('legacy-v3-no-journey-retention.json');
+    const result = SaveMigrations.migrateSavePayload(parsed);
+    assert.equal(result.payload.saveSchemaVersion, SaveSchema.CURRENT_SCHEMA_VERSION);
+    assert.ok(result.payload.journeyRetention);
+    const journeyRetention = result.payload.journeyRetention;
+    const chapter = journeyRetention.chapterProgress[journeyRetention.currentChapterId];
+    assert.ok(chapter);
+    assert.deepEqual(chapter.completedObjectives, {});
+    assert.deepEqual(chapter.deltas, {});
+});
 
 const errorFixtureCases = [
     {

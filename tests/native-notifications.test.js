@@ -1,0 +1,32 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+function freshRequire(modulePath) {
+    delete require.cache[require.resolve(modulePath)];
+    return require(modulePath);
+}
+
+test('native notifications deep-link route handler opens known routes', () => {
+    let opened = [];
+    global.showJourneyModal = () => { opened.push('journey'); };
+    global.showStreakModal = () => { opened.push('streak'); };
+    global.showExplorationModal = () => { opened.push('explore'); };
+    global.switchRoom = (roomId) => { opened.push('room:' + roomId); };
+    global.renderPetPhase = () => { opened.push('render'); };
+
+    const NativeNotifications = freshRequire('../js/native/notifications.js');
+    assert.equal(NativeNotifications.openRoute('journey'), true);
+    assert.equal(NativeNotifications.openRoute('/streak'), true);
+    assert.equal(NativeNotifications.openRoute('explore'), true);
+    assert.equal(NativeNotifications.openRoute('garden'), true);
+    assert.equal(opened.includes('journey'), true);
+    assert.equal(opened.includes('streak'), true);
+    assert.equal(opened.includes('explore'), true);
+    assert.equal(opened.includes('room:garden'), true);
+    delete global.showJourneyModal;
+    delete global.showStreakModal;
+    delete global.showExplorationModal;
+    delete global.switchRoom;
+    delete global.renderPetPhase;
+    delete global.MLFNativeNotifications;
+});

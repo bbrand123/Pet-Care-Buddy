@@ -8,6 +8,7 @@
 import SwiftUI
 import WebKit
 import UIKit
+import UserNotifications
 
 @main
 struct My_Little_FriendApp: App {
@@ -117,6 +118,7 @@ struct GameWebView: UIViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.add(context.coordinator, name: "haptics")
         configuration.userContentController.add(context.coordinator, name: "lifecycleSave")
+        configuration.userContentController.add(context.coordinator, name: "notifications")
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
@@ -154,7 +156,7 @@ struct GameWebView: UIViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler, UNUserNotificationCenterDelegate {
         private struct PendingLifecycleSaveRequest {
             let requestId: String
             let reason: String
@@ -186,6 +188,7 @@ struct GameWebView: UIViewRepresentable {
         private let lifecycleSaveTimeoutMs = 1800
         private let lifecycleSaveQueue = DispatchQueue.main
         private var lastLifecycleSaveTriggerAt = Date.distantPast
+        private var pendingNotificationDeepLink: [String: Any]?
 
         init(isLoading: Binding<Bool>, loadFailure: Binding<WebViewLoadFailureState?>) {
             _isLoading = isLoading
@@ -201,6 +204,7 @@ struct GameWebView: UIViewRepresentable {
         func attach(webView: WKWebView) {
             self.webView = webView
             installLifecycleObserversIfNeeded()
+            UNUserNotificationCenter.current().delegate = self
         }
 
         private func prepareHaptics() {
@@ -272,6 +276,10 @@ struct GameWebView: UIViewRepresentable {
                 handleLifecycleSaveCallback(message)
                 return
             }
+            if message.name == "notifications" {
+                handleNativeNotificationsMessage(message)
+                return
+            }
             guard message.name == "haptics" else { return }
 
             var type = "confirm"
@@ -289,6 +297,202 @@ struct GameWebView: UIViewRepresentable {
 
             DispatchQueue.main.async { [weak self] in
                 self?.fireHaptic(type: type, strength: strength)
+            }
+        }
+
+        private func handleNativeNotificationsMessage(_ message: WKScriptMessage) {
+            guard let body = message.body as? [String: Any] else { return }
+            let action = (body["action"] as? String ?? "").lowercased()
+            let requestId = body["requestId"] as? String ?? UUID().uuidString
+            switch action {
+            case "requestpermission":
+                handleNotificationsPermissionRequest(requestId: requestId)
+            case "schedule":
+                handleNotificationSchedule(body: body, requestId: requestId)
+            case "cancel":
+                handleNotificationCancel(body: body, requestId: requestId)
+            case "cancelall":
+                handleNotificationCancelAll(requestId: requestId)
+            default:
+                sendNotificationsBridgeCallback([
+                    "requestId": requestId,
+                    "ok": false,
+                    "error": "Unknown notifications action: \(action)"
+                ])
+            }
+        }
+
+        private func handleNotificationsPermissionRequest(requestId: String) {
+            let center = UNUserNotificationCenter.current()
+            center.requestAuthorization(options: [.alert, .badge, .sound]) { [weak self] granted, error in
+                center.getNotificationSettings { settings in
+                    let permission = self?.mapNotificationAuthorizationStatus(settings.authorizationStatus) ?? "default"
+                    DispatchQueue.main.async {
+                        var payload: [String: Any] = [
+                            "requestId": requestId,
+                            "ok": error == nil,
+                            "granted": granted,
+                            "permission": permission
+                        ]
+                        if let error {
+                            payload["error"] = error.localizedDescription
+                        }
+                        self?.sendNotificationsBridgeCallback(payload)
+                    }
+                }
+            }
+        }
+
+        private func handleNotificationSchedule(body: [String: Any], requestId: String) {
+            let identifier = (body["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "mlf.reminder.\(UUID().uuidString)"
+            let title = (body["title"] as? String) ?? "My Little Friend"
+            let messageBody = (body["body"] as? String) ?? ""
+            let route = normalizedReminderRoute(body["route"] as? String)
+            let reminderType = (body["reminderType"] as? String) ?? "generic"
+
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = messageBody
+            content.sound = .default
+            content.userInfo = [
+                "route": route,
+                "reminderType": reminderType,
+                "deepLink": "mlf://\(route)"
+            ]
+
+            let delaySeconds = (body["delaySeconds"] as? NSNumber)?.doubleValue ?? (body["delaySeconds"] as? Double)
+            let fireAtMs = (body["fireAt"] as? NSNumber)?.doubleValue ?? (body["fireAt"] as? Double)
+            let trigger: UNTimeIntervalNotificationTrigger
+            if let fireAtMs, fireAtMs > 0 {
+                let delta = max(1.0, (fireAtMs / 1000.0) - Date().timeIntervalSince1970)
+                trigger = UNTimeIntervalNotificationTrigger(timeInterval: delta, repeats: false)
+            } else {
+                trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1.0, delaySeconds ?? 3.0), repeats: false)
+            }
+
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: trigger)
+            UNUserNotificationCenter.current().add(request) { [weak self] error in
+                DispatchQueue.main.async {
+                    var payload: [String: Any] = [
+                        "requestId": requestId,
+                        "ok": error == nil,
+                        "id": identifier,
+                        "route": route
+                    ]
+                    if let error {
+                        payload["error"] = error.localizedDescription
+                    }
+                    self?.sendNotificationsBridgeCallback(payload)
+                }
+            }
+        }
+
+        private func handleNotificationCancel(body: [String: Any], requestId: String) {
+            let identifier = (body["id"] as? String) ?? ""
+            if !identifier.isEmpty {
+                UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+                UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
+            }
+            sendNotificationsBridgeCallback([
+                "requestId": requestId,
+                "ok": true,
+                "id": identifier
+            ])
+        }
+
+        private func handleNotificationCancelAll(requestId: String) {
+            let center = UNUserNotificationCenter.current()
+            center.removeAllPendingNotificationRequests()
+            center.removeAllDeliveredNotifications()
+            sendNotificationsBridgeCallback([
+                "requestId": requestId,
+                "ok": true
+            ])
+        }
+
+        private func mapNotificationAuthorizationStatus(_ status: UNAuthorizationStatus) -> String {
+            switch status {
+            case .authorized, .provisional, .ephemeral:
+                return "granted"
+            case .denied:
+                return "denied"
+            case .notDetermined:
+                return "default"
+            @unknown default:
+                return "default"
+            }
+        }
+
+        private func normalizedReminderRoute(_ route: String?) -> String {
+            let raw = (route ?? "journey").lowercased().replacingOccurrences(of: "#", with: "").replacingOccurrences(of: "/", with: "")
+            switch raw {
+            case "streak":
+                return "streak"
+            case "explore", "expedition":
+                return "explore"
+            case "garden":
+                return "garden"
+            default:
+                return "journey"
+            }
+        }
+
+        private func sendNotificationsBridgeCallback(_ payload: [String: Any]) {
+            guard let webView else { return }
+            guard JSONSerialization.isValidJSONObject(payload),
+                  let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let json = String(data: data, encoding: .utf8) else {
+                return
+            }
+            let script = """
+            (function() {
+              try {
+                if (window.MLFNativeNotifications && typeof window.MLFNativeNotifications.__nativeCallback === 'function') {
+                  window.MLFNativeNotifications.__nativeCallback(\(json));
+                }
+              } catch (_) {}
+            })();
+            """
+            webView.evaluateJavaScript(script, completionHandler: nil)
+        }
+
+        private func deliverReminderDeepLink(route: String, reminderType: String) {
+            let payload: [String: Any] = [
+                "route": normalizedReminderRoute(route),
+                "reminderType": reminderType,
+                "deepLink": "mlf://\(normalizedReminderRoute(route))"
+            ]
+            pendingNotificationDeepLink = payload
+            attemptDeliverPendingReminderDeepLink()
+        }
+
+        private func attemptDeliverPendingReminderDeepLink() {
+            guard let webView, let payload = pendingNotificationDeepLink else { return }
+            guard JSONSerialization.isValidJSONObject(payload),
+                  let data = try? JSONSerialization.data(withJSONObject: payload),
+                  let json = String(data: data, encoding: .utf8) else {
+                return
+            }
+            let script = """
+            (function() {
+              try {
+                if (window.MLFNativeNotifications && typeof window.MLFNativeNotifications.__nativeDeepLink === 'function') {
+                  return !!window.MLFNativeNotifications.__nativeDeepLink(\(json));
+                }
+                return false;
+              } catch (_) {
+                return false;
+              }
+            })();
+            """
+            webView.evaluateJavaScript(script) { [weak self] result, error in
+                guard let self else { return }
+                if error == nil {
+                    self.pendingNotificationDeepLink = nil
+                    return
+                }
+                self.pendingNotificationDeepLink = payload
+                _ = result
             }
         }
 
@@ -532,6 +736,7 @@ struct GameWebView: UIViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             isLoading = false
             loadFailure = nil
+            attemptDeliverPendingReminderDeepLink()
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -561,6 +766,28 @@ struct GameWebView: UIViewRepresentable {
                 UIApplication.shared.open(url)
             }
             decisionHandler(.cancel)
+        }
+
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter,
+            willPresent notification: UNNotification,
+            withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+        ) {
+            completionHandler([.banner, .sound])
+        }
+
+        func userNotificationCenter(
+            _ center: UNUserNotificationCenter,
+            didReceive response: UNNotificationResponse,
+            withCompletionHandler completionHandler: @escaping () -> Void
+        ) {
+            let userInfo = response.notification.request.content.userInfo
+            let route = (userInfo["route"] as? String) ?? "journey"
+            let reminderType = (userInfo["reminderType"] as? String) ?? "generic"
+            DispatchQueue.main.async { [weak self] in
+                self?.deliverReminderDeepLink(route: route, reminderType: reminderType)
+                completionHandler()
+            }
         }
 
         private func handleWebViewLoadFailure(in webView: WKWebView, error: Error, phase: String) {

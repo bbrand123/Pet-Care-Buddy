@@ -2,7 +2,40 @@
   "phase": "egg",
   "eggTaps": 2,
   "lastUpdate": 1700000000000,
-  "saveSchemaVersion": 3,
+  "saveSchemaVersion": 4,
+  "journeyRetention": {
+    "version": 1,
+    "startedAtDate": "2023-11-14",
+    "currentChapterId": "chapter1",
+    "lastUpdatedAt": 1700000000000,
+    "chapterProgress": {
+      "chapter1": {
+        "enteredAt": 1700000000000,
+        "baselines": {},
+        "deltas": {},
+        "completedObjectives": {},
+        "claimedRewards": {},
+        "chapterCompletedAt": 0
+      }
+    },
+    "streak": {
+      "lastClaimDate": null,
+      "backlog": {
+        "pending": [],
+        "pendingValue": 0,
+        "dripLoginsRemaining": 0,
+        "lastDripAt": 0
+      }
+    },
+    "bond": {
+      "xp": 0,
+      "level": 1
+    },
+    "tokens": 0,
+    "features": {
+      "seasonalEnabled": false
+    }
+  },
   "household": {
     "activePetId": null,
     "petsById": {},

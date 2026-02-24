@@ -4,49 +4,32 @@
   "lastUpdate": 1700000000000,
   "activePetIndex": 0,
   "pet": {
-    "name": "Nova",
-    "type": "furry",
-    "birthdate": 1699990000000,
-    "id": "pet-1"
+    "id": "pet-7",
+    "name": "Miso",
+    "type": "cat"
   },
   "pets": [
     {
-      "name": "Nova",
-      "type": "furry",
-      "birthdate": 1699990000000,
-      "id": "pet-1"
+      "id": "pet-7",
+      "name": "Miso",
+      "type": "cat"
     }
   ],
   "household": {
-    "activePetId": "pet-1",
+    "activePetId": "pet-7",
     "petsById": {
-      "pet-1": {
-        "name": "Nova",
-        "type": "furry",
-        "birthdate": 1699990000000,
-        "id": "pet-1",
-        "needs": {
-          "hunger": 70,
-          "energy": 70,
-          "fun": 70,
-          "hygiene": 70
-        },
-        "hunger": 70,
-        "energy": 70,
-        "happiness": 70,
-        "cleanliness": 70,
-        "mood": "neutral",
-        "traits": {},
-        "schedule": {},
-        "currentActivity": null,
-        "location": {
-          "roomId": "bedroom"
-        }
+      "pet-7": {
+        "id": "pet-7"
       }
     },
     "relationships": {},
     "lastSimulatedAt": 1700000000000,
     "simVersion": 1
+  },
+  "totalFeedCount": 12,
+  "totalDailyCompletions": 2,
+  "minigamePlayCounts": {
+    "matching": 3
   },
   "journeyRetention": {
     "version": 1,

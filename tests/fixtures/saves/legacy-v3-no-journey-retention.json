@@ -1,0 +1,34 @@
+{
+  "saveSchemaVersion": 3,
+  "phase": "pet",
+  "lastUpdate": 1700000000000,
+  "activePetIndex": 0,
+  "pet": {
+    "id": "pet-7",
+    "name": "Miso",
+    "type": "cat"
+  },
+  "pets": [
+    {
+      "id": "pet-7",
+      "name": "Miso",
+      "type": "cat"
+    }
+  ],
+  "household": {
+    "activePetId": "pet-7",
+    "petsById": {
+      "pet-7": {
+        "id": "pet-7"
+      }
+    },
+    "relationships": {},
+    "lastSimulatedAt": 1700000000000,
+    "simVersion": 1
+  },
+  "totalFeedCount": 12,
+  "totalDailyCompletions": 2,
+  "minigamePlayCounts": {
+    "matching": 3
+  }
+}

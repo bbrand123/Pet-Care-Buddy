@@ -180,6 +180,17 @@
             rewardModifiers: [],
             mastery: createDefaultMasteryState(),
             goalLadder: null,
+            journeyRetention: {
+                version: 1,
+                startedAtDate: null,
+                currentChapterId: 'chapter1',
+                lastUpdatedAt: 0,
+                chapterProgress: {},
+                streak: { lastClaimDate: null, backlog: { pending: [], pendingValue: 0, dripLoginsRemaining: 0, lastDripAt: 0 } },
+                bond: { xp: 0, level: 1 },
+                tokens: 0,
+                features: { seasonalEnabled: false }
+            },
             // Competition system
             competition: {
                 battlesWon: 0, battlesLost: 0, bossesDefeated: {},
@@ -1190,6 +1201,9 @@
 	                ensureExplorationState();
 	                ensureEconomyState();
 	                ensureMiniGameExpansionState();
+                    if (typeof Journey !== 'undefined' && Journey && typeof Journey.ensureJourneyState === 'function') {
+                        Journey.ensureJourneyState(gameState);
+                    }
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
                 if (gameState.phase === 'pet') {
@@ -1423,6 +1437,21 @@
                         parsed.minigameScoreHistory = {};
                     }
                     ensureMiniGameExpansionState(parsed);
+                    if (typeof MLFStateMigrations !== 'undefined' && MLFStateMigrations && typeof MLFStateMigrations.normalizeJourneyRetentionState === 'function') {
+                        MLFStateMigrations.normalizeJourneyRetentionState(parsed, { now: Date.now() });
+                    } else if (!parsed.journeyRetention || typeof parsed.journeyRetention !== 'object') {
+                        parsed.journeyRetention = {
+                            version: 1,
+                            startedAtDate: null,
+                            currentChapterId: 'chapter1',
+                            lastUpdatedAt: Date.now(),
+                            chapterProgress: {},
+                            streak: { lastClaimDate: null, backlog: { pending: [], pendingValue: 0, dripLoginsRemaining: 0, lastDripAt: 0 } },
+                            bond: { xp: 0, level: 1 },
+                            tokens: 0,
+                            features: { seasonalEnabled: false }
+                        };
+                    }
 
                     // Add garden if missing (for existing saves)
                     if (!parsed.garden || typeof parsed.garden !== 'object') {

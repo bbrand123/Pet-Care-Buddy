@@ -2667,9 +2667,14 @@
 	                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
 	                existing.remove();
 	            }
-	            if (typeof getJourneyStatus !== 'function') return;
-	            const status = getJourneyStatus();
-	            const chapters = (typeof getJourneyChapterStates === 'function') ? getJourneyChapterStates() : [];
+	            const status = (typeof getJourneyStatus === 'function')
+                    ? getJourneyStatus()
+                    : ((typeof Journey !== 'undefined' && Journey && typeof Journey.getJourneyModalStatus === 'function') ? Journey.getJourneyModalStatus() : null);
+                if (!status) return;
+	            const chapters = (typeof getJourneyChapterStates === 'function')
+                    ? getJourneyChapterStates()
+                    : ((typeof Journey !== 'undefined' && Journey && typeof Journey.getJourneyChapterStates === 'function') ? Journey.getJourneyChapterStates() : []);
+                if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') Journey.trackJourneyOpen();
 	            const chapterObjectives = Array.isArray(status.chapterObjectives) ? status.chapterObjectives : [];
 	            const objectivesHTML = chapterObjectives.length > 0
 	                ? chapterObjectives.map((objective) => `
@@ -2724,12 +2729,14 @@
 	                    <h3 class="journey-section-title">Chapter Progress</h3>
 	                    <div class="journey-chapter-list">${chapterHTML}</div>
 	                    <h3 class="journey-section-title">Journey Token Rewards</h3>
-	                    <div class="journey-token-store" role="group" aria-label="Journey token rewards">
-	                        <button type="button" data-journey-redeem="story">Story Memory (5)</button>
-	                        <button type="button" data-journey-redeem="cosmetic">Cosmetic Drop (8)</button>
-	                        <button type="button" data-journey-redeem="bond">Bond Boost (6)</button>
-	                        <button type="button" data-journey-redeem="codex">Codex Insight (7)</button>
-	                    </div>
+	                    ${typeof redeemJourneyTokenReward === 'function' ? `
+                        <div class="journey-token-store" role="group" aria-label="Journey token rewards">
+                            <button type="button" data-journey-redeem="story">Story Memory (5)</button>
+                            <button type="button" data-journey-redeem="cosmetic">Cosmetic Drop (8)</button>
+                            <button type="button" data-journey-redeem="bond">Bond Boost (6)</button>
+                            <button type="button" data-journey-redeem="codex">Codex Insight (7)</button>
+                        </div>
+                    ` : ''}
 	                    <button class="journey-close" id="journey-close" aria-label="Close journey">Close</button>
 	                </div>
 	            `;

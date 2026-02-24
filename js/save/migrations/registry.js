@@ -4,6 +4,7 @@
         let migrationV0ToV1 = null;
         let migrationV1ToV2 = null;
         let migrationV2ToV3 = null;
+        let migrationV3ToV4 = null;
         try {
             migrationV0ToV1 = require('./v0-to-v1.js');
         } catch (_) {}
@@ -13,15 +14,18 @@
         try {
             migrationV2ToV3 = require('./v2-to-v3.js');
         } catch (_) {}
-        module.exports = factory(migrationV0ToV1, migrationV1ToV2, migrationV2ToV3);
+        try {
+            migrationV3ToV4 = require('./v3-to-v4.js');
+        } catch (_) {}
+        module.exports = factory(migrationV0ToV1, migrationV1ToV2, migrationV2ToV3, migrationV3ToV4);
         return;
     }
-    root.MLFSaveMigrationRegistry = factory(root.MLFSaveMigrationV0ToV1, root.MLFSaveMigrationV1ToV2, root.MLFSaveMigrationV2ToV3);
-})(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFSaveMigrationRegistry(migrationV0ToV1, migrationV1ToV2, migrationV2ToV3) {
+    root.MLFSaveMigrationRegistry = factory(root.MLFSaveMigrationV0ToV1, root.MLFSaveMigrationV1ToV2, root.MLFSaveMigrationV2ToV3, root.MLFSaveMigrationV3ToV4);
+})(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFSaveMigrationRegistry(migrationV0ToV1, migrationV1ToV2, migrationV2ToV3, migrationV3ToV4) {
     'use strict';
 
     const MIGRATIONS = Object.freeze(
-        [migrationV0ToV1, migrationV1ToV2, migrationV2ToV3]
+        [migrationV0ToV1, migrationV1ToV2, migrationV2ToV3, migrationV3ToV4]
             .filter(Boolean)
             .sort((a, b) => {
                 if (a.fromVersion !== b.fromVersion) return a.fromVersion - b.fromVersion;

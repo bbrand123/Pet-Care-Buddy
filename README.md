@@ -93,6 +93,7 @@ If you maintain a web demo build, GitHub Pages can still be used (`https://[your
 - `StateManager` is the real state write/event path via a proxied `gameState` root and emits structured state events (`state:changed`, `state:replaced`) through `EventBus`.
 - Household background simulation is implemented as pure modules in `js/sim/*` and synchronized with existing runtime state via `js/state/household-state.js`.
 - Current saves maintain legacy `pets` / `pet` / `activePetIndex` compatibility while also storing `household` (`petsById`, `activePetId`, relationships, `lastSimulatedAt`, `simVersion`).
+- Retention/Journey runtime state is stored in `journeyRetention` (chapter-local baselines/deltas, streak claim metadata, Journey tokens/bond) and migrated through `js/save/migrations/*`.
 - Minigame metadata lives in `js/config/minigame-descriptors.js` and is registered through `js/registries/minigame-registry.js`.
 - Content packs apply through `js/registries/content-registries.js` instead of mutating global registries directly in the pack loader.
 - Extension-point and boundary guidance for contributors lives in `docs/RUNTIME_BOUNDARIES.md`.
@@ -107,6 +108,26 @@ This regenerates:
 
 - `js/config/runtime-manifest.generated.js`
 - `sw-assets.generated.js` (legacy web/PWA support)
+
+### Retention Flags (P0 rollout)
+
+Runtime retention flags live in `RETENTION_FEATURE_FLAGS` in `js/constants.js` and can be overridden in the dev admin panel (`?dev=true`):
+
+- `journeyEnabled` (default `true`)
+- `seasonalJourneyEnabled` (default `false`, scaffold for P2)
+- `telemetryCaptureEnabled` (default `true`, local queue + funnel snapshots)
+- `telemetryUploadEnabled` (default `false`, production-safe by default)
+- `telemetryEndpoint` (default `''`)
+- `pacingV2Enabled` (default `false`, reserved for P1 tuning rollout)
+- `reminderPrioritizationV2Enabled` (default `false`, reserved for P1)
+- `experimentsEnabled` (default `false`, reserved for P3)
+
+### Save Migration Notes (Journey Retention v4)
+
+- Save schema is now `v4` (`saveSchemaVersion: 4`).
+- `v3 -> v4` adds `journeyRetention` with chapter-local state.
+- Migration intentionally initializes per-chapter progress as safe baselines/deltas and does not auto-complete future chapters retroactively.
+- Older saves without `journeyRetention` are normalized during load and persisted on next save.
 
 ### Adding New Features
 
@@ -192,6 +213,10 @@ npm run test:e2e
 ```
 
 Run iOS app build/test checks (Xcode / `xcodebuild`) for `WKWebView` and native bridge coverage before release.
+
+Retention/TestFlight manual checks for the P0 overhaul are documented in:
+
+- `docs/retention-p0-what-to-test.txt`
 
 ## 🤖 CI
 

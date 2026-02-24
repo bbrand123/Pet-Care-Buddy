@@ -1,0 +1,31 @@
+What to test (Retention P0: Journey/HUD/Telemetry/Native reminders)
+
+1. Install on iPhone (TestFlight) and launch a fresh save.
+2. Confirm the main HUD shows the compact Journey card (current objective + next reward).
+3. On day 1-3 saves, confirm lower-value HUD panels are collapsed behind the "More panels" affordance.
+4. Tap the streak quick-claim button on the HUD:
+   - state updates immediately (bonus claimed),
+   - a toast appears,
+   - no modal navigation is required.
+5. Open Journey from the HUD card and top action button:
+   - modal opens,
+   - current chapter/objective data renders,
+   - telemetry `journey_open` is queued locally.
+6. Enable reminders from the Reminder Center prompt:
+   - iOS permission prompt appears,
+   - result is saved to `gameState.reminders.permission`,
+   - telemetry `reminder_opt_in` is queued.
+7. Schedule a local reminder (dev-trigger or natural reminder condition):
+   - notification is delivered,
+   - tapping it deep-links back into the app route (`streak`, `journey`, `explore`, or `garden`).
+8. Open `?dev=true` and verify the retention admin/debug panel:
+   - feature flags can be toggled,
+   - telemetry queue length is visible,
+   - D1/D7/D14/D30 funnel snapshot renders.
+9. Load a legacy save fixture/import:
+   - save migrates to schema v4,
+   - `journeyRetention` exists,
+   - chapter progress is not pre-completed retroactively.
+10. Background/foreground the app:
+   - lifecycle save still works,
+   - telemetry flush attempts do not crash the app.

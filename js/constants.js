@@ -3497,6 +3497,17 @@ const RETENTION_DEV_FLAGS = {
     showDebugPanel: false
 };
 
+const RETENTION_FEATURE_FLAGS = {
+    journeyEnabled: true,
+    seasonalJourneyEnabled: false,
+    telemetryCaptureEnabled: true,
+    telemetryUploadEnabled: false,
+    telemetryEndpoint: '',
+    pacingV2Enabled: false,
+    reminderPrioritizationV2Enabled: false,
+    experimentsEnabled: false
+};
+
 const JOURNEY_TRACKS = {
     bond: { id: 'bond', label: 'Bond', icon: '💞' },
     mastery: { id: 'mastery', label: 'Mastery', icon: '🧠' },
