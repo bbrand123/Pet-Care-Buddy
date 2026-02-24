@@ -18,7 +18,9 @@
             beginnerMoreSummary: 'More panels',
             beginnerMoreHint: 'Goal ladder, tips, and debug tools',
             backlogDripLabel: 'Comeback drip',
-            emotionalPromptTitle: 'Right now'
+            emotionalPromptTitle: 'Right now',
+            comebackQuestLabel: 'Comeback quest',
+            seasonalJourneyLabel: 'Seasonal loop'
         }),
         streak: Object.freeze({
             quickClaimCta: 'Claim',
@@ -34,7 +36,8 @@
             dismissLabel: 'Dismiss'
         }),
         emotional: Object.freeze({
-            defaultCta: 'Open Journey'
+            defaultCta: 'Open Journey',
+            comebackCta: 'Resume comeback quest'
         }),
         telemetry: Object.freeze({
             debugTitle: 'Retention Debug',

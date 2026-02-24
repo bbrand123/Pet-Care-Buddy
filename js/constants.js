@@ -3510,6 +3510,9 @@ const RETENTION_FEATURE_FLAGS = {
     telemetryEndpoint: '',
     pacingV2Enabled: false,
     reminderPrioritizationV2Enabled: false,
+    comebackQuestsEnabled: true,
+    journeyTokenStoreRotationEnabled: true,
+    householdRetentionBeatsEnabled: true,
     experimentsEnabled: false
 };
 

@@ -205,6 +205,7 @@
 
     function tickPet(pet, context, dtMs, nowMs) {
         const nextPet = normalizePetRecord(pet, nowMs);
+        const prevPet = normalizePetRecord(pet, nowMs);
         const options = (context && context.options) || {};
         const activePetId = context && context.activePetId != null ? String(context.activePetId) : null;
         const isActive = activePetId != null && String(nextPet.id) === activePetId;
@@ -231,15 +232,26 @@
                 at: nowMs
             });
         }
+        if ((prevPet.mood !== nextPet.mood) && (nextPet.mood === 'sad' || nextPet.mood === 'happy')) {
+            events.push({
+                type: 'mood-shift',
+                petId: String(nextPet.id),
+                petName: nextPet.name || 'Pet',
+                mood: nextPet.mood,
+                previousMood: prevPet.mood || 'neutral',
+                at: nowMs
+            });
+        }
 
         return { pet: nextPet, events };
     }
 
     function applySocialEvents(household, socialEvents, dtMs, nowMs) {
-        if (!Relationships) return household;
+        if (!Relationships) return { household, retentionBeats: [] };
         const relationships = Object.assign({}, household.relationships || {});
         const petsById = household.petsById || {};
         const seenPairs = new Set();
+        const retentionBeats = [];
 
         socialEvents
             .slice()
@@ -256,19 +268,24 @@
                 const current = relationships[key] || Relationships.createRelationship(nowMs);
                 const result = Relationships.applySocialInteraction(current, petA, petB, nowMs);
                 relationships[key] = result.relationship;
+                if (typeof Relationships.detectRetentionBeats === 'function') {
+                    const beats = Relationships.detectRetentionBeats(current, result.relationship, petA, petB);
+                    if (Array.isArray(beats) && beats.length) retentionBeats.push.apply(retentionBeats, beats);
+                }
             });
 
         Object.keys(relationships).forEach((key) => {
             relationships[key] = Relationships.applyPassiveDrift(relationships[key], nowMs, dtMs);
         });
 
-        return Object.assign({}, household, { relationships });
+        return { household: Object.assign({}, household, { relationships }), retentionBeats };
     }
 
     function tickNormalizedHousehold(household, dtMs, nowMs, options) {
         const next = normalizeHousehold(household, nowMs);
         const petIds = sortedPetIds(next.petsById);
         const socialEvents = [];
+        const retentionBeats = [];
         const tickContext = {
             activePetId: next.activePetId,
             petsById: next.petsById,
@@ -282,10 +299,28 @@
             if (Array.isArray(result.events)) socialEvents.push.apply(socialEvents, result.events);
         });
 
-        const withRelationships = applySocialEvents(next, socialEvents, dtMs, nowMs);
+        socialEvents.forEach((event) => {
+            if (event && event.type === 'mood-shift') {
+                retentionBeats.push({
+                    type: event.mood === 'happy' ? 'pet_happy_moment' : 'pet_needs_attention',
+                    priority: event.mood === 'happy' ? 'low' : 'medium',
+                    petId: event.petId,
+                    petName: event.petName,
+                    mood: event.mood,
+                    previousMood: event.previousMood,
+                    at: event.at
+                });
+            }
+        });
+
+        const socialResult = applySocialEvents(next, socialEvents, dtMs, nowMs);
+        const withRelationships = socialResult && socialResult.household ? socialResult.household : next;
+        if (socialResult && Array.isArray(socialResult.retentionBeats) && socialResult.retentionBeats.length) {
+            retentionBeats.push.apply(retentionBeats, socialResult.retentionBeats);
+        }
         withRelationships.lastSimulatedAt = Number.isFinite(nowMs) ? nowMs : withRelationships.lastSimulatedAt;
         withRelationships.simVersion = SIM_VERSION;
-        return { household: withRelationships, meta: { socialEventCount: socialEvents.length } };
+        return { household: withRelationships, meta: { socialEventCount: socialEvents.length, retentionBeats } };
     }
 
     function tickHousehold(stateOrHousehold, dtMs, nowMs, options) {
@@ -312,6 +347,7 @@
         let cursor = startAt;
         let steps = 0;
         let aggregateSocialEvents = 0;
+        let aggregateRetentionBeats = [];
         if (appliedElapsedMs > 0) {
             const target = startAt + appliedElapsedMs;
             while (cursor < target) {
@@ -321,6 +357,9 @@
                 household = tickResult.household;
                 steps++;
                 aggregateSocialEvents += (tickResult.meta && tickResult.meta.socialEventCount) || 0;
+                if (tickResult.meta && Array.isArray(tickResult.meta.retentionBeats) && tickResult.meta.retentionBeats.length) {
+                    aggregateRetentionBeats = aggregateRetentionBeats.concat(tickResult.meta.retentionBeats);
+                }
             }
         }
 
@@ -338,7 +377,8 @@
             rawElapsedMs,
             appliedElapsedMs,
             catchUpClamped: !!clamped,
-            socialEventCount: aggregateSocialEvents
+            socialEventCount: aggregateSocialEvents,
+            retentionBeats: aggregateRetentionBeats
         };
         return hasRoot ? { state: rootState, household, meta } : { household, meta };
     }

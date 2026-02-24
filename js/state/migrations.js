@@ -196,6 +196,8 @@
         if (!isObject(state.streak.backlog)) {
             state.streak.backlog = { pending: [], pendingValue: 0, dripLoginsRemaining: 0, lastDripAt: 0 };
         }
+        if (isObject(existing.tokenStore)) state.tokenStore = existing.tokenStore;
+        if (isObject(existing.seasonal)) state.seasonal = existing.seasonal;
         if (!Array.isArray(state.streak.backlog.pending)) state.streak.backlog.pending = [];
         state.streak.backlog.pendingValue = Math.max(0, Math.floor(Number(state.streak.backlog.pendingValue) || 0));
         state.streak.backlog.dripLoginsRemaining = Math.max(0, Math.floor(Number(state.streak.backlog.dripLoginsRemaining) || 0));

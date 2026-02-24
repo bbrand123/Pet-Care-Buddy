@@ -185,6 +185,9 @@
     function runReminderAction(action) {
         const a = isObject(action) ? action : { type: String(action || '') };
         const type = String(a.type || '').toLowerCase();
+        if (type === 'comeback' && typeof root.openComebackQuest === 'function') {
+            return !!root.openComebackQuest();
+        }
         if (type === 'journey' && typeof root.showJourneyModal === 'function') {
             root.showJourneyModal();
             return true;
@@ -205,6 +208,16 @@
         if (type === 'daily' && typeof root.showDailyChecklistModal === 'function') {
             root.showDailyChecklistModal();
             return true;
+        }
+        if (type === 'social' && typeof root.showHouseholdSummaryModal === 'function') {
+            root.showHouseholdSummaryModal();
+            return true;
+        }
+        if (type === 'care') {
+            if (typeof root.showJourneyModal === 'function') {
+                root.showJourneyModal();
+                return true;
+            }
         }
         return false;
     }
@@ -252,6 +265,12 @@
         if (!meta) return false;
         meta.reactivation.lastActivity = String(activityKey || '').trim() || meta.reactivation.lastActivity || '';
         meta.reactivation.lastSeenDate = getTodayString();
+        if (typeof root.recordComebackQuestActivity === 'function') {
+            try { root.recordComebackQuestActivity(activityKey, 1); } catch (_) {}
+        }
+        if (typeof root.recordSeasonalJourneyActivity === 'function') {
+            try { root.recordSeasonalJourneyActivity(activityKey, 1); } catch (_) {}
+        }
         return true;
     }
 
@@ -277,6 +296,19 @@
             Number((gs.journeyRetention && gs.journeyRetention.bond && gs.journeyRetention.bond.level) || (meta.bond && meta.bond.level) || 1) || 1
         );
         const awayDays = Math.max(0, Number(meta.reactivation.awayDays) || 0);
+        const comebackQuest = (typeof root.getActiveComebackQuest === 'function') ? root.getActiveComebackQuest() : null;
+
+        if (comebackQuest && comebackQuest.status !== 'completed') {
+            const emotionalStrings = (typeof root.MLFRetentionStrings !== 'undefined' && root.MLFRetentionStrings && root.MLFRetentionStrings.emotional)
+                ? root.MLFRetentionStrings.emotional
+                : { comebackCta: 'Resume comeback quest' };
+            return {
+                title: comebackQuest.title || 'Comeback quest',
+                body: `${comebackQuest.body || 'Complete your comeback quest.'} (${Math.max(0, Number(comebackQuest.progress) || 0)}/${Math.max(1, Number(comebackQuest.target) || 1)})`,
+                ctaLabel: emotionalStrings.comebackCta || 'Resume comeback quest',
+                actionType: 'comeback'
+            };
+        }
 
         if (streak.current > 0 && !streak.todayBonusClaimed) {
             return {

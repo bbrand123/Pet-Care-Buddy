@@ -193,6 +193,39 @@
         return { bestFriend, rival };
     }
 
+    function detectRetentionBeats(previousRel, nextRel, petA, petB) {
+        const before = normalizeRelationship(previousRel);
+        const after = normalizeRelationship(nextRel);
+        const beats = [];
+        const pair = {
+            petAId: petA && petA.id != null ? String(petA.id) : '',
+            petBId: petB && petB.id != null ? String(petB.id) : '',
+            petAName: petA && typeof petA.name === 'string' ? petA.name : 'Pet',
+            petBName: petB && typeof petB.name === 'string' ? petB.name : 'Pet'
+        };
+        const beforeTags = new Set(Array.isArray(before.tags) ? before.tags : []);
+        const afterTags = new Set(Array.isArray(after.tags) ? after.tags : []);
+        if (!beforeTags.has('friend') && afterTags.has('friend')) {
+            beats.push(Object.assign({ type: 'relationship_friend_unlocked', priority: 'high' }, pair, {
+                affinity: after.affinity,
+                familiarity: after.familiarity
+            }));
+        }
+        if (!beforeTags.has('rival') && afterTags.has('rival')) {
+            beats.push(Object.assign({ type: 'relationship_rival_unlocked', priority: 'medium' }, pair, {
+                affinity: after.affinity,
+                familiarity: after.familiarity
+            }));
+        }
+        const familiarityCrossed = before.familiarity < 75 && after.familiarity >= 75;
+        if (familiarityCrossed) {
+            beats.push(Object.assign({ type: 'relationship_familiarity_milestone', priority: 'medium' }, pair, {
+                familiarity: after.familiarity
+            }));
+        }
+        return beats;
+    }
+
     return Object.freeze({
         AFFINITY_MIN,
         AFFINITY_MAX,
@@ -208,6 +241,7 @@
         getTraitCompatibility,
         applySocialInteraction,
         applyPassiveDrift,
-        getRelationshipHighlightsForPet
+        getRelationshipHighlightsForPet,
+        detectRetentionBeats
     });
 });

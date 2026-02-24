@@ -120,6 +120,9 @@ Runtime retention flags live in `RETENTION_FEATURE_FLAGS` in `js/constants.js` a
 - `telemetryEndpoint` (default `''`)
 - `pacingV2Enabled` (default `false`, reserved for P1 tuning rollout)
 - `reminderPrioritizationV2Enabled` (default `false`, reserved for P1)
+- `comebackQuestsEnabled` (default `true`, P2 comeback quest generation + HUD/reminder hooks)
+- `journeyTokenStoreRotationEnabled` (default `true`, P2 rotating weekly Journey token store stock)
+- `householdRetentionBeatsEnabled` (default `true`, P2 household sim retention alerts)
 - `experimentsEnabled` (default `false`, reserved for P3)
 
 ### Retention P1 Tuning (flag-gated)
@@ -148,12 +151,33 @@ When `RETENTION_FEATURE_FLAGS.pacingV2Enabled` is enabled, runtime pacing helper
 
 `RETENTION_FEATURE_FLAGS.reminderPrioritizationV2Enabled` enables the reminder-center sorting/prioritization logic while keeping notifications optional (players who decline native notifications still receive in-game reminder center items).
 
+### Retention P2 Modules (Seasonal / Comeback / Household)
+
+- `js/retention/seasonal_journey.js`
+  - Weekly rotating seasonal chapter loop (season-aware objectives + reward track)
+  - Admin seed APIs:
+    - `adminSeedSeasonalWeeklyStock(weekKey, items)`
+    - `adminSeedSeasonalLimitedRewards(items)`
+- `js/retention/comeback-quests.js`
+  - Crafts comeback quests from `awayDays + lastActivity`
+  - Hooks into HUD emotional prompts and reminder center actions (`comeback`)
+- `js/retention/journey.js`
+  - Rotating Journey token store inventory with weekly stock and limited sinks
+  - Admin/QA helpers:
+    - `getJourneyTokenStoreInventory()`
+    - `rotateJourneyTokenStoreStock({ weekKey?, force? })`
+    - `adminSeedJourneyTokenStoreWeek(weekKey, items)`
+    - `adminSeedJourneyLimitedRewards(items)`
+- `js/sim/household-simulator.js` + `js/state/household-state.js`
+  - Emits relationship/mood retention beats and converts them into reminder-center household alerts with one-tap follow-up actions
+
 ### Save Migration Notes (Journey Retention v4)
 
 - Save schema is now `v4` (`saveSchemaVersion: 4`).
 - `v3 -> v4` adds `journeyRetention` with chapter-local state.
 - Migration intentionally initializes per-chapter progress as safe baselines/deltas and does not auto-complete future chapters retroactively.
 - Older saves without `journeyRetention` are normalized during load and persisted on next save.
+- P2 runtime state (`journeyRetention.tokenStore`, `journeyRetention.seasonal`, `meta.householdRetentionAlerts`, `meta.reactivation.comebackQuest`) is lazily initialized and preserved by the v4 normalizer (no schema bump required).
 
 ### Adding New Features
 

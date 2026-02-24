@@ -2699,6 +2699,30 @@
 	            const bond = track.bond || { completed: 0, total: 0, pct: 0 };
 	            const mastery = track.mastery || { completed: 0, total: 0, pct: 0 };
 	            const collection = track.collection || { completed: 0, total: 0, pct: 0 };
+                const comebackQuest = status.comebackQuest || (typeof getActiveComebackQuest === 'function' ? getActiveComebackQuest() : null);
+                const retentionEmotionalStrings = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.emotional)
+                    ? MLFRetentionStrings.emotional
+                    : { comebackCta: 'Resume comeback quest' };
+                const comebackQuestHTML = (comebackQuest && comebackQuest.status !== 'completed')
+                    ? `
+                        <div class="journey-emotional-prompt" role="group" aria-label="Comeback quest">
+                            <p><strong>✨ ${escapeHTML(comebackQuest.title || 'Comeback quest')}</strong></p>
+                            <p>${escapeHTML(comebackQuest.body || '')}</p>
+                            <p>${Math.floor(comebackQuest.progress || 0)}/${Math.floor(comebackQuest.target || 1)} complete</p>
+                            <button type="button" data-journey-emotional-action="comeback">${escapeHTML(retentionEmotionalStrings.comebackCta || 'Resume comeback quest')}</button>
+                        </div>
+                    `
+                    : '';
+                const seasonalJourney = status.seasonalJourney || (typeof getCurrentSeasonalJourney === 'function' ? getCurrentSeasonalJourney() : null);
+                const seasonalJourneyHTML = seasonalJourney
+                    ? `
+                        <div class="journey-emotional-prompt" role="group" aria-label="Seasonal journey">
+                            <p><strong>${escapeHTML((seasonalJourney.icon || '✨') + ' ' + (seasonalJourney.title || 'Seasonal Journey'))}</strong></p>
+                            <p>Week ${escapeHTML(seasonalJourney.weekKey || '')} · ${Math.floor(seasonalJourney.completedObjectives || 0)}/${Math.floor(seasonalJourney.totalObjectives || 0)} objectives</p>
+                            ${Array.isArray(seasonalJourney.rewardTrack) && seasonalJourney.rewardTrack.length ? `<p>Reward track: ${escapeHTML(seasonalJourney.rewardTrack.map((r) => r && r.label ? r.label : 'Reward').join(' · '))}</p>` : ''}
+                        </div>
+                    `
+                    : '';
                 const emotionalPrompt = (typeof getRetentionEmotionalPrompt === 'function') ? getRetentionEmotionalPrompt() : null;
                 const emotionalPromptHTML = (emotionalPrompt && emotionalPrompt.title)
                     ? `
@@ -2706,6 +2730,21 @@
                             <p><strong>${escapeHTML(emotionalPrompt.title)}</strong></p>
                             <p>${escapeHTML(emotionalPrompt.body || '')}</p>
                             <button type="button" data-journey-emotional-action="${escapeHTML(emotionalPrompt.actionType || 'journey')}">${escapeHTML(emotionalPrompt.ctaLabel || 'Open Journey')}</button>
+                        </div>
+                    `
+                    : '';
+                const tokenStore = (typeof getJourneyTokenStoreInventory === 'function')
+                    ? getJourneyTokenStoreInventory()
+                    : (status.tokenStore || { items: [] });
+                const tokenStoreHTML = (typeof redeemJourneyTokenReward === 'function')
+                    ? `
+                        <div class="journey-token-store" role="group" aria-label="Journey token rewards">
+                            ${(Array.isArray(tokenStore.items) ? tokenStore.items : []).map((item) => {
+                                const soldOut = !!item.soldOut;
+                                const stockText = item.remaining == null ? '∞' : `${Math.max(0, Math.floor(item.remaining))} left`;
+                                const limitedTag = item.limited ? ' · Limited' : '';
+                                return `<button type="button" data-journey-redeem="${escapeHTML(item.id)}" ${soldOut ? 'disabled' : ''}>${escapeHTML((item.title || item.id) + ` (${Math.floor(item.cost || 0)})`)} <span aria-hidden="true">${escapeHTML(stockText + limitedTag)}</span></button>`;
+                            }).join('')}
                         </div>
                     `
                     : '';
@@ -2720,6 +2759,8 @@
 	                    <h2 id="journey-title" class="journey-title">🧭 30-Day Journey</h2>
 	                    <p class="journey-subtitle">Day ${status.day} · ${escapeHTML(status.chapter ? status.chapter.label : 'Journey')}</p>
 	                    <p class="journey-subtitle">Journey Tokens: ${status.tokens} · Bond XP: ${status.bondXp} (Level ${status.bondLevel})</p>
+                        ${comebackQuestHTML}
+                        ${seasonalJourneyHTML}
                         ${emotionalPromptHTML}
 	                    <div class="journey-track-list" role="list" aria-label="Journey tracks">
 	                        <div class="journey-track" role="listitem" aria-label="Bond track ${bond.completed} of ${bond.total}">
@@ -2740,14 +2781,7 @@
 	                    <h3 class="journey-section-title">Chapter Progress</h3>
 	                    <div class="journey-chapter-list">${chapterHTML}</div>
 	                    <h3 class="journey-section-title">Journey Token Rewards</h3>
-	                    ${typeof redeemJourneyTokenReward === 'function' ? `
-                        <div class="journey-token-store" role="group" aria-label="Journey token rewards">
-                            <button type="button" data-journey-redeem="story">Story Memory (5)</button>
-                            <button type="button" data-journey-redeem="cosmetic">Cosmetic Drop (8)</button>
-                            <button type="button" data-journey-redeem="bond">Bond Boost (6)</button>
-                            <button type="button" data-journey-redeem="codex">Codex Insight (7)</button>
-                        </div>
-                    ` : ''}
+	                    ${tokenStoreHTML}
 	                    <button class="journey-close" id="journey-close" aria-label="Close journey">Close</button>
 	                </div>
 	            `;
@@ -2787,6 +2821,11 @@
                         if (actionType === 'streak' && typeof showStreakModal === 'function') {
                             closeJourney();
                             showStreakModal();
+                            return;
+                        }
+                        if (actionType === 'comeback' && typeof openComebackQuest === 'function') {
+                            closeJourney();
+                            openComebackQuest();
                             return;
                         }
                         if (actionType === 'garden' && typeof switchRoom === 'function') {

@@ -2307,7 +2307,16 @@
                 const awayDays = Math.max(0, Math.floor((Date.now() - lastUpdateTs) / 86400000));
                 meta.reactivation.awayDays = awayDays;
                 if (!meta.reactivation.lastSeenDate) meta.reactivation.lastSeenDate = nowDate;
-                if (awayDays >= 1 && typeof addReminderCenterItem === 'function') {
+                let quest = null;
+                if (awayDays >= 1 && typeof ensureComebackQuestForCurrentPlayer === 'function') {
+                    try {
+                        quest = ensureComebackQuestForCurrentPlayer({
+                            awayDays,
+                            lastActivity: meta.reactivation.lastActivity || ''
+                        });
+                    } catch (_) {}
+                }
+                if (awayDays >= 1 && typeof addReminderCenterItem === 'function' && !quest) {
                     addReminderCenterItem(
                         'comeback',
                         awayDays >= 7 ? '💛 Welcome back' : '👋 Good to see you again',

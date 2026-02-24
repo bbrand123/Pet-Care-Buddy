@@ -92,3 +92,54 @@ test('household catch-up simulation is deterministic for the same inputs', () =>
     assert.equal(Number.isFinite(run1.household.petsById['2'].energy), true);
 });
 
+test('relationship retention beats detect friend milestone transitions', () => {
+    const beats = Relationships.detectRetentionBeats(
+        { affinity: 58, familiarity: 49, tags: [] },
+        { affinity: 62, familiarity: 52, tags: ['friend'] },
+        { id: '1', name: 'Nova' },
+        { id: '2', name: 'Milo' }
+    );
+    assert.equal(Array.isArray(beats), true);
+    assert.equal(beats.some((b) => b.type === 'relationship_friend_unlocked'), true);
+});
+
+test('household simulator emits retention beats in meta', () => {
+    const state = {
+        household: {
+            activePetId: '1',
+            petsById: {
+                '1': {
+                    id: '1',
+                    name: 'Nova',
+                    type: 'cat',
+                    hunger: 20,
+                    energy: 40,
+                    happiness: 40,
+                    cleanliness: 40,
+                    personality: 'playful',
+                    currentActivity: { type: 'socialize', targetPetId: '2', startedAtMs: 0, durationMs: 60000, endsAtMs: 120000 }
+                },
+                '2': {
+                    id: '2',
+                    name: 'Milo',
+                    type: 'dog',
+                    hunger: 50,
+                    energy: 60,
+                    happiness: 60,
+                    cleanliness: 60,
+                    personality: 'playful',
+                    currentActivity: { type: 'idle', startedAtMs: 0, durationMs: 60000, endsAtMs: 120000 }
+                }
+            },
+            relationships: {
+                '1|2': { affinity: 58, familiarity: 49, lastInteractionAt: 0, tags: [] }
+            },
+            lastSimulatedAt: 0,
+            simVersion: 1
+        }
+    };
+    const result = HouseholdSimulator.tickHousehold(state, 60000, 60000);
+    assert.ok(result.meta);
+    assert.equal(Array.isArray(result.meta.retentionBeats), true);
+    assert.equal(result.meta.retentionBeats.some((b) => ['pet_needs_attention', 'relationship_friend_unlocked', 'relationship_familiarity_milestone'].includes(b.type)), true);
+});

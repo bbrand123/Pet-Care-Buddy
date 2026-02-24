@@ -19,11 +19,25 @@
         { id: 'chapter4', label: 'Week 4: Legacy Rhythm', dayStart: 22, dayEnd: 30, objectives: [{ id: 'streak_30', metric: 'streakCurrent', target: 30, label: 'Reach a 30-day streak', tokenReward: 4 }], chapterReward: { tokens: 8 } }
     ]);
     const NON_DELTA_METRICS = new Set(['streakCurrent', 'maxRelationshipPoints']);
-    const DEFAULT_TOKEN_STORE = Object.freeze({
-        story: { cost: 5, type: 'story' },
-        cosmetic: { cost: 8, type: 'cosmetic' },
-        bond: { cost: 6, type: 'bond' },
-        codex: { cost: 7, type: 'codex' }
+    const DEFAULT_TOKEN_STORE_CATALOG = Object.freeze({
+        story: { id: 'story', cost: 5, type: 'story', title: 'Story Memory', infinite: true, tier: 'core' },
+        cosmetic: { id: 'cosmetic', cost: 8, type: 'cosmetic', title: 'Cosmetic Drop', infinite: true, tier: 'core' },
+        bond: { id: 'bond', cost: 6, type: 'bond', title: 'Bond Boost', infinite: true, tier: 'core' },
+        codex: { id: 'codex', cost: 7, type: 'codex', title: 'Codex Insight', infinite: true, tier: 'core' },
+        emotePack: { id: 'emotePack', cost: 10, type: 'emote', title: 'Emote Pack', stock: 2, tier: 'weekly' },
+        photoFrame: { id: 'photoFrame', cost: 12, type: 'photoFrame', title: 'Photo Frame', stock: 1, tier: 'weekly' },
+        ambientVariant: { id: 'ambientVariant', cost: 14, type: 'ambient', title: 'Ambient Variant', stock: 1, tier: 'weekly' },
+        roomProp: { id: 'roomProp', cost: 16, type: 'roomProp', title: 'Room Prop', stock: 1, tier: 'weekly' },
+        heirloomRoomProp: { id: 'heirloomRoomProp', cost: 24, type: 'roomProp', title: 'Heirloom Prop', stock: 1, tier: 'limited', limited: true },
+        legendaryEmoteSet: { id: 'legendaryEmoteSet', cost: 22, type: 'emote', title: 'Legendary Emotes', stock: 1, tier: 'limited', limited: true },
+        ambientSuite: { id: 'ambientSuite', cost: 20, type: 'ambient', title: 'Ambient Suite', stock: 1, tier: 'limited', limited: true }
+    });
+    const JOURNEY_TOKEN_STORE_ROTATION = Object.freeze({
+        core: ['story', 'cosmetic', 'bond', 'codex'],
+        weeklyPool: ['emotePack', 'photoFrame', 'ambientVariant', 'roomProp'],
+        weeklySlots: 3,
+        limitedPool: ['heirloomRoomProp', 'legendaryEmoteSet', 'ambientSuite'],
+        maxWeeksRetained: 8
     });
 
     function isObject(value) {
@@ -49,6 +63,14 @@
         return (typeof root.JOURNEY_TOKEN_REWARD_TABLE !== 'undefined' && root.JOURNEY_TOKEN_REWARD_TABLE)
             ? root.JOURNEY_TOKEN_REWARD_TABLE
             : { chapterComplete: 4, objectiveComplete: 2, dailyComplete: 2, noveltyUnlock: 2 };
+    }
+
+    function isFeatureFlagEnabled(flagName, fallbackValue) {
+        if (typeof root.isRetentionFeatureFlagEnabled === 'function') {
+            try { return !!root.isRetentionFeatureFlagEnabled(flagName); } catch (_) {}
+        }
+        if (typeof fallbackValue === 'boolean') return fallbackValue;
+        return true;
     }
 
     function getTodayString() {
@@ -85,7 +107,9 @@
         const gs = state || getState();
         if (!gs) return null;
         if (StateMigrations && typeof StateMigrations.normalizeJourneyRetentionState === 'function') {
-            return StateMigrations.normalizeJourneyRetentionState(gs, { journeyChapters: getChapters(), now: Date.now() });
+            try {
+                StateMigrations.normalizeJourneyRetentionState(gs, { journeyChapters: getChapters(), now: Date.now() });
+            } catch (_) {}
         }
         if (!isObject(gs.journeyRetention)) {
             gs.journeyRetention = {
@@ -109,6 +133,28 @@
         if (!Number.isFinite(backlog.lastDripAt)) backlog.lastDripAt = 0;
         if (typeof backlog.lastLoginDate !== 'string' && backlog.lastLoginDate !== null) backlog.lastLoginDate = null;
         if (typeof backlog.lastDripDate !== 'string' && backlog.lastDripDate !== null) backlog.lastDripDate = null;
+        if (!isObject(gs.journeyRetention.tokenStore)) {
+            gs.journeyRetention.tokenStore = { version: 1, currentWeekKey: '', weeks: {}, admin: { weeklyStock: {}, limitedRewards: [] }, purchaseHistory: [] };
+        }
+        const tokenStore = gs.journeyRetention.tokenStore;
+        if (!isObject(tokenStore.weeks)) tokenStore.weeks = {};
+        if (!isObject(tokenStore.admin)) tokenStore.admin = {};
+        if (!isObject(tokenStore.admin.weeklyStock)) tokenStore.admin.weeklyStock = {};
+        if (!Array.isArray(tokenStore.admin.limitedRewards)) tokenStore.admin.limitedRewards = [];
+        if (!Array.isArray(tokenStore.purchaseHistory)) tokenStore.purchaseHistory = [];
+        if (!isObject(gs.meta)) gs.meta = {};
+        if (!isObject(gs.meta.retentionUnlocks)) {
+            gs.meta.retentionUnlocks = {
+                roomProps: [],
+                ambientVariants: [],
+                emotePacks: [],
+                photoFrames: []
+            };
+        }
+        if (!Array.isArray(gs.meta.retentionUnlocks.roomProps)) gs.meta.retentionUnlocks.roomProps = [];
+        if (!Array.isArray(gs.meta.retentionUnlocks.ambientVariants)) gs.meta.retentionUnlocks.ambientVariants = [];
+        if (!Array.isArray(gs.meta.retentionUnlocks.emotePacks)) gs.meta.retentionUnlocks.emotePacks = [];
+        if (!Array.isArray(gs.meta.retentionUnlocks.photoFrames)) gs.meta.retentionUnlocks.photoFrames = [];
         return gs.journeyRetention;
     }
 
@@ -315,6 +361,10 @@
             bondXp: clampInt(journeyState.bond && journeyState.bond.xp, 0),
             bondLevel: Math.max(1, clampInt(journeyState.bond && journeyState.bond.level, 1)),
             backlogDrip,
+            comebackQuest: (typeof root.getActiveComebackQuest === 'function') ? root.getActiveComebackQuest() : null,
+            seasonalJourney: (root.MLFSeasonalJourney && typeof root.MLFSeasonalJourney.getCurrentSeasonalJourney === 'function')
+                ? root.MLFSeasonalJourney.getCurrentSeasonalJourney()
+                : null,
             chapterObjectives: objectives.map((item) => ({
                 id: item.id,
                 label: item.label,
@@ -347,6 +397,9 @@
         if (add <= 0) return getCurrentChapter(playerId);
         record.entry.deltas[deltaKey] = clampInt(record.entry.deltas[deltaKey], 0) + add;
         record.journeyState.lastUpdatedAt = Date.now();
+        if (typeof root.recordSeasonalJourneyActivity === 'function') {
+            try { root.recordSeasonalJourneyActivity(deltaKey, add); } catch (_) {}
+        }
         markObjectiveCompletions(record);
         if (typeof root.saveGame === 'function') {
             try { root.saveGame({ silentIndicator: true, source: 'retention-journey' }); } catch (_) {}
@@ -374,6 +427,12 @@
         const journeyState = ensureJourneyState(gs);
         if (journeyState && isObject(journeyState.streak)) {
             journeyState.streak.lastClaimDate = getTodayString();
+        }
+        if (typeof root.recordComebackQuestActivity === 'function') {
+            try { root.recordComebackQuestActivity('streak', 1); } catch (_) {}
+        }
+        if (typeof root.recordSeasonalJourneyActivity === 'function') {
+            try { root.recordSeasonalJourneyActivity('streak', 1); } catch (_) {}
         }
         incrementChapterProgress(playerId || getPlayerId(gs), 'streakClaims', 1);
         if (Telemetry && typeof Telemetry.emit === 'function') {
@@ -486,14 +545,257 @@
         return false;
     }
 
+    function hashString(input) {
+        const str = String(input || '');
+        let h = 2166136261;
+        for (let i = 0; i < str.length; i++) {
+            h ^= str.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+
+    function toDateOnlyString(date) {
+        const d = date instanceof Date ? date : new Date(date);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function getWeekKey(nowValue) {
+        if (root.MLFSeasonalJourney && typeof root.MLFSeasonalJourney.getWeekKey === 'function') {
+            try { return root.MLFSeasonalJourney.getWeekKey(nowValue); } catch (_) {}
+        }
+        const date = nowValue != null ? new Date(nowValue) : new Date();
+        const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+        const day = d.getUTCDay();
+        const offsetToMonday = (day + 6) % 7;
+        d.setUTCDate(d.getUTCDate() - offsetToMonday);
+        return toDateOnlyString(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())));
+    }
+
+    function makeStoreItem(def, override) {
+        const item = Object.assign({}, def || {}, override || {});
+        item.id = String(item.id || (def && def.id) || '');
+        item.cost = clampInt(item.cost, 0);
+        if (item.stock == null || !Number.isFinite(Number(item.stock))) item.stock = null;
+        else item.stock = clampInt(item.stock, 0);
+        if (typeof item.infinite !== 'boolean') item.infinite = item.stock == null;
+        item.limited = !!item.limited;
+        return item;
+    }
+
+    function deterministicPick(poolIds, count, seed) {
+        const source = Array.isArray(poolIds) ? poolIds.slice() : [];
+        const out = [];
+        let h = hashString(seed);
+        while (source.length > 0 && out.length < count) {
+            h = (Math.imul(h ^ 0x9e3779b9, 1664525) + 1013904223) >>> 0;
+            const index = source.length > 0 ? (h % source.length) : 0;
+            out.push(source.splice(index, 1)[0]);
+        }
+        return out;
+    }
+
+    function pruneTokenStoreWeeks(tokenStore) {
+        const maxWeeks = clampInt(JOURNEY_TOKEN_STORE_ROTATION.maxWeeksRetained, 1);
+        const weekKeys = Object.keys(tokenStore && tokenStore.weeks || {}).sort();
+        const keep = new Set(weekKeys.slice(-maxWeeks));
+        weekKeys.forEach((key) => { if (!keep.has(key)) delete tokenStore.weeks[key]; });
+    }
+
+    function getTokenStoreState() {
+        const gs = getState();
+        const journeyState = ensureJourneyState(gs);
+        return journeyState ? journeyState.tokenStore : null;
+    }
+
+    function getSeasonalAdminStockForWeek(weekKey) {
+        if (root.MLFSeasonalJourney && typeof root.MLFSeasonalJourney.getAdminWeeklyStockSeed === 'function') {
+            try { return root.MLFSeasonalJourney.getAdminWeeklyStockSeed(weekKey); } catch (_) {}
+        }
+        return [];
+    }
+
+    function getSeasonalLimitedStoreRewards(weekKey) {
+        if (root.MLFSeasonalJourney && typeof root.MLFSeasonalJourney.getActiveLimitedRewards === 'function') {
+            try { return root.MLFSeasonalJourney.getActiveLimitedRewards(weekKey); } catch (_) {}
+        }
+        return [];
+    }
+
+    function buildWeeklyTokenStoreInventoryForWeek(weekKey) {
+        const tokenStore = getTokenStoreState();
+        const items = [];
+        JOURNEY_TOKEN_STORE_ROTATION.core.forEach((id) => {
+            const def = DEFAULT_TOKEN_STORE_CATALOG[id];
+            if (def) items.push(makeStoreItem(def));
+        });
+
+        const weeklyIds = deterministicPick(
+            JOURNEY_TOKEN_STORE_ROTATION.weeklyPool,
+            clampInt(JOURNEY_TOKEN_STORE_ROTATION.weeklySlots, 1),
+            `journey-store:${weekKey}`
+        );
+        weeklyIds.forEach((id) => {
+            const def = DEFAULT_TOKEN_STORE_CATALOG[id];
+            if (def) items.push(makeStoreItem(def, { stock: Number.isFinite(def.stock) ? def.stock : 1, infinite: false, weekKey }));
+        });
+
+        const limitedIds = deterministicPick(
+            JOURNEY_TOKEN_STORE_ROTATION.limitedPool,
+            1,
+            `journey-store-limited:${weekKey}`
+        );
+        limitedIds.forEach((id) => {
+            const def = DEFAULT_TOKEN_STORE_CATALOG[id];
+            if (def) items.push(makeStoreItem(def, { stock: Number.isFinite(def.stock) ? def.stock : 1, infinite: false, limited: true, weekKey }));
+        });
+
+        const localAdminWeekly = (tokenStore && tokenStore.admin && Array.isArray(tokenStore.admin.weeklyStock && tokenStore.admin.weeklyStock[weekKey]))
+            ? tokenStore.admin.weeklyStock[weekKey]
+            : [];
+        const adminWeekly = localAdminWeekly.concat(getSeasonalAdminStockForWeek(weekKey));
+        adminWeekly.forEach((entry) => {
+            if (!entry) return;
+            const base = DEFAULT_TOKEN_STORE_CATALOG[entry.id] || { id: entry.id, type: entry.type || 'cosmetic', title: entry.title || 'Special Reward', cost: entry.cost || 10 };
+            items.push(makeStoreItem(base, Object.assign({}, entry, { weekKey, infinite: entry.stock == null })));
+        });
+
+        const localLimited = (tokenStore && tokenStore.admin && Array.isArray(tokenStore.admin.limitedRewards))
+            ? tokenStore.admin.limitedRewards
+            : [];
+        const adminLimited = localLimited.concat(getSeasonalLimitedStoreRewards(weekKey));
+        const today = parseDateOnly(getTodayString()) || new Date();
+        adminLimited.forEach((entry) => {
+            if (!entry) return;
+            if (entry.weekKey && String(entry.weekKey) !== String(weekKey)) return;
+            const starts = entry.startsOn ? parseDateOnly(entry.startsOn) : null;
+            const ends = entry.expiresOn ? parseDateOnly(entry.expiresOn) : null;
+            if (starts && starts.getTime() > today.getTime()) return;
+            if (ends && ends.getTime() < today.getTime()) return;
+            const base = DEFAULT_TOKEN_STORE_CATALOG[entry.id] || { id: entry.id, type: entry.type || 'cosmetic', title: entry.title || 'Limited Reward', cost: entry.cost || 18 };
+            items.push(makeStoreItem(base, Object.assign({}, entry, { limited: true, infinite: entry.stock == null })));
+        });
+
+        const deduped = {};
+        items.forEach((item) => { if (item && item.id) deduped[item.id] = item; });
+        return Object.values(deduped);
+    }
+
+    function ensureJourneyTokenStoreWeek(weekKey) {
+        const tokenStore = getTokenStoreState();
+        if (!tokenStore) return null;
+        const key = weekKey || getWeekKey();
+        if (!isFeatureFlagEnabled('journeyTokenStoreRotationEnabled', true)) {
+            if (!isObject(tokenStore.weeks[key])) {
+                tokenStore.weeks[key] = {
+                    weekKey: key,
+                    generatedAt: Date.now(),
+                    items: JOURNEY_TOKEN_STORE_ROTATION.core.map((id) => makeStoreItem(DEFAULT_TOKEN_STORE_CATALOG[id])).filter(Boolean),
+                    purchased: {}
+                };
+            }
+            tokenStore.currentWeekKey = key;
+            return tokenStore.weeks[key];
+        }
+        if (!isObject(tokenStore.weeks[key])) {
+            tokenStore.weeks[key] = {
+                weekKey: key,
+                generatedAt: Date.now(),
+                items: buildWeeklyTokenStoreInventoryForWeek(key).map((item) => Object.assign({}, item)),
+                purchased: {}
+            };
+        }
+        if (!isObject(tokenStore.weeks[key].purchased)) tokenStore.weeks[key].purchased = {};
+        if (!Array.isArray(tokenStore.weeks[key].items)) tokenStore.weeks[key].items = [];
+        tokenStore.currentWeekKey = key;
+        pruneTokenStoreWeeks(tokenStore);
+        return tokenStore.weeks[key];
+    }
+
+    function getJourneyTokenStoreInventory() {
+        const week = ensureJourneyTokenStoreWeek();
+        const tokenStore = getTokenStoreState();
+        if (!week || !tokenStore) return { weekKey: getWeekKey(), items: [] };
+        const items = week.items.map((item) => {
+            const purchased = clampInt(week.purchased && week.purchased[item.id], 0);
+            const stock = (item && item.stock != null && Number.isFinite(Number(item.stock))) ? clampInt(item.stock, 0) : null;
+            const remaining = stock == null ? null : Math.max(0, stock - purchased);
+            return Object.assign({}, item, { purchased, remaining, soldOut: remaining === 0 && stock != null });
+        });
+        return { weekKey: week.weekKey, items };
+    }
+
+    function rotateJourneyTokenStoreStock(options) {
+        const weekKey = options && options.weekKey ? String(options.weekKey) : getWeekKey();
+        const tokenStore = getTokenStoreState();
+        if (!tokenStore) return null;
+        if (options && options.force === true) {
+            delete tokenStore.weeks[weekKey];
+        }
+        const week = ensureJourneyTokenStoreWeek(weekKey);
+        if (typeof root.saveGame === 'function') {
+            try { root.saveGame({ silentIndicator: true, source: 'journey-token-store-rotate' }); } catch (_) {}
+        }
+        return week ? { weekKey: week.weekKey, itemCount: week.items.length } : null;
+    }
+
+    function adminSeedJourneyTokenStoreWeek(weekKey, items) {
+        const tokenStore = getTokenStoreState();
+        if (!tokenStore) return { ok: false, reason: 'state-unavailable' };
+        const key = typeof weekKey === 'string' && weekKey ? weekKey : getWeekKey();
+        tokenStore.admin.weeklyStock[key] = Array.isArray(items) ? items.filter(Boolean).map((entry) => Object.assign({}, entry)) : [];
+        delete tokenStore.weeks[key];
+        return { ok: true, weekKey: key, count: tokenStore.admin.weeklyStock[key].length };
+    }
+
+    function adminSeedJourneyLimitedRewards(items) {
+        const tokenStore = getTokenStoreState();
+        if (!tokenStore) return { ok: false, reason: 'state-unavailable' };
+        tokenStore.admin.limitedRewards = Array.isArray(items) ? items.filter(Boolean).map((entry) => Object.assign({}, entry)) : [];
+        const currentKey = getWeekKey();
+        delete tokenStore.weeks[currentKey];
+        return { ok: true, count: tokenStore.admin.limitedRewards.length };
+    }
+
+    function addRetentionUnlock(kind, unlockId, fallbackCoins) {
+        const gs = getState();
+        if (!gs || !isObject(gs.meta) || !isObject(gs.meta.retentionUnlocks)) {
+            const coins = addCoinsFallback(fallbackCoins || 25, 'Journey unlock fallback');
+            return { granted: false, duplicate: false, fallbackCoins: coins };
+        }
+        const mapKey = kind === 'roomProp' ? 'roomProps'
+            : kind === 'ambient' ? 'ambientVariants'
+            : kind === 'emote' ? 'emotePacks'
+            : kind === 'photoFrame' ? 'photoFrames'
+            : null;
+        if (!mapKey || !Array.isArray(gs.meta.retentionUnlocks[mapKey])) {
+            const coins = addCoinsFallback(fallbackCoins || 25, 'Journey unlock fallback');
+            return { granted: false, duplicate: false, fallbackCoins: coins };
+        }
+        const id = String(unlockId || '');
+        if (!id) {
+            const coins = addCoinsFallback(fallbackCoins || 25, 'Journey unlock fallback');
+            return { granted: false, duplicate: false, fallbackCoins: coins };
+        }
+        if (!gs.meta.retentionUnlocks[mapKey].includes(id)) {
+            gs.meta.retentionUnlocks[mapKey].push(id);
+            return { granted: true, duplicate: false, fallbackCoins: 0, id, kind };
+        }
+        const coins = addCoinsFallback(fallbackCoins || 25, `Journey duplicate ${kind}`);
+        return { granted: false, duplicate: true, fallbackCoins: coins, id, kind };
+    }
+
     function redeemJourneyTokenReward(rewardId) {
-        const reward = DEFAULT_TOKEN_STORE[rewardId];
-        if (!reward) return { ok: false, reason: 'unknown-reward' };
+        const inventory = getJourneyTokenStoreInventory();
+        const reward = (inventory.items || []).find((item) => item && item.id === rewardId) || null;
+        if (!reward) return { ok: false, reason: 'unknown-reward', weekKey: inventory.weekKey };
+        if (reward.soldOut) return { ok: false, reason: 'sold-out', weekKey: inventory.weekKey };
         const spend = spendJourneyTokens(reward.cost);
         if (!spend.ok) return { ok: false, reason: spend.reason, balance: spend.balance };
 
         let message = 'Reward redeemed.';
         let fallbackCoins = 0;
+        let grantedUnlock = null;
         if (reward.type === 'story') {
             addJournalStoryEntry('Journey token memory unlocked: your pet remembers your steady return.');
             const bonusTokens = 0;
@@ -521,6 +823,47 @@
             fallbackCoins = coins;
             addJournalStoryEntry('Codex insight: your pet noticed patterns in your routines.');
             message = `Codex insight granted${coins > 0 ? ` and converted extra value to ${coins} coins` : ''}.`;
+        } else if (reward.type === 'roomProp') {
+            const unlockId = reward.unlockId || reward.id;
+            const grant = addRetentionUnlock('roomProp', unlockId, 34);
+            fallbackCoins = grant.fallbackCoins || 0;
+            grantedUnlock = grant.granted ? { type: 'roomProp', id: unlockId } : null;
+            message = grant.granted ? 'Room prop unlocked for your home.' : `Duplicate prop converted to ${fallbackCoins} coins.`;
+        } else if (reward.type === 'ambient') {
+            const unlockId = reward.unlockId || reward.id;
+            const grant = addRetentionUnlock('ambient', unlockId, 30);
+            fallbackCoins = grant.fallbackCoins || 0;
+            grantedUnlock = grant.granted ? { type: 'ambient', id: unlockId } : null;
+            message = grant.granted ? 'Ambient variant unlocked.' : `Duplicate ambient reward converted to ${fallbackCoins} coins.`;
+        } else if (reward.type === 'emote') {
+            const unlockId = reward.unlockId || reward.id;
+            const grant = addRetentionUnlock('emote', unlockId, 28);
+            fallbackCoins = grant.fallbackCoins || 0;
+            grantedUnlock = grant.granted ? { type: 'emote', id: unlockId } : null;
+            message = grant.granted ? 'Emote pack unlocked.' : `Duplicate emote pack converted to ${fallbackCoins} coins.`;
+        } else if (reward.type === 'photoFrame') {
+            const unlockId = reward.unlockId || reward.id;
+            const grant = addRetentionUnlock('photoFrame', unlockId, 26);
+            fallbackCoins = grant.fallbackCoins || 0;
+            grantedUnlock = grant.granted ? { type: 'photoFrame', id: unlockId } : null;
+            message = grant.granted ? 'Photo frame unlocked.' : `Duplicate photo frame converted to ${fallbackCoins} coins.`;
+        } else if (reward.type === 'currency') {
+            fallbackCoins = addCoinsFallback(reward.coins || 20, 'Journey currency reward');
+            message = `Converted to ${fallbackCoins} coins.`;
+        }
+
+        const tokenStore = getTokenStoreState();
+        const week = tokenStore && ensureJourneyTokenStoreWeek(inventory.weekKey);
+        if (week) {
+            if (!isObject(week.purchased)) week.purchased = {};
+            week.purchased[reward.id] = clampInt(week.purchased[reward.id], 0) + 1;
+            tokenStore.purchaseHistory.push({
+                id: reward.id,
+                weekKey: inventory.weekKey,
+                at: Date.now(),
+                cost: clampInt(reward.cost, 0)
+            });
+            if (tokenStore.purchaseHistory.length > 50) tokenStore.purchaseHistory = tokenStore.purchaseHistory.slice(-50);
         }
 
         if (typeof root.saveGame === 'function') {
@@ -529,9 +872,11 @@
         return {
             ok: true,
             rewardId,
+            weekKey: inventory.weekKey,
             spent: reward.cost,
             balance: spend.balance,
             fallbackCoins,
+            unlock: grantedUnlock,
             message
         };
     }
@@ -578,6 +923,9 @@
             nextObjective: current.nextObjective,
             nextReward: current.nextReward,
             backlogDrip: current.backlogDrip,
+            comebackQuest: current.comebackQuest || null,
+            seasonalJourney: current.seasonalJourney || null,
+            tokenStore: getJourneyTokenStoreInventory(),
             chapterObjectives: current.chapterObjectives,
             trackProgress: {
                 bond: byTrack.bond || { completed: 0, total: 0, pct: 0 },
@@ -628,6 +976,10 @@
         getCurrentChapter,
         getJourneyModalStatus,
         getJourneyChapterStates,
+        getJourneyTokenStoreInventory,
+        rotateJourneyTokenStoreStock,
+        adminSeedJourneyTokenStoreWeek,
+        adminSeedJourneyLimitedRewards,
         claimStreak,
         incrementChapterProgress,
         trackJourneyOpen,
@@ -649,6 +1001,26 @@
         if (typeof root.redeemJourneyTokenReward !== 'function') {
             root.redeemJourneyTokenReward = function redeemJourneyTokenRewardCompat(rewardId) {
                 return api.redeemJourneyTokenReward(rewardId);
+            };
+        }
+        if (typeof root.getJourneyTokenStoreInventory !== 'function') {
+            root.getJourneyTokenStoreInventory = function getJourneyTokenStoreInventoryCompat() {
+                return api.getJourneyTokenStoreInventory();
+            };
+        }
+        if (typeof root.rotateJourneyTokenStoreStock !== 'function') {
+            root.rotateJourneyTokenStoreStock = function rotateJourneyTokenStoreStockCompat(options) {
+                return api.rotateJourneyTokenStoreStock(options);
+            };
+        }
+        if (typeof root.adminSeedJourneyTokenStoreWeek !== 'function') {
+            root.adminSeedJourneyTokenStoreWeek = function adminSeedJourneyTokenStoreWeekCompat(weekKey, items) {
+                return api.adminSeedJourneyTokenStoreWeek(weekKey, items);
+            };
+        }
+        if (typeof root.adminSeedJourneyLimitedRewards !== 'function') {
+            root.adminSeedJourneyLimitedRewards = function adminSeedJourneyLimitedRewardsCompat(items) {
+                return api.adminSeedJourneyLimitedRewards(items);
             };
         }
     }

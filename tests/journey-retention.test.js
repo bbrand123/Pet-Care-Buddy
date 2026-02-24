@@ -153,6 +153,7 @@ test('Journey backlog drip distributes missed-day rewards across multiple logins
 });
 
 test('Journey token cosmetic redemption converts duplicates to currency fallback', () => {
+    global.isRetentionFeatureFlagEnabled = () => true;
     global.gameState = {
         economy: { playerId: 'pid_test', coins: 0 },
         pet: { unlockedAccessories: [] },
@@ -191,7 +192,72 @@ test('Journey token cosmetic redemption converts duplicates to currency fallback
     delete global.ACCESSORIES;
     delete global.grantSticker;
     delete global.addCoins;
+    delete global.isRetentionFeatureFlagEnabled;
     delete global.JOURNEY_CHAPTERS;
+    delete global.Journey;
+    delete global.MLFJourney;
+});
+
+test('Journey token store rotates weekly stock and enforces limited stock redemption', () => {
+    global.isRetentionFeatureFlagEnabled = () => true;
+    global.getTodayString = () => '2026-02-09';
+    global.gameState = {
+        economy: { playerId: 'pid_test', coins: 0 },
+        pet: { unlockedAccessories: [] },
+        streak: { current: 1, todayBonusClaimed: false },
+        meta: {},
+        journeyRetention: {
+            version: 1,
+            startedAtDate: '2026-02-01',
+            currentChapterId: 'chapter1',
+            lastUpdatedAt: Date.now(),
+            chapterProgress: {},
+            streak: { backlog: { pending: [], pendingValue: 0, dripLoginsRemaining: 0, lastDripAt: 0, lastLoginDate: null, lastDripDate: null } },
+            bond: { xp: 0, level: 1 },
+            tokens: 40,
+            features: { seasonalEnabled: false }
+        }
+    };
+    global.JOURNEY_CHAPTERS = [{ id: 'chapter1', label: 'Week 1', dayStart: 1, dayEnd: 7, objectives: [], chapterReward: { tokens: 4 } }];
+    global.addCoins = (amount) => {
+        global.gameState.economy.coins += amount;
+        return amount;
+    };
+
+    const Journey = freshRequire('../js/retention/journey.js');
+    const initial = Journey.getJourneyTokenStoreInventory();
+    assert.equal(Array.isArray(initial.items), true);
+    assert.equal(initial.items.some((item) => item.id === 'story'), true);
+
+    const weekKey = initial.weekKey;
+    const seedResult = Journey.adminSeedJourneyLimitedRewards([
+        { id: 'limitedCoinTest', type: 'currency', title: 'Limited Coin Cache', cost: 9, coins: 99, stock: 1, weekKey }
+    ]);
+    assert.equal(seedResult.ok, true);
+
+    Journey.rotateJourneyTokenStoreStock({ weekKey, force: true });
+    const rotated = Journey.getJourneyTokenStoreInventory();
+    const limited = rotated.items.find((item) => item.id === 'limitedCoinTest');
+    assert.ok(limited);
+    assert.equal(limited.remaining, 1);
+
+    const firstRedeem = Journey.redeemJourneyTokenReward('limitedCoinTest');
+    assert.equal(firstRedeem.ok, true);
+    assert.equal(global.gameState.economy.coins >= 99, true);
+
+    const afterFirst = Journey.getJourneyTokenStoreInventory();
+    const soldOut = afterFirst.items.find((item) => item.id === 'limitedCoinTest');
+    assert.equal(!!soldOut.soldOut, true);
+
+    const secondRedeem = Journey.redeemJourneyTokenReward('limitedCoinTest');
+    assert.equal(secondRedeem.ok, false);
+    assert.equal(secondRedeem.reason, 'sold-out');
+
+    delete global.getTodayString;
+    delete global.isRetentionFeatureFlagEnabled;
+    delete global.gameState;
+    delete global.JOURNEY_CHAPTERS;
+    delete global.addCoins;
     delete global.Journey;
     delete global.MLFJourney;
 });

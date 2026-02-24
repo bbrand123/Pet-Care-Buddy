@@ -311,8 +311,11 @@
                             chapter: current.chapter,
                             chapterPct: current.chapterPct || 0,
                             tokens: current.tokens || 0,
+                            backlogDrip: current.backlogDrip || null,
                             nextObjective: current.nextObjective || null,
                             nextReward: current.nextReward || null,
+                            comebackQuest: current.comebackQuest || null,
+                            seasonalJourney: current.seasonalJourney || null,
                             chapterComplete: !!current.chapterComplete,
                             trackProgress: { bond: { pct: 0, completed: 0, total: 0 }, mastery: { pct: 0, completed: 0, total: 0 }, collection: { pct: 0, completed: 0, total: 0 } }
                         };
@@ -341,7 +344,9 @@
                     journeyOpen: 'Open',
                     nextObjectiveLabel: 'Current objective',
                     nextRewardLabel: 'Next reward',
-                    chapterComplete: 'Chapter complete! Open Journey to review rewards.'
+                    chapterComplete: 'Chapter complete! Open Journey to review rewards.',
+                    comebackQuestLabel: 'Comeback quest',
+                    seasonalJourneyLabel: 'Seasonal loop'
                 };
             }
 
@@ -357,6 +362,12 @@
                 const backlogDrip = status.backlogDrip && Number(status.backlogDrip.applied) > 0
                     ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.backlogDripLabel || 'Comeback drip')}:</strong> +${Math.floor(status.backlogDrip.applied)} tokens today · ${Math.floor(status.backlogDrip.pending || 0)} pending</p>`
                     : '';
+                const comebackQuest = status.comebackQuest && status.comebackQuest.status !== 'completed'
+                    ? `<p class="journey-status-next"><strong>${escapeHTML(uiStrings.comebackQuestLabel || 'Comeback quest')}:</strong> ${escapeHTML(status.comebackQuest.title || 'Comeback quest')} (${Math.floor(status.comebackQuest.progress || 0)}/${Math.floor(status.comebackQuest.target || 1)})</p>`
+                    : '';
+                const seasonalJourney = status.seasonalJourney
+                    ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.seasonalJourneyLabel || 'Seasonal loop')}:</strong> ${escapeHTML((status.seasonalJourney.icon || '✨') + ' ' + (status.seasonalJourney.title || 'Seasonal Journey'))} (${Math.floor(status.seasonalJourney.completedObjectives || 0)}/${Math.floor(status.seasonalJourney.totalObjectives || 0)})</p>`
+                    : '';
 	            return `
 	                <section class="journey-status-panel" id="journey-status-panel" role="region" aria-label="30 day journey status">
 	                    <div class="journey-status-head">
@@ -370,6 +381,8 @@
                         </div>
 	                    <p class="journey-status-next"><strong>${escapeHTML(uiStrings.nextObjectiveLabel)}:</strong> ${objectiveCopy}</p>
 	                    <p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.nextRewardLabel)}:</strong> ${rewardCopy}</p>
+                        ${comebackQuest}
+                        ${seasonalJourney}
                         ${backlogDrip}
 	                </section>
 	            `;
@@ -1874,6 +1887,7 @@
                     const btn = document.getElementById('retention-emotional-cta');
                     const actionType = (btn && btn.getAttribute('data-retention-action')) || 'journey';
                     if (typeof noteRetentionActivity === 'function') noteRetentionActivity(actionType);
+                    if (actionType === 'comeback' && typeof openComebackQuest === 'function') return openComebackQuest();
                     if (actionType === 'streak' && typeof showStreakModal === 'function') return showStreakModal();
                     if (actionType === 'explore' && typeof showExplorationModal === 'function') return showExplorationModal();
                     if (actionType === 'garden' && typeof switchRoom === 'function') {

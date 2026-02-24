@@ -15,6 +15,7 @@
     root.MLFHouseholdState = factory(root.MLFHouseholdSimulator, root.MLFSimRelationships);
 })(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFHouseholdState(HouseholdSimulator, Relationships) {
     'use strict';
+    const root = (typeof globalThis !== 'undefined') ? globalThis : (typeof window !== 'undefined' ? window : {});
 
     function isObject(value) {
         return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -235,6 +236,87 @@
         return state;
     }
 
+    function isHouseholdRetentionBeatsEnabled() {
+        if (root && typeof root.isRetentionFeatureFlagEnabled === 'function') {
+            try { return !!root.isRetentionFeatureFlagEnabled('householdRetentionBeatsEnabled'); } catch (_) {}
+        }
+        return true;
+    }
+
+    function ensureHouseholdRetentionAlertState(state) {
+        if (!isObject(state)) return null;
+        if (!isObject(state.meta)) state.meta = {};
+        if (!Array.isArray(state.meta.householdRetentionAlerts)) state.meta.householdRetentionAlerts = [];
+        return state.meta.householdRetentionAlerts;
+    }
+
+    function translateHouseholdBeatToAlert(beat) {
+        if (!isObject(beat)) return null;
+        if (beat.type === 'relationship_friend_unlocked') {
+            return {
+                id: `hh_${beat.type}_${beat.petAId}_${beat.petBId}`,
+                type: 'household',
+                priority: 'high',
+                title: `💞 ${beat.petAName || 'Pet'} and ${beat.petBName || 'Pet'} became friends`,
+                body: 'Open the household view to follow up with a social interaction and reinforce the bond.',
+                action: { type: 'social' }
+            };
+        }
+        if (beat.type === 'relationship_rival_unlocked') {
+            return {
+                id: `hh_${beat.type}_${beat.petAId}_${beat.petBId}`,
+                type: 'household',
+                priority: 'medium',
+                title: `⚡ Tension rose between ${beat.petAName || 'pets'} and ${beat.petBName || 'pets'}`,
+                body: 'A quick household check-in can redirect this rivalry into a stronger social beat.',
+                action: { type: 'social' }
+            };
+        }
+        if (beat.type === 'pet_needs_attention') {
+            return {
+                id: `hh_${beat.type}_${beat.petId}_${Math.floor((Number(beat.at) || 0) / 3600000)}`,
+                type: 'household',
+                priority: 'medium',
+                title: `🫶 ${beat.petName || 'A pet'} needs a quick check-in`,
+                body: 'One care action now can stabilize the household mood and keep your session flowing.',
+                action: { type: 'care' }
+            };
+        }
+        if (beat.type === 'pet_happy_moment') {
+            return {
+                id: `hh_${beat.type}_${beat.petId}_${Math.floor((Number(beat.at) || 0) / 86400000)}`,
+                type: 'household',
+                priority: 'low',
+                title: `✨ ${beat.petName || 'A pet'} had a happy moment`,
+                body: 'Follow up with play or social time to turn this into relationship progress.',
+                action: { type: 'social' }
+            };
+        }
+        return null;
+    }
+
+    function applyHouseholdRetentionBeatsToState(state, beats) {
+        if (!isHouseholdRetentionBeatsEnabled()) return 0;
+        if (!isObject(state) || !Array.isArray(beats) || beats.length === 0) return 0;
+        const alerts = ensureHouseholdRetentionAlertState(state);
+        if (!alerts) return 0;
+        const seen = new Set(alerts.map((a) => a && a.id).filter(Boolean));
+        let added = 0;
+        beats.forEach((beat) => {
+            const alert = translateHouseholdBeatToAlert(beat);
+            if (!alert || !alert.id || seen.has(alert.id)) return;
+            seen.add(alert.id);
+            alert.createdAt = Date.now();
+            alerts.push(alert);
+            added += 1;
+            if (root && typeof root.addReminderCenterItem === 'function') {
+                try { root.addReminderCenterItem('household', alert.title, alert.body, alert.action || { type: 'social' }); } catch (_) {}
+            }
+        });
+        if (alerts.length > 20) state.meta.householdRetentionAlerts = alerts.slice(-20);
+        return added;
+    }
+
     function setLastSimulatedAt(state, nowMs) {
         if (!isObject(state)) return state;
         if (!isObject(state.household)) syncLegacyToHousehold(state, nowMs);
@@ -254,6 +336,9 @@
         const result = HouseholdSimulator.simulateHouseholdToNow({ household: state.household }, nowMs, options);
         if (result && result.household) state.household = result.household;
         syncHouseholdToLegacy(state);
+        if (result && result.meta && Array.isArray(result.meta.retentionBeats)) {
+            applyHouseholdRetentionBeatsToState(state, result.meta.retentionBeats);
+        }
         return { state, meta: (result && result.meta) || null };
     }
 
@@ -267,6 +352,9 @@
         const result = HouseholdSimulator.tickHousehold({ household: state.household }, dtMs, nowMs, options);
         if (result && result.household) state.household = result.household;
         syncHouseholdToLegacy(state);
+        if (result && result.meta && Array.isArray(result.meta.retentionBeats)) {
+            applyHouseholdRetentionBeatsToState(state, result.meta.retentionBeats);
+        }
         return { state, meta: (result && result.meta) || null };
     }
 
@@ -276,6 +364,7 @@
         ensureHouseholdState,
         setLastSimulatedAt,
         simulateHouseholdToNowOnState,
-        tickHouseholdOnState
+        tickHouseholdOnState,
+        applyHouseholdRetentionBeatsToState
     });
 });

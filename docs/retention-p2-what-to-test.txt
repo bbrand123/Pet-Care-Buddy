@@ -1,0 +1,34 @@
+P2 Retention / Journey Expansion (Seasonal + Comeback + Household) - What To Test
+
+1. Comeback quest (7-day absence)
+- Set device/app state to simulate `awayDays >= 7` (or use dev state edit).
+- Launch app and confirm a comeback quest is created.
+- Verify Journey HUD shows a comeback quest row with progress.
+- Open reminder center and confirm comeback reminder opens the correct destination (streak/explore/garden/social depending quest).
+- Complete the quest and verify reward is granted (Journey tokens / coins / bond XP) and progress no longer shows as active.
+
+2. Journey token store weekly rotation
+- Open Journey modal and confirm token store shows core items plus rotating weekly stock and at least one limited/high-tier sink.
+- Redeem a limited item with stock 1 and verify it becomes sold out in the same week.
+- Trigger `rotateJourneyTokenStoreStock({ force: true })` in dev console and confirm inventory refreshes.
+- Seed custom stock with `adminSeedJourneyTokenStoreWeek(...)` or `adminSeedJourneyLimitedRewards(...)` and verify seeded item appears.
+
+3. Duplicate fallback value
+- Redeem a cosmetic/visible unlock the player already owns.
+- Verify duplicate is converted to fallback coins and player still receives meaningful value.
+
+4. Seasonal Journey loop
+- Enable seasonal Journey flag in dev admin (`?dev=true`, Seasonal on).
+- Verify seasonal weekly chapter appears in Journey HUD/modal.
+- Perform mapped actions (care/garden/explore/streak) and verify seasonal objective progress updates.
+- Confirm seasonal reward track labels are shown.
+
+5. Household retention beats
+- Trigger a household relationship milestone (friend/rival) or a needs/mood shift via dev command/sim time jump.
+- Verify a household alert appears in reminder center.
+- Verify alert “Open” performs a one-tap follow-up to household/social (or care fallback).
+
+6. Regression checks
+- Save/load works after redeeming token store items and after comeback quest completion.
+- Existing Journey core objectives and streak quick-claim still work.
+- Reminder center still functions when native notifications are declined.
