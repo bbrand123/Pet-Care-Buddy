@@ -36,3 +36,39 @@ test('harvest payout applies seasonal boost deterministically', () => {
     assert.ok(inSeason > offSeason);
     assert.equal(inSeason, Math.max(2, Math.round(offSeason * 1.2)));
 });
+
+test('staple crops are not net-positive in pure coin loops over repeated cycles', () => {
+    const economyMultiplier = 0.82; // matches current tuned default in constants
+    const staples = [
+        {
+            id: 'carrot',
+            crop: { hungerValue: 15, happinessValue: 5, energyValue: 0, growTime: 3, seasonBonus: ['spring'] },
+            season: 'spring',
+            packCost: 14,
+            seedsPerPack: 3
+        },
+        {
+            id: 'tomato',
+            crop: { hungerValue: 18, happinessValue: 8, energyValue: 0, growTime: 4, seasonBonus: ['summer'] },
+            season: 'summer',
+            packCost: 18,
+            seedsPerPack: 3
+        }
+    ];
+
+    staples.forEach((entry) => {
+        const payoutPerHarvest = EconomyCalculations.computeHarvestCoinPayout({
+            crop: entry.crop,
+            currentSeason: entry.season,
+            economyMultiplier
+        });
+        const cycles = 12;
+        const grossCoins = payoutPerHarvest * cycles;
+        const seedUnitCost = Math.ceil(entry.packCost / entry.seedsPerPack);
+        const seedCoinsSpent = seedUnitCost * cycles;
+        assert.ok(
+            grossCoins <= seedCoinsSpent,
+            `${entry.id} should not be net-positive in pure coin terms (${grossCoins} > ${seedCoinsSpent})`
+        );
+    });
+});

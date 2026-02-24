@@ -55,10 +55,14 @@
         const cfg = input || {};
         const crop = cfg.crop || null;
         if (!crop) return 0;
-        const base = 3
-            + Math.round((Number(crop.hungerValue) || 0) / 4)
-            + Math.round((Number(crop.happinessValue) || 0) / 6)
-            + Math.round((Number(crop.energyValue) || 0) / 6);
+        const statBase = 1
+            + Math.round((Number(crop.hungerValue) || 0) / 8)
+            + Math.round((Number(crop.happinessValue) || 0) / 10)
+            + Math.round((Number(crop.energyValue) || 0) / 10);
+        const growTime = Math.max(0, Math.floor(Number(crop.growTime) || 0));
+        const growthGateBonus = Math.max(0, Math.round((growTime - 3) / 2));
+        const cropBonus = Math.max(0, Math.floor(Number(crop.harvestCoinBonus) || 0));
+        const base = Math.max(1, statBase + growthGateBonus + cropBonus);
         const season = String(cfg.currentSeason || '');
         const seasonalBoost = Array.isArray(crop.seasonBonus) && crop.seasonBonus.includes(season) ? 1.2 : 1.0;
         const ecoMult = Number.isFinite(Number(cfg.economyMultiplier)) ? Number(cfg.economyMultiplier) : 1;
