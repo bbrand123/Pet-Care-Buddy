@@ -460,10 +460,25 @@
 
 	        function getGardenExpansionStatus() {
 	            const garden = gameState.garden || {};
+	            const tiers = Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS : [];
 	            const expansionTier = Math.max(0, Math.floor(Number(garden.expansionTier) || 0));
-	            const nextTier = (Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS[expansionTier] : null) || null;
-	            const capacity = getGardenPlotCapacity(expansionTier);
-	            const unlockedPlots = getUnlockedPlotCount(garden.totalHarvests || 0, expansionTier);
+	            const nextTier = tiers[expansionTier] || null;
+	            let capacity = 6;
+	            if (typeof getGardenPlotCapacity === 'function') {
+	                capacity = getGardenPlotCapacity(expansionTier);
+	            } else {
+	                const basePlots = Math.max(1, Math.floor(Number(typeof GARDEN_BASE_PLOTS !== 'undefined' ? GARDEN_BASE_PLOTS : 6) || 6));
+	                capacity = basePlots;
+	                for (let i = 0; i < expansionTier && i < tiers.length; i++) {
+	                    capacity += Math.max(0, Math.floor(Number(tiers[i].additionalPlots) || 0));
+	                }
+	                if (typeof MAX_GARDEN_PLOTS !== 'undefined') {
+	                    capacity = Math.min(MAX_GARDEN_PLOTS, capacity);
+	                }
+	            }
+	            const unlockedPlots = (typeof getUnlockedPlotCount === 'function')
+	                ? getUnlockedPlotCount(garden.totalHarvests || 0, expansionTier)
+	                : Math.max(0, Math.min(capacity, Math.floor(Number(garden.plots && garden.plots.length) || 0)));
 	            return { expansionTier, nextTier, capacity, unlockedPlots };
 	        }
 
@@ -625,13 +640,20 @@
             }
         }
 
-        function renderGardenUI() {
-            const gardenSection = document.getElementById('garden-section');
-            if (!gardenSection) return;
+	        function renderGardenUI() {
+	            const gardenSection = document.getElementById('garden-section');
+	            if (!gardenSection) return;
 
-            const garden = gameState.garden;
-            const season = gameState.season || getCurrentSeason();
-            const seasonData = SEASONS[season];
+	            if (!gameState.garden || typeof gameState.garden !== 'object') {
+	                gameState.garden = { plots: [], inventory: {}, lastGrowTick: Date.now(), totalHarvests: 0, expansionTier: 0 };
+	            }
+	            const garden = gameState.garden;
+	            if (!Array.isArray(garden.plots)) garden.plots = [];
+	            if (!garden.inventory || typeof garden.inventory !== 'object') garden.inventory = {};
+	            if (typeof garden.totalHarvests !== 'number' || !Number.isFinite(garden.totalHarvests)) garden.totalHarvests = 0;
+	            if (typeof garden.expansionTier !== 'number' || !Number.isFinite(garden.expansionTier)) garden.expansionTier = 0;
+	            const season = gameState.season || getCurrentSeason();
+	            const seasonData = SEASONS[season];
 
             // Render plots
             let plotsHTML = '';
@@ -721,21 +743,34 @@
                 `;
             }
 
-	            const expansionStatus = getGardenExpansionStatus();
-	            const nextExpansion = expansionStatus.nextTier;
-	            const harvests = Math.max(0, Math.floor(Number(garden.totalHarvests) || 0));
-	            const expansionLine = nextExpansion
-	                ? `${nextExpansion.name}: +${nextExpansion.additionalPlots} plots • ${nextExpansion.costCoins} coins • needs ${nextExpansion.requiredHarvests} harvests`
-	                : 'All garden expansions unlocked';
-	            const canBuyExpansion = !!nextExpansion
-	                && harvests >= Math.max(0, Number(nextExpansion.requiredHarvests) || 0)
-	                && (typeof getCoinBalance !== 'function' || getCoinBalance() >= Math.max(0, Number(nextExpansion.costCoins) || 0));
-	            gardenSection.innerHTML = `
+		            let expansionStatus = null;
+		            let nextExpansion = null;
+		            let harvests = Math.max(0, Math.floor(Number(garden.totalHarvests) || 0));
+		            let expansionLine = '';
+		            let canBuyExpansion = false;
+		            let expansionTierCount = 0;
+		            try {
+		                expansionStatus = getGardenExpansionStatus();
+		                nextExpansion = expansionStatus.nextTier;
+		                expansionTierCount = Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS.length : 0;
+		                expansionLine = nextExpansion
+		                    ? `${nextExpansion.name}: +${nextExpansion.additionalPlots} plots • ${nextExpansion.costCoins} coins • needs ${nextExpansion.requiredHarvests} harvests`
+		                    : 'All garden expansions unlocked';
+		                canBuyExpansion = !!nextExpansion
+		                    && harvests >= Math.max(0, Number(nextExpansion.requiredHarvests) || 0)
+		                    && (typeof getCoinBalance !== 'function' || getCoinBalance() >= Math.max(0, Number(nextExpansion.costCoins) || 0));
+		            } catch (e) {
+		                expansionStatus = { expansionTier: Math.max(0, Math.floor(Number(garden.expansionTier) || 0)), capacity: unlockedPlots, unlockedPlots };
+		                nextExpansion = null;
+		                expansionTierCount = 0;
+		                expansionLine = 'Expansion details unavailable.';
+		            }
+		            gardenSection.innerHTML = `
 	                <div class="garden-title"><span aria-hidden="true">🌱 ${seasonData ? seasonData.icon : ''}</span> My Garden</div>
 	                <div class="garden-subtitle" style="font-size:0.82rem;color:#6d4c41;margin-bottom:8px;">Seed stock: ${Object.entries((gameState.economy && gameState.economy.inventory && gameState.economy.inventory.seeds) || {}).filter(([, c]) => c > 0).map(([cropId, count]) => `${(GARDEN_CROPS[cropId] ? GARDEN_CROPS[cropId].seedEmoji : '🌱')}x${count}`).join(' · ') || 'None'}</div>
 	                <div class="garden-inventory" style="margin-bottom:8px;">
 	                    <strong><span aria-hidden="true">🏡</span> Garden Expansion:</strong>
-	                    <div class="garden-plot-status">Tier ${expansionStatus.expansionTier}/${GARDEN_EXPANSION_TIERS.length} • Capacity ${expansionStatus.capacity}/${MAX_GARDEN_PLOTS} • Unlocked ${expansionStatus.unlockedPlots}</div>
+		                    <div class="garden-plot-status">Tier ${expansionStatus.expansionTier}/${expansionTierCount} • Capacity ${expansionStatus.capacity}/${typeof MAX_GARDEN_PLOTS !== 'undefined' ? MAX_GARDEN_PLOTS : expansionStatus.capacity} • Unlocked ${expansionStatus.unlockedPlots}</div>
 	                    <div class="garden-plot-status">${escapeHTML(expansionLine)}</div>
 	                    ${nextExpansion ? `<div class="garden-inventory-items"><button class="garden-inventory-item" id="garden-expand-btn" ${canBuyExpansion ? '' : 'disabled'} aria-label="Unlock ${escapeHTML(nextExpansion.name)}">Unlock ${escapeHTML(nextExpansion.name)}</button></div>` : ''}
 	                </div>
