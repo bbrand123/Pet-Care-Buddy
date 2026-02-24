@@ -354,6 +354,9 @@
 	                : escapeHTML(uiStrings.chapterComplete);
                 const rewardCopy = escapeHTML(getJourneyNextRewardLabel(status) || 'Chapter reward');
                 const chapterPct = Math.max(0, Math.min(100, Math.floor(Number(status.chapterPct) || 0)));
+                const backlogDrip = status.backlogDrip && Number(status.backlogDrip.applied) > 0
+                    ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.backlogDripLabel || 'Comeback drip')}:</strong> +${Math.floor(status.backlogDrip.applied)} tokens today · ${Math.floor(status.backlogDrip.pending || 0)} pending</p>`
+                    : '';
 	            return `
 	                <section class="journey-status-panel" id="journey-status-panel" role="region" aria-label="30 day journey status">
 	                    <div class="journey-status-head">
@@ -367,9 +370,29 @@
                         </div>
 	                    <p class="journey-status-next"><strong>${escapeHTML(uiStrings.nextObjectiveLabel)}:</strong> ${objectiveCopy}</p>
 	                    <p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.nextRewardLabel)}:</strong> ${rewardCopy}</p>
+                        ${backlogDrip}
 	                </section>
 	            `;
 	        }
+
+            function generateRetentionEmotionalPromptHTML() {
+                if (typeof getRetentionEmotionalPrompt !== 'function') return '';
+                const prompt = getRetentionEmotionalPrompt();
+                if (!prompt || !prompt.title) return '';
+                const hudStrings = getJourneyUiStrings();
+                const emotionalStrings = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.emotional) ? MLFRetentionStrings.emotional : { defaultCta: 'Open Journey' };
+                const ctaLabel = prompt.ctaLabel || emotionalStrings.defaultCta;
+                return `
+                    <section class="retention-emotional-prompt" id="retention-emotional-prompt" role="region" aria-label="${escapeHTML(hudStrings.emotionalPromptTitle || 'Right now')}">
+                        <div class="retention-emotional-head">
+                            <h3>${escapeHTML(prompt.title)}</h3>
+                            <span class="retention-emotional-tag">${escapeHTML(hudStrings.emotionalPromptTitle || 'Right now')}</span>
+                        </div>
+                        <p>${escapeHTML(prompt.body || '')}</p>
+                        <button type="button" id="retention-emotional-cta" data-retention-action="${escapeHTML(prompt.actionType || 'journey')}">${escapeHTML(ctaLabel)}</button>
+                    </section>
+                `;
+            }
 
             function shouldCollapseLowValuePanelsForNewPlayers() {
                 const journey = getJourneyHudStatus();
@@ -1608,6 +1631,7 @@
 
 	                ${generateStreakStatusPanelHTML()}
 	                ${generateJourneyStatusPanelHTML()}
+                    ${generateRetentionEmotionalPromptHTML()}
 	                ${generateReminderCenterBannerHTML()}
 		                ${generateOnboardingNextPanelHTML()}
                         ${wrapLowValueHudPanelsHTML([
@@ -1842,10 +1866,24 @@
                 const el = document.getElementById(id);
                 if (el) el.addEventListener('click', handler);
             }
-            safeAddClick('feed-btn', () => careAction('feed'));
-            safeAddClick('wash-btn', () => careAction('wash'));
-            safeAddClick('play-btn', () => careAction('play'));
-	            safeAddClick('sleep-btn', () => careAction('sleep'));
+            safeAddClick('feed-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('feed'); });
+            safeAddClick('wash-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('wash'); });
+            safeAddClick('play-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('play'); });
+	            safeAddClick('sleep-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('sleep'); });
+                safeAddClick('retention-emotional-cta', () => {
+                    const btn = document.getElementById('retention-emotional-cta');
+                    const actionType = (btn && btn.getAttribute('data-retention-action')) || 'journey';
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity(actionType);
+                    if (actionType === 'streak' && typeof showStreakModal === 'function') return showStreakModal();
+                    if (actionType === 'explore' && typeof showExplorationModal === 'function') return showExplorationModal();
+                    if (actionType === 'garden' && typeof switchRoom === 'function') {
+                        switchRoom('garden');
+                        if (typeof renderPetPhase === 'function') renderPetPhase();
+                        return;
+                    }
+                    if (actionType === 'social' && typeof showHouseholdSummaryModal === 'function') return showHouseholdSummaryModal();
+                    if (typeof showJourneyModal === 'function') showJourneyModal();
+                });
 	            safeAddClick('streak-status-open', () => {
 	                if (typeof showStreakModal === 'function') showStreakModal();
 	            });
@@ -1871,10 +1909,12 @@
                     renderPetPhase();
                 });
 	            safeAddClick('journey-status-open', () => {
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity('journey');
                     if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') Journey.trackJourneyOpen();
 	                if (typeof showJourneyModal === 'function') showJourneyModal();
 	            });
 	            safeAddClick('journey-btn', () => {
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity('journey');
                     if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') Journey.trackJourneyOpen();
 	                if (typeof showJourneyModal === 'function') showJourneyModal();
 	            });
@@ -1882,9 +1922,11 @@
                     if (typeof showHouseholdSummaryModal === 'function') showHouseholdSummaryModal();
                 });
 	            safeAddClick('daily-btn', () => {
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity('daily');
 	                if (typeof markCoachChecklistProgress === 'function') markCoachChecklistProgress('complete_daily');
 	            });
 	            safeAddClick('codex-btn', () => {
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity('collection');
 	                if (typeof markCoachChecklistProgress === 'function') markCoachChecklistProgress('open_codex');
 	            });
 	            safeAddClick('next-action-chip', () => {
@@ -1892,20 +1934,25 @@
 	                careAction(recommendedNext.action);
 	            });
 	            safeAddClick('next-step-daily', () => {
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity('daily');
 	                if (typeof showDailyChecklistModal === 'function') showDailyChecklistModal();
 	                if (typeof markCoachChecklistProgress === 'function') markCoachChecklistProgress('complete_daily');
 	            });
 	            safeAddClick('next-step-codex', () => {
+                    if (typeof noteRetentionActivity === 'function') noteRetentionActivity('collection');
 	                if (typeof showPetCodex === 'function') showPetCodex();
 	                if (typeof markCoachChecklistProgress === 'function') markCoachChecklistProgress('open_codex');
 	            });
 		            safeAddClick('next-step-expedition', () => {
+                        if (typeof noteRetentionActivity === 'function') noteRetentionActivity('expedition');
 		                if (typeof showExplorationModal === 'function') showExplorationModal();
 		            });
                     safeAddClick('empty-next-garden', () => {
+                        if (typeof noteRetentionActivity === 'function') noteRetentionActivity('harvest');
                         if (typeof switchRoom === 'function') switchRoom('garden');
                     });
                     safeAddClick('empty-next-explore', () => {
+                        if (typeof noteRetentionActivity === 'function') noteRetentionActivity('expedition');
                         if (typeof showExplorationModal === 'function') showExplorationModal();
                     });
                     safeAddClick('empty-next-favorites', () => {
@@ -1989,6 +2036,7 @@
 	                    const openBtn = event.target.closest('[data-reminder-open]');
 	                    if (openBtn) {
 	                        const itemId = openBtn.getAttribute('data-reminder-open');
+                            if (typeof noteRetentionActivity === 'function') noteRetentionActivity('reminder');
 	                        if (itemId && typeof openReminderCenterAction === 'function') openReminderCenterAction(itemId);
 	                        if (itemId && typeof dismissReminderCenterItem === 'function') dismissReminderCenterItem(itemId);
 	                        renderPetPhase();
@@ -2002,13 +2050,13 @@
 	                    }
 	                });
 	            }
-	            safeAddClick('core-feed-btn', () => careAction('feed'));
-	            safeAddClick('core-wash-btn', () => careAction('wash'));
-            safeAddClick('core-play-btn', () => careAction('play'));
-            safeAddClick('core-sleep-btn', () => careAction('sleep'));
-            safeAddClick('medicine-btn', () => careAction('medicine'));
-            safeAddClick('groom-btn', () => careAction('groom'));
-            safeAddClick('exercise-btn', () => careAction('exercise'));
+	            safeAddClick('core-feed-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('feed'); });
+	            safeAddClick('core-wash-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('wash'); });
+            safeAddClick('core-play-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('play'); });
+            safeAddClick('core-sleep-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('sleep'); });
+            safeAddClick('medicine-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('medicine'); });
+            safeAddClick('groom-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('groom'); });
+            safeAddClick('exercise-btn', () => { if (typeof noteRetentionActivity === 'function') noteRetentionActivity('care'); careAction('exercise'); });
             safeAddClick('treasure-btn', () => {
                 if (typeof runTreasureHunt !== 'function') return;
                 const roomId = gameState.currentRoom || 'bedroom';

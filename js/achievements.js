@@ -340,11 +340,25 @@
 
         function grantBundleCollectible(collectible) {
             if (!collectible || typeof collectible !== 'object') return false;
-            if (collectible.type === 'sticker') return grantSticker(collectible.id);
+            const duplicateFallbackCoins = Number.isFinite(collectible.fallbackCoins)
+                ? Math.max(1, Math.floor(collectible.fallbackCoins))
+                : (collectible.type === 'accessory' ? 20 : 14);
+            if (collectible.type === 'sticker') {
+                if (grantSticker(collectible.id)) return true;
+                if (typeof addCoins === 'function') {
+                    addCoins(duplicateFallbackCoins, 'Duplicate collectible fallback', true);
+                    return true;
+                }
+                return false;
+            }
             if (collectible.type === 'accessory' && gameState.pet) {
                 if (!Array.isArray(gameState.pet.unlockedAccessories)) gameState.pet.unlockedAccessories = [];
                 if (!gameState.pet.unlockedAccessories.includes(collectible.id)) {
                     gameState.pet.unlockedAccessories.push(collectible.id);
+                    return true;
+                }
+                if (typeof addCoins === 'function') {
+                    addCoins(duplicateFallbackCoins, 'Duplicate accessory fallback', true);
                     return true;
                 }
             }
@@ -1119,28 +1133,33 @@
 
         function checkReminderSignals() {
             const reminders = ensureReminderState();
-            if (!reminders.enabled) return;
+            const addReminderItem = (typeof addReminderCenterItem === 'function') ? addReminderCenterItem : null;
             const expedition = ((gameState.exploration || {}).expedition) || null;
             if (expedition && Date.now() >= (expedition.endAt || 0)) {
                 maybeSendLocalReminder('expeditionReady', '🧭 Expedition ready', 'Collect your expedition rewards.');
+                if (addReminderItem) addReminderItem('expeditionReady', '🧭 Expedition ready', 'Collect your expedition rewards.', { type: 'explore' });
             }
             const harvestReady = getHarvestReadyReminderCount();
             if (harvestReady > 0) {
                 maybeSendLocalReminder('harvestReady', '🌾 Harvest ready', 'Crops are ready to collect in the garden.');
+                if (addReminderItem) addReminderItem('garden', '🌾 Harvest ready', 'Crops are ready to collect in the garden.', { type: 'garden' });
             }
             const hatched = Array.isArray(gameState.hatchedBreedingEggs) ? gameState.hatchedBreedingEggs.length : 0;
             if (hatched > 0) {
                 maybeSendLocalReminder('hatchReady', '🥚 Hatch ready', 'A new family member is ready to hatch.');
+                if (addReminderItem) addReminderItem('hatchReady', '🥚 Hatch ready', 'A new family member is ready to hatch.', { type: 'journey' });
             }
             const nearHatch = getNearHatchReminderCount();
             if (nearHatch > 0 && hatched <= 0) {
                 maybeSendLocalReminder('eggNearHatch', '🐣 Egg close to hatch', 'An incubating egg is almost ready.');
+                if (addReminderItem) addReminderItem('eggNearHatch', '🐣 Egg close to hatch', 'An incubating egg is almost ready.', { type: 'journey' });
             }
             const streak = gameState.streak || {};
             const lastPlay = streak.lastPlayDate;
             const today = getTodayString();
             if (lastPlay && lastPlay !== today) {
                 maybeSendLocalReminder('streakRisk', '🔥 Streak risk!', 'Log in to protect your streak.');
+                if (addReminderItem) addReminderItem('streakRisk', '🔥 Streak risk!', 'Log in to protect your streak.', { type: 'streak' });
             }
         }
 

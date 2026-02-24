@@ -16,7 +16,9 @@
             nextRewardLabel: 'Next reward',
             chapterComplete: 'Chapter complete! Open Journey to review rewards.',
             beginnerMoreSummary: 'More panels',
-            beginnerMoreHint: 'Goal ladder, tips, and debug tools'
+            beginnerMoreHint: 'Goal ladder, tips, and debug tools',
+            backlogDripLabel: 'Comeback drip',
+            emotionalPromptTitle: 'Right now'
         }),
         streak: Object.freeze({
             quickClaimCta: 'Claim',
@@ -27,7 +29,12 @@
         }),
         reminders: Object.freeze({
             enabledToast: 'Reminders enabled.',
-            laterToast: 'Using in-game reminders only for now.'
+            laterToast: 'Using in-game reminders only for now.',
+            openLabel: 'Open',
+            dismissLabel: 'Dismiss'
+        }),
+        emotional: Object.freeze({
+            defaultCta: 'Open Journey'
         }),
         telemetry: Object.freeze({
             debugTitle: 'Retention Debug',

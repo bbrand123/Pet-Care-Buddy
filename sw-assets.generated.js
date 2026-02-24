@@ -167,6 +167,7 @@ self.SW_GENERATED_ASSETS = Object.freeze([
   "./js/registries/content-registries.js",
   "./js/registries/minigame-registry.js",
   "./js/retention/journey.js",
+  "./js/retention/reminders.js",
   "./js/retention/strings.js",
   "./js/retention/telemetry.js",
   "./js/rooms.js",

@@ -2699,6 +2699,16 @@
 	            const bond = track.bond || { completed: 0, total: 0, pct: 0 };
 	            const mastery = track.mastery || { completed: 0, total: 0, pct: 0 };
 	            const collection = track.collection || { completed: 0, total: 0, pct: 0 };
+                const emotionalPrompt = (typeof getRetentionEmotionalPrompt === 'function') ? getRetentionEmotionalPrompt() : null;
+                const emotionalPromptHTML = (emotionalPrompt && emotionalPrompt.title)
+                    ? `
+                        <div class="journey-emotional-prompt" role="group" aria-label="Suggested next action">
+                            <p><strong>${escapeHTML(emotionalPrompt.title)}</strong></p>
+                            <p>${escapeHTML(emotionalPrompt.body || '')}</p>
+                            <button type="button" data-journey-emotional-action="${escapeHTML(emotionalPrompt.actionType || 'journey')}">${escapeHTML(emotionalPrompt.ctaLabel || 'Open Journey')}</button>
+                        </div>
+                    `
+                    : '';
 
 	            const overlay = document.createElement('div');
 	            overlay.className = 'journey-overlay';
@@ -2710,6 +2720,7 @@
 	                    <h2 id="journey-title" class="journey-title">🧭 30-Day Journey</h2>
 	                    <p class="journey-subtitle">Day ${status.day} · ${escapeHTML(status.chapter ? status.chapter.label : 'Journey')}</p>
 	                    <p class="journey-subtitle">Journey Tokens: ${status.tokens} · Bond XP: ${status.bondXp} (Level ${status.bondLevel})</p>
+                        ${emotionalPromptHTML}
 	                    <div class="journey-track-list" role="list" aria-label="Journey tracks">
 	                        <div class="journey-track" role="listitem" aria-label="Bond track ${bond.completed} of ${bond.total}">
 	                            <span>💞 Bond</span>
@@ -2764,6 +2775,33 @@
 	                    showJourneyModal();
 	                });
 	            });
+                overlay.querySelectorAll('[data-journey-emotional-action]').forEach((button) => {
+                    button.addEventListener('click', () => {
+                        const actionType = button.getAttribute('data-journey-emotional-action') || 'journey';
+                        if (typeof noteRetentionActivity === 'function') noteRetentionActivity(actionType);
+                        if ((actionType === 'explore' || actionType === 'expedition') && typeof showExplorationModal === 'function') {
+                            closeJourney();
+                            showExplorationModal();
+                            return;
+                        }
+                        if (actionType === 'streak' && typeof showStreakModal === 'function') {
+                            closeJourney();
+                            showStreakModal();
+                            return;
+                        }
+                        if (actionType === 'garden' && typeof switchRoom === 'function') {
+                            closeJourney();
+                            switchRoom('garden');
+                            if (typeof renderPetPhase === 'function') renderPetPhase();
+                            return;
+                        }
+                        if (actionType === 'social' && typeof showHouseholdSummaryModal === 'function') {
+                            closeJourney();
+                            showHouseholdSummaryModal();
+                            return;
+                        }
+                    });
+                });
 
 	            document.getElementById('journey-close').focus();
 	            document.getElementById('journey-close').addEventListener('click', closeJourney);
@@ -2789,6 +2827,10 @@
 	                collection: 'collection progress'
 	            };
 	            const activityLabel = activityLabels[recap.lastActivity] || 'your recent progress';
+                const emotionalPrompt = (typeof getRetentionEmotionalPrompt === 'function') ? getRetentionEmotionalPrompt() : null;
+                const suggestionLine = emotionalPrompt && emotionalPrompt.body
+                    ? `<p>${escapeHTML(emotionalPrompt.body)}</p>`
+                    : '';
 	            const overlay = document.createElement('div');
 	            overlay.className = 'return-recap-overlay';
 	            overlay.setAttribute('role', 'dialog');
@@ -2800,6 +2842,7 @@
 	                    <p>You were away for ${Math.max(0, Math.floor(recap.awayDays || 0))} day${Math.floor(recap.awayDays || 0) === 1 ? '' : 's'}.</p>
 	                    <p>Last focus: ${escapeHTML(activityLabel)}.</p>
 	                    <p>Current streak: ${Math.max(0, Math.floor(recap.streak || 0))} · Bond level: ${Math.max(1, Math.floor(recap.bondLevel || 1))} · Journey day: ${Math.max(1, Math.floor(recap.journeyDay || 1))}.</p>
+                        ${suggestionLine}
 	                    <div class="return-recap-actions">
 	                        <button id="return-recap-close" type="button">Continue</button>
 	                        <button id="return-recap-skip" type="button">Skip</button>

@@ -122,6 +122,32 @@ Runtime retention flags live in `RETENTION_FEATURE_FLAGS` in `js/constants.js` a
 - `reminderPrioritizationV2Enabled` (default `false`, reserved for P1)
 - `experimentsEnabled` (default `false`, reserved for P3)
 
+### Retention P1 Tuning (flag-gated)
+
+When `RETENTION_FEATURE_FLAGS.pacingV2Enabled` is enabled, runtime pacing helpers read from `RETENTION_P1_TUNING` in `js/constants.js`:
+
+- `growthThresholds.child|adult|elder`
+  - `actionsNeeded`
+  - `hoursNeeded`
+- `journeyRewardPacing`
+  - `objectiveComplete`
+  - `chapterComplete`
+  - `dailyComplete`
+  - `noveltyUnlock`
+  - `backlog`
+    - `tokenPerMissedDay`
+    - `dripLogins`
+    - `maxBufferedMissedDays`
+    - `minAwayDaysForBacklog`
+- `noveltyUnlockCadence`
+  - `earlyUnlockSpacingDays`
+  - `weeklySpikeWeightBoost`
+- `reminderCenter`
+  - `lowValueDemoteAgeHours`
+  - `maxHighPriorityPinned`
+
+`RETENTION_FEATURE_FLAGS.reminderPrioritizationV2Enabled` enables the reminder-center sorting/prioritization logic while keeping notifications optional (players who decline native notifications still receive in-game reminder center items).
+
 ### Save Migration Notes (Journey Retention v4)
 
 - Save schema is now `v4` (`saveSchemaVersion: 4`).

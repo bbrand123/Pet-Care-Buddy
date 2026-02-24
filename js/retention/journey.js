@@ -19,6 +19,12 @@
         { id: 'chapter4', label: 'Week 4: Legacy Rhythm', dayStart: 22, dayEnd: 30, objectives: [{ id: 'streak_30', metric: 'streakCurrent', target: 30, label: 'Reach a 30-day streak', tokenReward: 4 }], chapterReward: { tokens: 8 } }
     ]);
     const NON_DELTA_METRICS = new Set(['streakCurrent', 'maxRelationshipPoints']);
+    const DEFAULT_TOKEN_STORE = Object.freeze({
+        story: { cost: 5, type: 'story' },
+        cosmetic: { cost: 8, type: 'cosmetic' },
+        bond: { cost: 6, type: 'bond' },
+        codex: { cost: 7, type: 'codex' }
+    });
 
     function isObject(value) {
         return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -27,6 +33,22 @@
     function clampInt(value, min) {
         const n = Math.floor(Number(value) || 0);
         return n < min ? min : n;
+    }
+
+    function getRetentionPacing() {
+        if (typeof root.getRetentionP1Tuning === 'function') {
+            try { return root.getRetentionP1Tuning(); } catch (_) {}
+        }
+        return null;
+    }
+
+    function getJourneyRewardPacing() {
+        if (typeof root.getJourneyRewardPacingTable === 'function') {
+            try { return root.getJourneyRewardPacingTable(); } catch (_) {}
+        }
+        return (typeof root.JOURNEY_TOKEN_REWARD_TABLE !== 'undefined' && root.JOURNEY_TOKEN_REWARD_TABLE)
+            ? root.JOURNEY_TOKEN_REWARD_TABLE
+            : { chapterComplete: 4, objectiveComplete: 2, dailyComplete: 2, noveltyUnlock: 2 };
     }
 
     function getTodayString() {
@@ -72,13 +94,86 @@
                 currentChapterId: 'chapter1',
                 lastUpdatedAt: Date.now(),
                 chapterProgress: {},
-                streak: { lastClaimDate: null, backlog: { pending: [], pendingValue: 0, dripLoginsRemaining: 0, lastDripAt: 0 } },
+                streak: { lastClaimDate: null, backlog: { pending: [], pendingValue: 0, dripLoginsRemaining: 0, lastDripAt: 0, lastLoginDate: null, lastDripDate: null } },
                 bond: { xp: 0, level: 1 },
                 tokens: 0,
                 features: { seasonalEnabled: false }
             };
         }
+        if (!isObject(gs.journeyRetention.streak)) gs.journeyRetention.streak = { lastClaimDate: null, backlog: {} };
+        if (!isObject(gs.journeyRetention.streak.backlog)) gs.journeyRetention.streak.backlog = {};
+        const backlog = gs.journeyRetention.streak.backlog;
+        if (!Array.isArray(backlog.pending)) backlog.pending = [];
+        if (!Number.isFinite(backlog.pendingValue)) backlog.pendingValue = 0;
+        if (!Number.isFinite(backlog.dripLoginsRemaining)) backlog.dripLoginsRemaining = 0;
+        if (!Number.isFinite(backlog.lastDripAt)) backlog.lastDripAt = 0;
+        if (typeof backlog.lastLoginDate !== 'string' && backlog.lastLoginDate !== null) backlog.lastLoginDate = null;
+        if (typeof backlog.lastDripDate !== 'string' && backlog.lastDripDate !== null) backlog.lastDripDate = null;
         return gs.journeyRetention;
+    }
+
+    function parseDateOnly(dateStr) {
+        if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+        const dt = new Date(dateStr + 'T00:00:00');
+        return Number.isNaN(dt.getTime()) ? null : dt;
+    }
+
+    function diffDays(dateA, dateB) {
+        const a = parseDateOnly(dateA);
+        const b = parseDateOnly(dateB);
+        if (!a || !b) return 0;
+        return Math.max(0, Math.floor((b.getTime() - a.getTime()) / 86400000));
+    }
+
+    function addJourneyTokensRaw(journeyState, amount, reason) {
+        const add = clampInt(amount, 0);
+        if (!journeyState || add <= 0) return 0;
+        journeyState.tokens = clampInt(journeyState.tokens, 0) + add;
+        journeyState.lastUpdatedAt = Date.now();
+        return add;
+    }
+
+    function applyBacklogDripOnLogin(record) {
+        if (!record || !record.journeyState || !isObject(record.journeyState.streak)) return { applied: 0, pending: 0 };
+        const backlog = record.journeyState.streak.backlog;
+        const today = getTodayString();
+        const pacing = getRetentionPacing();
+        const backlogCfg = pacing && pacing.journeyRewardPacing && pacing.journeyRewardPacing.backlog
+            ? pacing.journeyRewardPacing.backlog
+            : { tokenPerMissedDay: 2, dripLogins: 3, maxBufferedMissedDays: 10, minAwayDaysForBacklog: 1 };
+
+        if (backlog.lastLoginDate && backlog.lastLoginDate !== today) {
+            const awayDays = diffDays(backlog.lastLoginDate, today);
+            const missedDays = Math.max(0, awayDays - 1);
+            if (missedDays >= clampInt(backlogCfg.minAwayDaysForBacklog, 1)) {
+                const countedMissedDays = Math.min(missedDays, clampInt(backlogCfg.maxBufferedMissedDays, 1));
+                backlog.pendingValue = clampInt(backlog.pendingValue, 0) + (countedMissedDays * Math.max(1, clampInt(backlogCfg.tokenPerMissedDay, 1)));
+                backlog.dripLoginsRemaining = Math.max(
+                    clampInt(backlog.dripLoginsRemaining, 0),
+                    Math.max(1, clampInt(backlogCfg.dripLogins, 1))
+                );
+                backlog.pending.push({ type: 'absence', missedDays: countedMissedDays, queuedAt: Date.now() });
+            }
+        }
+
+        let applied = 0;
+        if (backlog.lastDripDate !== today && clampInt(backlog.pendingValue, 0) > 0) {
+            const remaining = Math.max(1, clampInt(backlog.dripLoginsRemaining, 1));
+            applied = Math.max(1, Math.ceil(clampInt(backlog.pendingValue, 0) / remaining));
+            applied = Math.min(applied, clampInt(backlog.pendingValue, 0));
+            addJourneyTokensRaw(record.journeyState, applied, 'backlog-drip');
+            backlog.pendingValue = Math.max(0, clampInt(backlog.pendingValue, 0) - applied);
+            backlog.dripLoginsRemaining = Math.max(0, remaining - 1);
+            backlog.lastDripAt = Date.now();
+            backlog.lastDripDate = today;
+            record._journeyMutated = true;
+        }
+        backlog.lastLoginDate = today;
+        return {
+            applied,
+            pending: clampInt(backlog.pendingValue, 0),
+            remainingLogins: clampInt(backlog.dripLoginsRemaining, 0)
+        };
     }
 
     function getMetricValue(gs, metricKey) {
@@ -147,12 +242,20 @@
         const { chapter, entry, state } = record;
         let completedNow = [];
         const objectives = Array.isArray(chapter.objectives) ? chapter.objectives : [];
+        const rewardPacing = getJourneyRewardPacing();
         for (const objective of objectives) {
             const progress = computeObjectiveProgress(state, entry, objective);
             if (!progress.done) continue;
             if (!entry.completedObjectives[objective.id]) {
                 entry.completedObjectives[objective.id] = { at: Date.now(), value: progress.value };
                 completedNow.push(progress);
+                const objectiveRewardKey = 'objective:' + objective.id;
+                if (!entry.claimedRewards[objectiveRewardKey]) {
+                    const award = Math.max(1, clampInt(progress.tokenReward || rewardPacing.objectiveComplete, 1));
+                    addJourneyTokensRaw(record.journeyState, award, objectiveRewardKey);
+                    record._journeyMutated = true;
+                    entry.claimedRewards[objectiveRewardKey] = { at: Date.now(), tokens: award };
+                }
                 if (Telemetry && typeof Telemetry.emit === 'function') {
                     Telemetry.emit('journey_objective_complete', {
                         chapterId: chapter.id,
@@ -164,6 +267,13 @@
         if (objectives.length > 0 && objectives.every((obj) => !!entry.completedObjectives[obj.id])) {
             if (!Number.isFinite(entry.chapterCompletedAt) || entry.chapterCompletedAt <= 0) {
                 entry.chapterCompletedAt = Date.now();
+            }
+            if (!entry.claimedRewards.chapter) {
+                const chapterReward = summarizeChapterReward(chapter).reward || {};
+                const chapterTokens = Math.max(1, clampInt(chapterReward.tokens || rewardPacing.chapterComplete, 1));
+                addJourneyTokensRaw(record.journeyState, chapterTokens, 'chapter:' + chapter.id);
+                record._journeyMutated = true;
+                entry.claimedRewards.chapter = { at: Date.now(), tokens: chapterTokens };
             }
         }
         return completedNow;
@@ -177,6 +287,7 @@
         const record = getCurrentChapterRecord();
         if (!record) return null;
         const { day, chapter, entry, journeyState, state } = record;
+        const backlogDrip = applyBacklogDripOnLogin(record);
         const objectives = (Array.isArray(chapter.objectives) ? chapter.objectives : []).map((objective) => computeObjectiveProgress(state, entry, objective));
         const completeCount = objectives.filter((item) => item.done).length;
         const nextObjective = objectives.find((item) => !item.done) || null;
@@ -184,6 +295,9 @@
             ? { type: 'objective', label: '+' + (nextObjective.tokenReward || 0) + ' Journey Tokens', tokens: nextObjective.tokenReward || 0 }
             : summarizeChapterReward(chapter);
         markObjectiveCompletions(record);
+        if (record._journeyMutated && typeof root.saveGame === 'function') {
+            try { root.saveGame({ silentIndicator: true, source: 'retention-journey-auto' }); } catch (_) {}
+        }
         return {
             playerId: playerId || getPlayerId(state),
             day,
@@ -200,6 +314,7 @@
             tokens: clampInt(journeyState.tokens, 0),
             bondXp: clampInt(journeyState.bond && journeyState.bond.xp, 0),
             bondLevel: Math.max(1, clampInt(journeyState.bond && journeyState.bond.level, 1)),
+            backlogDrip,
             chapterObjectives: objectives.map((item) => ({
                 id: item.id,
                 label: item.label,
@@ -270,6 +385,157 @@
         return Object.assign({ ok: true }, result);
     }
 
+    function spendJourneyTokens(cost) {
+        const gs = getState();
+        if (!gs) return { ok: false, reason: 'state-unavailable', balance: 0 };
+        const journeyState = ensureJourneyState(gs);
+        const amount = Math.max(0, clampInt(cost, 0));
+        if (amount <= 0) return { ok: true, spent: 0, balance: clampInt(journeyState.tokens, 0) };
+        if (clampInt(journeyState.tokens, 0) < amount) {
+            return { ok: false, reason: 'insufficient-tokens', balance: clampInt(journeyState.tokens, 0) };
+        }
+        journeyState.tokens = clampInt(journeyState.tokens, 0) - amount;
+        return { ok: true, spent: amount, balance: clampInt(journeyState.tokens, 0) };
+    }
+
+    function addCoinsFallback(amount, reason) {
+        const coins = Math.max(0, clampInt(amount, 0));
+        if (coins <= 0) return 0;
+        if (typeof root.addCoins === 'function') {
+            try { return clampInt(root.addCoins(coins, reason || 'Journey Fallback', true), 0); } catch (_) {}
+        }
+        const gs = getState();
+        if (gs && gs.economy) {
+            gs.economy.coins = clampInt(gs.economy.coins, 0) + coins;
+            return coins;
+        }
+        return 0;
+    }
+
+    function grantStickerOrFallback(stickerId, fallbackCoins) {
+        if (typeof root.grantSticker === 'function' && stickerId) {
+            try {
+                if (root.grantSticker(stickerId)) return { granted: true, duplicate: false, kind: 'sticker', id: stickerId, fallbackCoins: 0 };
+            } catch (_) {}
+            const coins = addCoinsFallback(fallbackCoins || 15, 'Journey duplicate sticker');
+            return { granted: false, duplicate: true, kind: 'sticker', id: stickerId, fallbackCoins: coins };
+        }
+        const coins = addCoinsFallback(fallbackCoins || 15, 'Journey cosmetic fallback');
+        return { granted: false, duplicate: false, kind: 'sticker', id: stickerId || '', fallbackCoins: coins };
+    }
+
+    function grantAccessoryOrFallback(accessoryId, fallbackCoins) {
+        const gs = getState();
+        if (gs && gs.pet && accessoryId) {
+            if (!Array.isArray(gs.pet.unlockedAccessories)) gs.pet.unlockedAccessories = [];
+            if (!gs.pet.unlockedAccessories.includes(accessoryId)) {
+                gs.pet.unlockedAccessories.push(accessoryId);
+                return { granted: true, duplicate: false, kind: 'accessory', id: accessoryId, fallbackCoins: 0 };
+            }
+            const coins = addCoinsFallback(fallbackCoins || 20, 'Journey duplicate accessory');
+            return { granted: false, duplicate: true, kind: 'accessory', id: accessoryId, fallbackCoins: coins };
+        }
+        const coins = addCoinsFallback(fallbackCoins || 20, 'Journey accessory fallback');
+        return { granted: false, duplicate: false, kind: 'accessory', id: accessoryId || '', fallbackCoins: coins };
+    }
+
+    function pickJourneyCosmeticReward() {
+        const gs = getState() || {};
+        const stickerPool = (typeof root.STICKERS !== 'undefined' && root.STICKERS) ? Object.keys(root.STICKERS) : [];
+        const accessoryPool = (typeof root.ACCESSORIES !== 'undefined' && root.ACCESSORIES) ? Object.keys(root.ACCESSORIES) : [];
+        const ownedStickers = isObject(gs.stickers) ? new Set(Object.keys(gs.stickers)) : new Set();
+        const ownedAccessories = (gs.pet && Array.isArray(gs.pet.unlockedAccessories)) ? new Set(gs.pet.unlockedAccessories) : new Set();
+        const availableStickers = stickerPool.filter((id) => !ownedStickers.has(id));
+        const availableAccessories = accessoryPool.filter((id) => !ownedAccessories.has(id));
+        if (availableAccessories.length > 0) {
+            return { type: 'accessory', id: availableAccessories[Math.floor(Math.random() * availableAccessories.length)] };
+        }
+        if (availableStickers.length > 0) {
+            return { type: 'sticker', id: availableStickers[Math.floor(Math.random() * availableStickers.length)] };
+        }
+        if (accessoryPool.length > 0) {
+            return { type: 'accessory', id: accessoryPool[Math.floor(Math.random() * accessoryPool.length)] };
+        }
+        if (stickerPool.length > 0) {
+            return { type: 'sticker', id: stickerPool[Math.floor(Math.random() * stickerPool.length)] };
+        }
+        return null;
+    }
+
+    function addBondReward(xpAmount) {
+        const gs = getState();
+        if (!gs) return { xp: 0 };
+        const journeyState = ensureJourneyState(gs);
+        if (!isObject(journeyState.bond)) journeyState.bond = { xp: 0, level: 1 };
+        const addXp = Math.max(0, clampInt(xpAmount, 0));
+        journeyState.bond.xp = clampInt(journeyState.bond.xp, 0) + addXp;
+        journeyState.bond.level = Math.max(1, 1 + Math.floor(journeyState.bond.xp / 45));
+        if (gs.pet) {
+            gs.pet.happiness = Math.min(100, clampInt(gs.pet.happiness, 0) + Math.max(2, Math.floor(addXp / 2)));
+        }
+        return { xp: addXp, level: journeyState.bond.level };
+    }
+
+    function addJournalStoryEntry(text) {
+        if (typeof root.addJournalEntry === 'function') {
+            try {
+                root.addJournalEntry('📘', text || 'Journey story unlocked.');
+                return true;
+            } catch (_) {}
+        }
+        return false;
+    }
+
+    function redeemJourneyTokenReward(rewardId) {
+        const reward = DEFAULT_TOKEN_STORE[rewardId];
+        if (!reward) return { ok: false, reason: 'unknown-reward' };
+        const spend = spendJourneyTokens(reward.cost);
+        if (!spend.ok) return { ok: false, reason: spend.reason, balance: spend.balance };
+
+        let message = 'Reward redeemed.';
+        let fallbackCoins = 0;
+        if (reward.type === 'story') {
+            addJournalStoryEntry('Journey token memory unlocked: your pet remembers your steady return.');
+            const bonusTokens = 0;
+            message = 'A new story memory was added.';
+            if (bonusTokens > 0) message += ` (+${bonusTokens} tokens)`;
+        } else if (reward.type === 'cosmetic') {
+            const pick = pickJourneyCosmeticReward();
+            if (!pick) {
+                fallbackCoins = addCoinsFallback(30, 'Journey cosmetic no-pool fallback');
+                message = `No cosmetic pool available. Converted to ${fallbackCoins} coins.`;
+            } else if (pick.type === 'sticker') {
+                const grant = grantStickerOrFallback(pick.id, 18);
+                fallbackCoins = grant.fallbackCoins || 0;
+                message = grant.granted ? 'Cosmetic reward unlocked.' : `Duplicate sticker converted to ${fallbackCoins} coins.`;
+            } else {
+                const grant = grantAccessoryOrFallback(pick.id, 22);
+                fallbackCoins = grant.fallbackCoins || 0;
+                message = grant.granted ? 'Cosmetic reward unlocked.' : `Duplicate cosmetic converted to ${fallbackCoins} coins.`;
+            }
+        } else if (reward.type === 'bond') {
+            const bond = addBondReward(12);
+            message = `Bond boost applied (+${bond.xp} XP, Lv ${bond.level}).`;
+        } else if (reward.type === 'codex') {
+            const coins = addCoinsFallback(20, 'Journey codex fallback');
+            fallbackCoins = coins;
+            addJournalStoryEntry('Codex insight: your pet noticed patterns in your routines.');
+            message = `Codex insight granted${coins > 0 ? ` and converted extra value to ${coins} coins` : ''}.`;
+        }
+
+        if (typeof root.saveGame === 'function') {
+            try { root.saveGame({ silentIndicator: true, source: 'journey-token-redeem' }); } catch (_) {}
+        }
+        return {
+            ok: true,
+            rewardId,
+            spent: reward.cost,
+            balance: spend.balance,
+            fallbackCoins,
+            message
+        };
+    }
+
     function getJourneyModalStatus() {
         const current = getCurrentChapter();
         if (!current) return null;
@@ -310,6 +576,8 @@
             bondXp: current.bondXp,
             bondLevel: current.bondLevel,
             nextObjective: current.nextObjective,
+            nextReward: current.nextReward,
+            backlogDrip: current.backlogDrip,
             chapterObjectives: current.chapterObjectives,
             trackProgress: {
                 bond: byTrack.bond || { completed: 0, total: 0, pct: 0 },
@@ -362,7 +630,8 @@
         getJourneyChapterStates,
         claimStreak,
         incrementChapterProgress,
-        trackJourneyOpen
+        trackJourneyOpen,
+        redeemJourneyTokenReward
     });
 
     if (root && typeof root === 'object') {
@@ -375,6 +644,11 @@
         if (typeof root.getJourneyChapterStates !== 'function') {
             root.getJourneyChapterStates = function getJourneyChapterStatesCompat() {
                 return api.getJourneyChapterStates();
+            };
+        }
+        if (typeof root.redeemJourneyTokenReward !== 'function') {
+            root.redeemJourneyTokenReward = function redeemJourneyTokenRewardCompat(rewardId) {
+                return api.redeemJourneyTokenReward(rewardId);
             };
         }
     }

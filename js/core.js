@@ -2300,6 +2300,25 @@
             refreshMasteryTracks();
             getGoalLadder();
             runLoginMemoryHooks();
+            if (typeof ensureRetentionMetaState === 'function') {
+                const meta = ensureRetentionMetaState();
+                const nowDate = (typeof getTodayString === 'function') ? getTodayString() : new Date().toISOString().slice(0, 10);
+                const lastUpdateTs = Number(gameState.lastUpdate) || Date.now();
+                const awayDays = Math.max(0, Math.floor((Date.now() - lastUpdateTs) / 86400000));
+                meta.reactivation.awayDays = awayDays;
+                if (!meta.reactivation.lastSeenDate) meta.reactivation.lastSeenDate = nowDate;
+                if (awayDays >= 1 && typeof addReminderCenterItem === 'function') {
+                    addReminderCenterItem(
+                        'comeback',
+                        awayDays >= 7 ? '💛 Welcome back' : '👋 Good to see you again',
+                        awayDays >= 7
+                            ? 'Start with one simple action. Journey catch-up rewards can drip across your next few logins.'
+                            : 'A quick check-in can rebuild your streak and Journey momentum.',
+                        { type: 'journey' }
+                    );
+                }
+                meta.reactivation.lastSeenDate = nowDate;
+            }
             checkReminderSignals();
             startReminderMonitor();
             // Run initial unlock checks and surface newly-qualified items.

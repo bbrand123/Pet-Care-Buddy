@@ -25,6 +25,7 @@ export const BASE_RUNTIME_FILES = Object.freeze([
   "./constants.js",
   "./retention/strings.js",
   "./retention/telemetry.js",
+  "./retention/reminders.js",
   "./native/notifications.js",
   "./retention/journey.js",
   "./registries/content-registries.js",

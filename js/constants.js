@@ -650,12 +650,15 @@ function getGrowthStage(careActions, ageInHours, stageOrCareQuality) {
     const weightedActions = careActions * qualityBoost * growthWeight;
     const weightedHours = ageInHours * (0.96 + (qualityBoost - 1.0) * 0.45);
 
-    const hasElderTime = weightedHours >= GROWTH_STAGES.elder.hoursNeeded;
-    const hasElderActions = weightedActions >= GROWTH_STAGES.elder.actionsNeeded;
-    const hasAdultTime = weightedHours >= GROWTH_STAGES.adult.hoursNeeded;
-    const hasAdultActions = weightedActions >= GROWTH_STAGES.adult.actionsNeeded;
-    const hasChildTime = weightedHours >= GROWTH_STAGES.child.hoursNeeded;
-    const hasChildActions = weightedActions >= GROWTH_STAGES.child.actionsNeeded;
+    const elderThresholds = getGrowthThresholdsForStage('elder');
+    const adultThresholds = getGrowthThresholdsForStage('adult');
+    const childThresholds = getGrowthThresholdsForStage('child');
+    const hasElderTime = weightedHours >= elderThresholds.hoursNeeded;
+    const hasElderActions = weightedActions >= elderThresholds.actionsNeeded;
+    const hasAdultTime = weightedHours >= adultThresholds.hoursNeeded;
+    const hasAdultActions = weightedActions >= adultThresholds.actionsNeeded;
+    const hasChildTime = weightedHours >= childThresholds.hoursNeeded;
+    const hasChildActions = weightedActions >= childThresholds.actionsNeeded;
 
     if (hasElderTime && hasElderActions) return 'elder';
     if (hasAdultTime && hasAdultActions) return 'adult';
@@ -683,10 +686,12 @@ function getGrowthProgress(careActions, ageInHours, currentStage, careQuality) {
     const weightedActions = careActions * qualityBoost * growthWeight;
     const weightedHours = ageInHours * (0.96 + (qualityBoost - 1.0) * 0.45);
 
-    const currentActionsThreshold = GROWTH_STAGES[currentStage].actionsNeeded;
-    const nextActionsThreshold = GROWTH_STAGES[nextStage].actionsNeeded;
-    const currentHoursThreshold = GROWTH_STAGES[currentStage].hoursNeeded;
-    const nextHoursThreshold = GROWTH_STAGES[nextStage].hoursNeeded;
+    const currentThresholds = getGrowthThresholdsForStage(currentStage);
+    const nextThresholds = getGrowthThresholdsForStage(nextStage);
+    const currentActionsThreshold = currentThresholds.actionsNeeded;
+    const nextActionsThreshold = nextThresholds.actionsNeeded;
+    const currentHoursThreshold = currentThresholds.hoursNeeded;
+    const nextHoursThreshold = nextThresholds.hoursNeeded;
 
     // Progress is the minimum of time-based and action-based progress
     const actionDiff = nextActionsThreshold - currentActionsThreshold;
@@ -3508,6 +3513,78 @@ const RETENTION_FEATURE_FLAGS = {
     experimentsEnabled: false
 };
 
+const RETENTION_P1_TUNING = {
+    growthThresholds: {
+        child: { actionsNeeded: 12, hoursNeeded: 1.5 },
+        adult: { actionsNeeded: 34, hoursNeeded: 5 },
+        elder: { actionsNeeded: 100, hoursNeeded: 22 }
+    },
+    journeyRewardPacing: {
+        objectiveComplete: 2,
+        chapterComplete: 5,
+        dailyComplete: 2,
+        noveltyUnlock: 3,
+        backlog: {
+            tokenPerMissedDay: 2,
+            dripLogins: 3,
+            maxBufferedMissedDays: 10,
+            minAwayDaysForBacklog: 1
+        }
+    },
+    noveltyUnlockCadence: {
+        earlyUnlockSpacingDays: 2,
+        weeklySpikeWeightBoost: 0.2
+    },
+    reminderCenter: {
+        lowValueDemoteAgeHours: 18,
+        maxHighPriorityPinned: 3
+    }
+};
+
+function isRetentionFeatureFlagEnabled(flagName) {
+    if (!flagName) return false;
+    try {
+        if (typeof MLFRetentionTelemetry !== 'undefined'
+            && MLFRetentionTelemetry
+            && typeof MLFRetentionTelemetry.getRuntimeFlags === 'function') {
+            const flags = MLFRetentionTelemetry.getRuntimeFlags();
+            return !!(flags && flags[flagName] === true);
+        }
+    } catch (e) {}
+    try {
+        if (typeof localStorage !== 'undefined') {
+            const raw = localStorage.getItem('mlf_retention_flags_v1');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                return !!(parsed && parsed[flagName] === true);
+            }
+        }
+    } catch (e) {}
+    return !!(RETENTION_FEATURE_FLAGS && RETENTION_FEATURE_FLAGS[flagName] === true);
+}
+
+function getRetentionP1Tuning() {
+    return isRetentionFeatureFlagEnabled('pacingV2Enabled') ? RETENTION_P1_TUNING : null;
+}
+
+function getGrowthThresholdsForStage(stage) {
+    const stageKey = GROWTH_STAGES[stage] ? stage : 'baby';
+    const base = GROWTH_STAGES[stageKey];
+    const tuning = getRetentionP1Tuning();
+    const override = tuning && tuning.growthThresholds ? tuning.growthThresholds[stageKey] : null;
+    return {
+        actionsNeeded: Number.isFinite(override && override.actionsNeeded) ? Math.max(0, Number(override.actionsNeeded)) : base.actionsNeeded,
+        hoursNeeded: Number.isFinite(override && override.hoursNeeded) ? Math.max(0, Number(override.hoursNeeded)) : base.hoursNeeded
+    };
+}
+
+function getJourneyRewardPacingTable() {
+    const base = JOURNEY_TOKEN_REWARD_TABLE || { chapterComplete: 4, objectiveComplete: 2, dailyComplete: 2, noveltyUnlock: 2 };
+    const tuning = getRetentionP1Tuning();
+    if (!tuning || !tuning.journeyRewardPacing) return base;
+    return Object.assign({}, base, tuning.journeyRewardPacing);
+}
+
 const JOURNEY_TRACKS = {
     bond: { id: 'bond', label: 'Bond', icon: '💞' },
     mastery: { id: 'mastery', label: 'Mastery', icon: '🧠' },
@@ -4657,8 +4734,8 @@ function getPreferenceModifier(pet, action, cropId) {
 // ==================== ELDER GROWTH STAGE ====================
 
 const ELDER_CONFIG = {
-    hoursNeeded: GROWTH_STAGES.elder.hoursNeeded,
-    actionsNeeded: GROWTH_STAGES.elder.actionsNeeded,
+    hoursNeeded: getGrowthThresholdsForStage('elder').hoursNeeded,
+    actionsNeeded: getGrowthThresholdsForStage('elder').actionsNeeded,
     wisdomBonusBase: 10,     // Base wisdom bonus for stat gains
     wisdomDecayReduction: 0.8, // 20% slower stat decay
     wisdomRelationshipBonus: 1.5, // 50% faster relationship building
