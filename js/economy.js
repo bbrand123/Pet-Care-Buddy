@@ -173,7 +173,30 @@
 	        }
 
         function createDefaultAuctionHouseData() {
-            return { listings: [], wallets: {} };
+            return { listings: [], wallets: {}, profileWallets: {} };
+        }
+
+        function normalizeAuctionListingRecord(listing) {
+            if (!listing || typeof listing !== 'object') return null;
+            return {
+                id: String(listing.id || ''),
+                sellerSlot: String(listing.sellerSlot || 'slotA'),
+                // Stable seller identity for cross-slot self-trade protection (legacy aliases preserved).
+                sellerProfileId: listing.sellerProfileId ? String(listing.sellerProfileId) : null,
+                sellerPlayerId: listing.sellerPlayerId ? String(listing.sellerPlayerId) : null,
+                itemType: String(listing.itemType || ''),
+                itemId: String(listing.itemId || ''),
+                quantity: Math.max(1, Math.floor(Number(listing.quantity) || 1)),
+                price: Math.max(1, Math.floor(Number(listing.price) || 1)),
+                createdAt: Number(listing.createdAt) || Date.now(),
+                expiresAt: Number.isFinite(Number(listing.expiresAt)) ? Math.floor(Number(listing.expiresAt)) : 0,
+                expiredAt: Number.isFinite(Number(listing.expiredAt)) ? Math.floor(Number(listing.expiredAt)) : 0,
+                status: String(listing.status || ''),
+                listingFee: Math.max(0, Math.floor(Number(listing.listingFee) || 0)),
+                legacyOwnerSlot: listing.legacyOwnerSlot ? String(listing.legacyOwnerSlot) : null,
+                relistKey: listing.relistKey ? String(listing.relistKey) : '',
+                relistCount: Math.max(0, Math.floor(Number(listing.relistCount) || 0))
+            };
         }
 
         function loadAuctionHouseData() {
@@ -184,17 +207,9 @@
                 if (!parsed || typeof parsed !== 'object') return createDefaultAuctionHouseData();
                 if (!Array.isArray(parsed.listings)) parsed.listings = [];
                 if (!parsed.wallets || typeof parsed.wallets !== 'object') parsed.wallets = {};
+                if (!parsed.profileWallets || typeof parsed.profileWallets !== 'object') parsed.profileWallets = {};
                 parsed.listings = parsed.listings
-                    .filter((l) => l && typeof l === 'object')
-                    .map((listing) => ({
-                        id: String(listing.id || ''),
-                        sellerSlot: String(listing.sellerSlot || 'slotA'),
-                        itemType: String(listing.itemType || ''),
-                        itemId: String(listing.itemId || ''),
-                        quantity: Math.max(1, Math.floor(Number(listing.quantity) || 1)),
-                        price: Math.max(1, Math.floor(Number(listing.price) || 1)),
-                        createdAt: Number(listing.createdAt) || Date.now()
-                    }))
+                    .map(normalizeAuctionListingRecord)
                     .filter((l) => l.id && l.itemType && l.itemId);
                 return parsed;
             } catch (e) {
@@ -207,10 +222,40 @@
                 const clean = data && typeof data === 'object' ? data : createDefaultAuctionHouseData();
                 if (!Array.isArray(clean.listings)) clean.listings = [];
                 if (!clean.wallets || typeof clean.wallets !== 'object') clean.wallets = {};
+                if (!clean.profileWallets || typeof clean.profileWallets !== 'object') clean.profileWallets = {};
                 localStorage.setItem(getAuctionHouseStorageKey(), JSON.stringify(clean));
             } catch (e) {
                 // ignore storage errors
             }
+        }
+
+        function migrateAuctionIdentityForPlayer(playerId, activeSlotId) {
+            if (!playerId) return;
+            const data = loadAuctionHouseData();
+            let changed = false;
+            (data.listings || []).forEach((listing) => {
+                if (!listing || listing.sellerProfileId) return;
+                if (listing.sellerPlayerId) {
+                    listing.sellerProfileId = String(listing.sellerPlayerId);
+                    changed = true;
+                    return;
+                }
+                // Best-effort migration for legacy slot-owned listings only for the active slot.
+                if (listing.sellerSlot === activeSlotId) {
+                    listing.sellerProfileId = String(playerId);
+                    listing.sellerPlayerId = String(playerId);
+                    changed = true;
+                } else {
+                    listing.legacyOwnerSlot = listing.sellerSlot || 'slotA';
+                }
+            });
+            const legacyWallet = Math.max(0, Math.floor((data.wallets && data.wallets[activeSlotId]) || 0));
+            if (legacyWallet > 0) {
+                data.profileWallets[playerId] = Math.max(0, Math.floor((data.profileWallets[playerId] || 0))) + legacyWallet;
+                data.wallets[activeSlotId] = 0;
+                changed = true;
+            }
+            if (changed) saveAuctionHouseData(data);
         }
 
         function createDefaultEconomyInventory() {
@@ -242,11 +287,25 @@
             if (!eco.market || typeof eco.market !== 'object') eco.market = { dayKey: '', stock: [] };
             if (typeof eco.market.dayKey !== 'string') eco.market.dayKey = '';
             if (!Array.isArray(eco.market.stock)) eco.market.stock = [];
+            if (!eco.market.rare || typeof eco.market.rare !== 'object' || Array.isArray(eco.market.rare)) {
+                eco.market.rare = { marketDayKey: '', generatedForDay: false, offers: [], lastTrustedDayKey: '' };
+            }
+            if (typeof eco.market.rare.marketDayKey !== 'string') eco.market.rare.marketDayKey = '';
+            if (typeof eco.market.rare.generatedForDay !== 'boolean') eco.market.rare.generatedForDay = false;
+            if (!Array.isArray(eco.market.rare.offers)) eco.market.rare.offers = [];
+            if (typeof eco.market.rare.lastTrustedDayKey !== 'string') eco.market.rare.lastTrustedDayKey = '';
             if (!eco.auction || typeof eco.auction !== 'object') eco.auction = { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0 };
             if (!ECONOMY_AUCTION_SLOTS.includes(eco.auction.slotId)) eco.auction.slotId = 'slotA';
             if (typeof eco.auction.soldCount !== 'number') eco.auction.soldCount = 0;
             if (typeof eco.auction.boughtCount !== 'number') eco.auction.boughtCount = 0;
             if (typeof eco.auction.postedCount !== 'number') eco.auction.postedCount = 0;
+            if (!eco.auction.relistTracker || typeof eco.auction.relistTracker !== 'object' || Array.isArray(eco.auction.relistTracker)) eco.auction.relistTracker = {};
+            if (!Number.isFinite(eco.auction.auctionEarningsPending)) eco.auction.auctionEarningsPending = 0;
+            if (!Number.isFinite(eco.auction.auctionEarningsWithheld)) eco.auction.auctionEarningsWithheld = 0;
+            eco.auction.auctionEarningsPending = Math.max(0, Math.floor(eco.auction.auctionEarningsPending));
+            eco.auction.auctionEarningsWithheld = Math.max(0, Math.floor(eco.auction.auctionEarningsWithheld));
+            if (!eco.auction.auctionEarningsLastClaimResult || typeof eco.auction.auctionEarningsLastClaimResult !== 'object') eco.auction.auctionEarningsLastClaimResult = null;
+            if (!Number.isFinite(eco.auction.lastTrustedNowMs)) eco.auction.lastTrustedNowMs = 0;
             if (typeof eco.totalEarned !== 'number') eco.totalEarned = 0;
 	            if (typeof eco.totalSpent !== 'number') eco.totalSpent = 0;
 	            if (typeof eco.mysteryEggsOpened !== 'number') eco.mysteryEggsOpened = 0;
@@ -260,9 +319,17 @@
 	            if (!Number.isFinite(eco.wealthPressure.lastFee)) eco.wealthPressure.lastFee = 0;
 	            if (!Number.isFinite(eco.wealthPressure.unpaidFeeDebt)) eco.wealthPressure.unpaidFeeDebt = 0;
 	            if (eco.wealthPressure.lastBreakdown !== null && typeof eco.wealthPressure.lastBreakdown !== 'object') eco.wealthPressure.lastBreakdown = null;
+            if (!eco.recurringSinks || typeof eco.recurringSinks !== 'object' || Array.isArray(eco.recurringSinks)) {
+                eco.recurringSinks = { lastAppliedDayKey: '', lastChargeTotal: 0, unpaidDebt: 0, lastBreakdown: null };
+            }
+            if (typeof eco.recurringSinks.lastAppliedDayKey !== 'string') eco.recurringSinks.lastAppliedDayKey = '';
+            if (!Number.isFinite(eco.recurringSinks.lastChargeTotal)) eco.recurringSinks.lastChargeTotal = 0;
+            if (!Number.isFinite(eco.recurringSinks.unpaidDebt)) eco.recurringSinks.unpaidDebt = 0;
+            if (eco.recurringSinks.lastBreakdown !== null && typeof eco.recurringSinks.lastBreakdown !== 'object') eco.recurringSinks.lastBreakdown = null;
 	            ensureEconomySecurityState(state);
 	            // Rec 2: Ensure persistent playerId exists for auction self-trade prevention
             if (!eco.playerId || typeof eco.playerId !== 'string') eco.playerId = generatePlayerId();
+            if (typeof eco.auctionIdentityMigrationDone !== 'boolean') eco.auctionIdentityMigrationDone = false;
             if (eco.starterSeedGranted !== true) {
                 eco.inventory.seeds.carrot = (eco.inventory.seeds.carrot || 0) + 4;
                 eco.inventory.seeds.tomato = (eco.inventory.seeds.tomato || 0) + 3;
@@ -277,7 +344,81 @@
                 }
             })();
             if (preferredSlot && ECONOMY_AUCTION_SLOTS.includes(preferredSlot)) eco.auction.slotId = preferredSlot;
+            if (!eco.auctionIdentityMigrationDone) {
+                migrateAuctionIdentityForPlayer(eco.playerId, eco.auction.slotId);
+                eco.auctionIdentityMigrationDone = true;
+            }
             return eco;
+        }
+
+        function getTodayStringFallback() {
+            if (typeof getTodayString === 'function') return getTodayString();
+            return new Date().toISOString().slice(0, 10);
+        }
+
+        function isAuctionInteractionLocked(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            if (!getHardeningCfg('suspiciousAuctionLock', true)) return false;
+            return isSuspiciousEconomyState(state);
+        }
+
+        function showAuctionLockToast() {
+            showEconomyHardeningToast('auction-locked', 'Save integrity warning: auction interactions are temporarily locked.', '#EF5350');
+        }
+
+        function getHardenedEconomyNowMs(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            const eco = ensureEconomyState(state);
+            const now = Date.now();
+            if (isSuspiciousEconomyState(state)) {
+                if (Number.isFinite(eco.auction.lastTrustedNowMs) && eco.auction.lastTrustedNowMs > 0) {
+                    return eco.auction.lastTrustedNowMs;
+                }
+                eco.auction.lastTrustedNowMs = now;
+                return now;
+            }
+            eco.auction.lastTrustedNowMs = now;
+            return now;
+        }
+
+        function getHardenedEconomyDayKey(targetState) {
+            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+            if (typeof getTodayStringWithTimeHardening === 'function') {
+                return String(getTodayStringWithTimeHardening(state) || getTodayStringFallback());
+            }
+            const eco = ensureEconomyState(state);
+            const rawDayKey = String(getTodayStringFallback());
+            const rareState = eco.market && eco.market.rare ? eco.market.rare : null;
+            if (isSuspiciousEconomyState(state) && rareState && rareState.lastTrustedDayKey) {
+                return String(rareState.lastTrustedDayKey);
+            }
+            if (rareState) rareState.lastTrustedDayKey = rawDayKey;
+            return rawDayKey;
+        }
+
+        function getAuctionListingExpiryMs() {
+            const auctionCfg = getHardeningCfg('auction', {}) || {};
+            return Math.max(60 * 60 * 1000, Math.floor(Number(auctionCfg.listingExpiryMs) || (48 * 60 * 60 * 1000)));
+        }
+
+        function markExpiredAuctionListings(data, nowMs) {
+            if (!data || !Array.isArray(data.listings)) return false;
+            const now = Number.isFinite(nowMs) ? nowMs : getHardenedEconomyNowMs();
+            let changed = false;
+            data.listings.forEach((listing) => {
+                if (!listing || typeof listing !== 'object') return;
+                if (!Number.isFinite(listing.expiresAt) || listing.expiresAt <= 0) {
+                    const createdAt = Math.max(0, Number(listing.createdAt) || now);
+                    listing.expiresAt = createdAt + getAuctionListingExpiryMs();
+                    changed = true;
+                }
+                if (listing.status !== 'expired' && listing.expiresAt > 0 && listing.expiresAt <= now) {
+                    listing.status = 'expired';
+                    listing.expiredAt = now;
+                    changed = true;
+                }
+            });
+            return changed;
         }
 
         function getCoinBalance() {
@@ -288,25 +429,49 @@
             return Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString();
         }
 
-	        function addCoins(amount, reason, silent) {
+	        function addCoinsDetailed(amount, reason, options) {
 	            const eco = ensureEconomyState();
-	            const rawAdd = Math.max(0, Math.floor(Number(amount) || 0));
-	            if (rawAdd <= 0) return 0;
-	            const limited = applyCoinGainRateLimits(rawAdd, reason, gameState);
+	            const opts = options && typeof options === 'object' ? options : {};
+	            const rawRequested = Math.max(0, Math.floor(Number(amount) || 0));
+	            if (rawRequested <= 0) {
+	                return {
+	                    requested: 0,
+	                    limitedAmount: 0,
+	                    credited: 0,
+	                    repaidDebt: 0,
+	                    withheldByGuards: 0,
+	                    rateLimit: { amount: 0, minuteMult: 1, sessionMult: 1, suspiciousMult: 1 }
+	                };
+	            }
+	            const limited = applyCoinGainRateLimits(rawRequested, reason, gameState);
 	            let add = Math.max(0, Math.floor(Number(limited.amount) || 0));
-	            const repayment = applyWealthPressureDebtRepayment(add, gameState);
-	            add = repayment.credited;
+	            const withheldByGuards = Math.max(0, rawRequested - add);
+	            const skipDebtRepayment = !!opts.skipWealthPressureDebtRepayment;
+	            const repayment = skipDebtRepayment ? { credited: add, repaid: 0 } : applyWealthPressureDebtRepayment(add, gameState);
+	            add = Math.max(0, Math.floor(Number(repayment.credited) || 0));
 	            if (add > 0) eco.coins += add;
 	            eco.totalEarned = (eco.totalEarned || 0) + add;
 	            recordCoinTelemetry(reason, add);
-	            if (!silent && typeof showToast === 'function') {
+	            if (!opts.silent && typeof showToast === 'function') {
 	                let msg = `🪙 +${add} coins${reason ? ` (${reason})` : ''}`;
-	                if (repayment.repaid > 0) msg += ` • ${repayment.repaid} paid toward storage fee debt`;
+	                if ((repayment.repaid || 0) > 0) msg += ` • ${repayment.repaid} paid toward storage fee debt`;
+	                if (withheldByGuards > 0) msg += ` • ${withheldByGuards} withheld`;
 	                showToast(msg, '#FFD700');
-	            } else if (repayment.repaid > 0 && typeof showToast === 'function') {
+	            } else if ((repayment.repaid || 0) > 0 && typeof showToast === 'function') {
 	                showToast(`🧾 ${repayment.repaid} coins auto-paid toward storage fee debt.`, '#90A4AE');
 	            }
-	            return add;
+	            return {
+	                requested: rawRequested,
+	                limitedAmount: Math.max(0, Math.floor(Number(limited.amount) || 0)),
+	                credited: add,
+	                repaidDebt: Math.max(0, Math.floor(Number(repayment.repaid) || 0)),
+	                withheldByGuards,
+	                rateLimit: limited
+	            };
+	        }
+
+	        function addCoins(amount, reason, silent) {
+	            return addCoinsDetailed(amount, reason, { silent: !!silent }).credited;
 	        }
 
 	        function estimateTradableInventoryValue(targetState) {
@@ -316,6 +481,40 @@
 	            const ex = state.exploration || {};
 	            const eco = state.economy || {};
 	            let total = 0;
+            const conservativeFactor = 0.45;
+            const resaleFactorByBucket = {
+                food: 0.4,
+                toys: 0.4,
+                medicine: 0.45,
+                seeds: 0.4,
+                crafted: 0.45,
+                accessories: 0.55,
+                decorations: 0.55
+            };
+            function estimateBucketItemValue(bucket, itemId) {
+                if (bucket === 'seeds') {
+                    const seedEntry = Object.values((ECONOMY_SHOP_ITEMS && ECONOMY_SHOP_ITEMS.seeds) || {})
+                        .find((seed) => seed && seed.cropId === itemId);
+                    if (!seedEntry) return 2;
+                    const packPrice = Math.max(1, Math.floor(Number(seedEntry.basePrice) || 1));
+                    const qtyPerPack = Math.max(1, Math.floor(Number(seedEntry.quantity) || 1));
+                    const perUnit = packPrice / qtyPerPack;
+                    return Math.max(1, Math.round(perUnit * resaleFactorByBucket.seeds));
+                }
+                if (bucket === 'crafted') {
+                    const craftedDef = (typeof CRAFTED_ITEMS !== 'undefined' && CRAFTED_ITEMS) ? CRAFTED_ITEMS[itemId] : null;
+                    const craftCost = craftedDef ? Math.max(0, Math.floor(Number(craftedDef.craftCost) || 0)) : 0;
+                    if (craftCost > 0) return Math.max(1, Math.round(craftCost * resaleFactorByBucket.crafted));
+                    return 10;
+                }
+                const shopBucket = bucket === 'accessories' ? 'accessories'
+                    : bucket === 'decorations' ? 'decorations'
+                    : bucket;
+                const shopDef = (ECONOMY_SHOP_ITEMS && ECONOMY_SHOP_ITEMS[shopBucket]) ? ECONOMY_SHOP_ITEMS[shopBucket][itemId] : null;
+                const baseValue = shopDef ? Math.max(1, Math.floor(Number(shopDef.basePrice) || 1)) : 10;
+                const factor = resaleFactorByBucket[bucket] || conservativeFactor;
+                return Math.max(1, Math.round(baseValue * factor));
+            }
 	            Object.entries(ex.lootInventory || {}).forEach(([lootId, qty]) => {
 	                const count = Math.max(0, Math.floor(Number(qty) || 0));
 	                if (count <= 0) return;
@@ -329,16 +528,23 @@
 	                const base = 3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6);
 	                total += Math.max(1, base) * count;
 	            });
-	            ['crafted', 'accessories', 'decorations'].forEach((bucket) => {
+	            ['food', 'toys', 'medicine', 'seeds', 'crafted', 'accessories', 'decorations'].forEach((bucket) => {
 	                Object.entries((((eco.inventory || {})[bucket]) || {})).forEach(([itemId, qty]) => {
 	                    const count = Math.max(0, Math.floor(Number(qty) || 0));
 	                    if (count <= 0) return;
-	                    const shopBucket = bucket === 'decorations' ? 'decorations' : (bucket === 'accessories' ? 'accessories' : null);
-	                    const shopDef = (shopBucket && ECONOMY_SHOP_ITEMS && ECONOMY_SHOP_ITEMS[shopBucket]) ? ECONOMY_SHOP_ITEMS[shopBucket][itemId] : null;
-	                    const baseValue = shopDef ? Math.max(1, Math.floor(Number(shopDef.basePrice) || 1)) : 10;
-	                    total += Math.max(1, Math.round(baseValue * 0.55)) * count;
+	                    total += estimateBucketItemValue(bucket, itemId) * count;
 	                });
 	            });
+            try {
+                const auctionData = loadAuctionHouseData();
+                const currentSlot = (eco.auction && eco.auction.slotId) ? eco.auction.slotId : 'slotA';
+                const playerId = (typeof eco.playerId === 'string' && eco.playerId) ? eco.playerId : '';
+                const slotWallet = Math.max(0, Math.floor(((auctionData.wallets || {})[currentSlot]) || 0));
+                const profileWallet = playerId ? Math.max(0, Math.floor(((auctionData.profileWallets || {})[playerId]) || 0)) : 0;
+                total += slotWallet + profileWallet;
+            } catch (e) {
+                // Ignore storage read failures for valuation.
+            }
 	            return Math.max(0, Math.floor(total));
 	        }
 
@@ -447,9 +653,7 @@
         function getEconomyVolatility(itemKey) {
             const season = gameState.season || getCurrentSeason();
             const weather = gameState.weather || 'sunny';
-            const day = typeof getTodayString === 'function'
-                ? getTodayString()
-                : `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+            const day = getHardenedEconomyDayKey();
             const hash = hashStringToUint(`${day}:${season}:${weather}:${itemKey || ''}`);
             // Rec 7: Narrowed volatility window from 86%-119% to 92%-108%
             const volMin = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.volatilityMin === 'number')
@@ -742,6 +946,98 @@
             return !!owned[purchaseId];
         }
 
+        function hasPrestigeCompletionProgress() {
+            const owned = getOwnedPrestige();
+            const anyPrestigePurchase = Object.values(owned || {}).some((count) => Math.max(0, Math.floor(Number(count) || 0)) > 0);
+            if (anyPrestigePurchase) return true;
+            const streakPrestige = (((gameState || {}).streak || {}).prestige) || {};
+            return Math.max(0, Math.floor(Number(streakPrestige.completedCycles) || 0)) > 0;
+        }
+
+        function getRecurringPrestigeSinkConfig() {
+            const cfg = getHardeningCfg('recurringSinks', {}) || {};
+            return {
+                enabled: cfg.enabled !== false,
+                requirePrestige: cfg.requirePrestige !== false,
+                roomUpkeepBase: Math.max(0, Math.floor(Number(cfg.roomUpkeepBase) || 6)),
+                roomUpkeepPerDecoratedRoom: Math.max(0, Math.floor(Number(cfg.roomUpkeepPerDecoratedRoom) || 2)),
+                breedingPermitPerEgg: Math.max(0, Math.floor(Number(cfg.breedingPermitPerEgg) || 4)),
+                auctionListingUpkeepPerActiveListing: Math.max(0, Math.floor(Number(cfg.auctionListingUpkeepPerActiveListing) || 2)),
+                maxDailyTotal: Math.max(0, Math.floor(Number(cfg.maxDailyTotal) || 36))
+            };
+        }
+
+        function countDecoratedRoomsForUpkeep() {
+            const furniture = (gameState && gameState.furniture && typeof gameState.furniture === 'object') ? gameState.furniture : {};
+            let count = 0;
+            Object.keys(furniture).forEach((roomId) => {
+                const room = furniture[roomId];
+                if (!room || typeof room !== 'object') return;
+                if ((room.bed && room.bed !== 'basic') || (room.decoration && room.decoration !== 'none')) count++;
+            });
+            return count;
+        }
+
+        function countOwnedActiveAuctionListingsForUpkeep() {
+            const eco = ensureEconomyState();
+            const data = loadAuctionHouseData();
+            markExpiredAuctionListings(data);
+            const playerId = eco.playerId || '';
+            return (data.listings || []).filter((listing) => {
+                if (!listing || listing.status === 'expired') return false;
+                const sellerIdentity = listing.sellerProfileId || listing.sellerPlayerId || '';
+                return !!playerId && sellerIdentity === playerId;
+            }).length;
+        }
+
+        function applyRecurringPrestigeSinks(targetState) {
+            const state = targetState || gameState;
+            const eco = ensureEconomyState(state);
+            const cfg = getRecurringPrestigeSinkConfig();
+            if (!cfg.enabled) return { applied: false, reason: 'disabled', totalCharged: 0, debtAdded: 0 };
+            if (cfg.requirePrestige && !hasPrestigeCompletionProgress()) return { applied: false, reason: 'not-prestige', totalCharged: 0, debtAdded: 0 };
+            const dayKey = getHardenedEconomyDayKey(state);
+            if (eco.recurringSinks.lastAppliedDayKey === dayKey) {
+                return { applied: false, reason: 'already-applied', totalCharged: 0, debtAdded: 0, breakdown: eco.recurringSinks.lastBreakdown || null };
+            }
+            const decoratedRooms = countDecoratedRoomsForUpkeep();
+            const breedingEggs = Array.isArray(state.breedingEggs) ? state.breedingEggs.length : 0;
+            const auctionListings = countOwnedActiveAuctionListingsForUpkeep();
+            const roomUpkeep = cfg.roomUpkeepBase + (decoratedRooms * cfg.roomUpkeepPerDecoratedRoom);
+            const breedingPermit = breedingEggs * cfg.breedingPermitPerEgg;
+            const auctionUpkeep = auctionListings * cfg.auctionListingUpkeepPerActiveListing;
+            let total = Math.max(0, roomUpkeep + breedingPermit + auctionUpkeep);
+            if (cfg.maxDailyTotal > 0) total = Math.min(total, cfg.maxDailyTotal);
+            const paid = Math.min(Math.max(0, eco.coins), total);
+            const debtAdded = Math.max(0, total - paid);
+            if (paid > 0) {
+                eco.coins -= paid;
+                eco.totalSpent = (eco.totalSpent || 0) + paid;
+            }
+            if (debtAdded > 0) eco.recurringSinks.unpaidDebt = Math.max(0, Math.floor(Number(eco.recurringSinks.unpaidDebt) || 0)) + debtAdded;
+            const breakdown = {
+                dayKey,
+                roomUpkeep,
+                decoratedRooms,
+                breedingPermit,
+                breedingEggs,
+                auctionUpkeep,
+                auctionListings,
+                total,
+                paid,
+                debtAdded,
+                appliedAt: getHardenedEconomyNowMs(state)
+            };
+            eco.recurringSinks.lastAppliedDayKey = dayKey;
+            eco.recurringSinks.lastChargeTotal = total;
+            eco.recurringSinks.lastBreakdown = breakdown;
+            if (total > 0 && typeof showToast === 'function') {
+                const debtText = debtAdded > 0 ? ` (${debtAdded} deferred)` : '';
+                showToast(`🧾 Prestige upkeep: -${paid}/${total} coins${debtText}`, '#90A4AE');
+            }
+            return { applied: true, totalCharged: paid, debtAdded, breakdown };
+        }
+
         function buyPrestigePurchase(purchaseId) {
             const purchases = getPrestigePurchases();
             const item = purchases[purchaseId];
@@ -771,6 +1067,7 @@
 	            const decayFloor = Math.max(threshold, protectedWallet);
 	            if (eco.coins <= decayFloor) {
 	                applyWealthPressureFee();
+                applyRecurringPrestigeSinks();
 	                return 0;
 	            }
 	            const previousChecklist = gameState.dailyChecklist || null;
@@ -807,6 +1104,7 @@
 	                showToast(`🏦 Coin maintenance: -${tax} coins${engagedText ? ` (${engagedText})` : ''}`, '#90A4AE');
 	            }
 	            applyWealthPressureFee();
+            applyRecurringPrestigeSinks();
 	            return tax;
 	        }
 
@@ -819,13 +1117,25 @@
             return seasons.includes(currentSeason);
         }
 
+        const LOOT_SELL_VALUE_BANDS = {
+            // Same-rarity items can vary modestly in base sell value to reduce value compression.
+            ancientCoin: 0.92,
+            shell: 0.88,
+            shinyPebble: 0.95,
+            emberStone: 1.06,
+            stardust: 1.12,
+            runeFragment: 1.08,
+            mysteryMap: 1.04,
+            tidePearl: 0.98
+        };
+
         function getLootSellBasePrice(lootId) {
             const loot = EXPLORATION_LOOT[lootId];
             if (!loot) return 0;
             const rarity = loot.rarity || 'common';
-            if (rarity === 'rare') return 34;
-            if (rarity === 'uncommon') return 18;
-            return 10;
+            const rarityBase = (rarity === 'rare') ? 34 : (rarity === 'uncommon' ? 18 : 10);
+            const bandMult = Math.max(0.7, Math.min(1.35, Number(LOOT_SELL_VALUE_BANDS[lootId]) || 1));
+            return Math.max(1, Math.round(rarityBase * bandMult));
         }
 
 	        function getLootSellPrice(lootIdOrStack, options) {
@@ -958,11 +1268,17 @@
             const eco = ensureEconomyState();
             const season = gameState.season || getCurrentSeason();
             const weather = gameState.weather || 'sunny';
-            const day = typeof getTodayString === 'function'
-                ? getTodayString()
-                : `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+            const day = getHardenedEconomyDayKey();
             const key = `${day}:${season}:${weather}`;
-            if (!forceRefresh && eco.market.dayKey === key && Array.isArray(eco.market.stock) && eco.market.stock.length > 0) {
+            const rareState = eco.market.rare || (eco.market.rare = { marketDayKey: '', generatedForDay: false, offers: [], lastTrustedDayKey: day });
+            if (!Array.isArray(rareState.offers)) rareState.offers = [];
+            if (typeof rareState.generatedForDay !== 'boolean') rareState.generatedForDay = false;
+            if (typeof rareState.marketDayKey !== 'string') rareState.marketDayKey = '';
+            rareState.lastTrustedDayKey = String(day || rareState.lastTrustedDayKey || '');
+
+            if (!forceRefresh && rareState.marketDayKey === key && rareState.generatedForDay) {
+                eco.market.dayKey = key;
+                eco.market.stock = rareState.offers.filter((offer) => offer && offer.purchased !== true);
                 return eco.market.stock;
             }
 
@@ -974,7 +1290,7 @@
                 const idx = Math.floor(rand() * pool.length);
                 picks.push(pool.splice(idx, 1)[0]);
             }
-            eco.market.stock = picks.map((entry, idx) => {
+            const generatedOffers = picks.map((entry, idx) => {
                 const categoryMap = {
                     food: 'food',
                     toys: 'toys',
@@ -995,9 +1311,14 @@
                     kind: entry.kind,
                     itemId: entry.itemId,
                     quantity: entry.quantity || 1,
-                    price
+                    price,
+                    purchased: false
                 };
             });
+            rareState.marketDayKey = key;
+            rareState.generatedForDay = true;
+            rareState.offers = generatedOffers;
+            eco.market.stock = generatedOffers.filter((offer) => offer && offer.purchased !== true);
             eco.market.dayKey = key;
             saveGame();
             return eco.market.stock;
@@ -1005,16 +1326,19 @@
 
         function getRareMarketplaceStock() {
             refreshRareMarketplace(false);
-            return (ensureEconomyState().market.stock || []).slice();
+            const eco = ensureEconomyState();
+            const offers = (((eco.market || {}).rare || {}).offers) || [];
+            return offers.filter((offer) => offer && offer.purchased !== true).map((offer) => Object.assign({}, offer));
         }
 
         function buyRareMarketOffer(offerId) {
             const eco = ensureEconomyState();
             refreshRareMarketplace(false);
-            const stock = eco.market.stock || [];
-            const idx = stock.findIndex((offer) => offer && offer.offerId === offerId);
+            const rareState = eco.market.rare || { offers: [] };
+            const offers = Array.isArray(rareState.offers) ? rareState.offers : [];
+            const idx = offers.findIndex((offer) => offer && offer.offerId === offerId && offer.purchased !== true);
             if (idx === -1) return { ok: false, reason: 'offer-missing' };
-            const offer = stock[idx];
+            const offer = offers[idx];
             const spend = spendCoins(offer.price, 'Rare Market', true);
             if (!spend.ok) return { ok: false, reason: spend.reason, needed: offer.price, balance: spend.balance };
 
@@ -1052,8 +1376,8 @@
                 itemEmoji = item ? item.emoji : '🛋️';
             }
 
-            stock.splice(idx, 1);
-            eco.market.stock = stock;
+            offers[idx].purchased = true;
+            eco.market.stock = offers.filter((row) => row && row.purchased !== true);
             saveGame();
             return { ok: true, offer, itemLabel, itemEmoji, balance: eco.coins };
         }
@@ -1533,20 +1857,34 @@
         function getAuctionHouseSnapshot() {
             const eco = ensureEconomyState();
             const data = loadAuctionHouseData();
+            if (markExpiredAuctionListings(data)) saveAuctionHouseData(data);
             const slotId = eco.auction.slotId;
-            const myWallet = Math.max(0, Math.floor((data.wallets && data.wallets[slotId]) || 0));
+            const legacySlotWallet = Math.max(0, Math.floor((data.wallets && data.wallets[slotId]) || 0));
+            const profileWallet = Math.max(0, Math.floor((data.profileWallets && data.profileWallets[eco.playerId]) || 0));
+            const myWallet = legacySlotWallet + profileWallet;
             const listings = (data.listings || [])
                 .slice()
                 .sort((a, b) => b.createdAt - a.createdAt)
                 .map((listing) => {
                     const label = getAuctionItemLabel(listing.itemType, listing.itemId);
-                    return Object.assign({}, listing, label);
+                    const sellerIdentity = listing.sellerProfileId || listing.sellerPlayerId || null;
+                    const isMine = !!(sellerIdentity && sellerIdentity === eco.playerId);
+                    const isExpired = listing.status === 'expired';
+                    return Object.assign({}, listing, label, { isMine, isExpired });
                 });
             return {
                 slotId,
                 slotLabel: getAuctionSlotLabel(slotId),
                 wallets: Object.assign({}, data.wallets || {}),
+                profileWallets: Object.assign({}, data.profileWallets || {}),
                 myWallet,
+                legacySlotWallet,
+                profileWallet,
+                auctionEarningsPending: Math.max(0, Math.floor(eco.auction.auctionEarningsPending || 0)),
+                auctionEarningsWithheld: Math.max(0, Math.floor(eco.auction.auctionEarningsWithheld || 0)),
+                auctionEarningsLastClaimResult: eco.auction.auctionEarningsLastClaimResult || null,
+                locked: isAuctionInteractionLocked(),
+                lockReason: isAuctionInteractionLocked() ? 'save-integrity-warning' : null,
                 listings
             };
         }
@@ -1660,6 +1998,10 @@
 
         function createAuctionListing(itemType, itemId, quantity, price) {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showAuctionLockToast();
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const qty = Math.max(1, Math.floor(Number(quantity) || 1));
             const ask = Math.max(1, Math.floor(Number(price) || 1));
             const owned = getAuctionOwnedCount(itemType, itemId);
@@ -1669,7 +2011,8 @@
             const perSlotCap = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.auctionPerSlotListingCap === 'number')
                 ? ECONOMY_BALANCE.auctionPerSlotListingCap : 12;
             const existingData = loadAuctionHouseData();
-            const mySlotListings = (existingData.listings || []).filter(l => l.sellerSlot === eco.auction.slotId);
+            if (markExpiredAuctionListings(existingData)) saveAuctionHouseData(existingData);
+            const mySlotListings = (existingData.listings || []).filter((l) => l && l.status !== 'expired' && l.sellerSlot === eco.auction.slotId && ((l.sellerProfileId || l.sellerPlayerId || '') === eco.playerId));
             if (mySlotListings.length >= perSlotCap) {
                 return { ok: false, reason: 'slot-listing-cap', cap: perSlotCap };
             }
@@ -1677,7 +2020,21 @@
             // Rec 4: Charge non-refundable listing fee upfront
             const feeRate = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.auctionListingFeeRate === 'number')
                 ? ECONOMY_BALANCE.auctionListingFeeRate : 0.03;
-            const listingFee = Math.max(1, Math.floor(ask * feeRate));
+            const relistKey = `${itemType}:${itemId}`;
+            const auctionHardeningCfg = getHardeningCfg('auction', {}) || {};
+            const relistEscalationCfg = (auctionHardeningCfg.relistFeeEscalation && typeof auctionHardeningCfg.relistFeeEscalation === 'object')
+                ? auctionHardeningCfg.relistFeeEscalation
+                : auctionHardeningCfg;
+            const relistWindowMs = Math.max(60000, Number(relistEscalationCfg.windowMs || relistEscalationCfg.relistWindowMs) || (3 * 24 * 60 * 60 * 1000));
+            const relistStepRate = Math.max(0, Number(relistEscalationCfg.stepRate || relistEscalationCfg.relistFeeStepRate) || 0.02);
+            const relistMaxExtraRate = Math.max(0, Number(relistEscalationCfg.maxExtraRate || relistEscalationCfg.relistFeeMaxExtraRate) || 0.12);
+            const tracker = eco.auction.relistTracker || (eco.auction.relistTracker = {});
+            const trackerEntry = (tracker[relistKey] && typeof tracker[relistKey] === 'object') ? tracker[relistKey] : { lastAt: 0, count: 0 };
+            const nowMs = getHardenedEconomyNowMs();
+            const withinRelistWindow = trackerEntry.lastAt > 0 && (nowMs - trackerEntry.lastAt) <= relistWindowMs;
+            const relistCount = withinRelistWindow ? Math.max(0, Math.floor(Number(trackerEntry.count) || 0)) : 0;
+            const relistExtraRate = Math.min(relistMaxExtraRate, relistCount * relistStepRate);
+            const listingFee = Math.max(1, Math.floor(ask * (feeRate + relistExtraRate)));
             const feeSpend = spendCoins(listingFee, 'Listing Fee', true);
             if (!feeSpend.ok) return { ok: false, reason: 'insufficient-funds-fee', needed: listingFee, balance: feeSpend.balance };
 
@@ -1688,33 +2045,52 @@
             }
 
             const data = loadAuctionHouseData();
+            markExpiredAuctionListings(data);
             const listing = {
                 id: `auc_${Date.now()}_${Math.floor(Math.random() * 99999)}`,
                 sellerSlot: eco.auction.slotId,
                 // Rec 2: Embed persistent playerId for cross-slot self-trade prevention
+                sellerProfileId: eco.playerId || '',
                 sellerPlayerId: eco.playerId || '',
                 itemType,
                 itemId,
                 quantity: qty,
                 price: ask,
                 listingFee: listingFee,
-                createdAt: Date.now()
+                createdAt: nowMs,
+                expiresAt: nowMs + getAuctionListingExpiryMs(),
+                status: 'active',
+                relistKey,
+                relistCount
             };
             data.listings.unshift(listing);
             if (data.listings.length > 80) data.listings = data.listings.slice(0, 80);
             saveAuctionHouseData(data);
             eco.auction.postedCount = (eco.auction.postedCount || 0) + 1;
+            tracker[relistKey] = { lastAt: nowMs, count: relistCount + 1 };
             saveGame();
-            return { ok: true, listing: Object.assign({}, listing, getAuctionItemLabel(itemType, itemId)), listingFee };
+            return {
+                ok: true,
+                listing: Object.assign({}, listing, getAuctionItemLabel(itemType, itemId)),
+                listingFee,
+                relistFeeExtraRate: relistExtraRate
+            };
         }
 
         function cancelAuctionListing(listingId) {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showAuctionLockToast();
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const data = loadAuctionHouseData();
+            if (markExpiredAuctionListings(data)) saveAuctionHouseData(data);
             const idx = data.listings.findIndex((l) => l && l.id === listingId);
             if (idx === -1) return { ok: false, reason: 'listing-not-found' };
             const listing = data.listings[idx];
-            if (listing.sellerSlot !== eco.auction.slotId) return { ok: false, reason: 'not-owner' };
+            const sellerIdentity = listing.sellerProfileId || listing.sellerPlayerId || null;
+            if (!sellerIdentity) return { ok: false, reason: 'legacy-owner-unknown' };
+            if (sellerIdentity !== eco.playerId) return { ok: false, reason: 'not-owner' };
             data.listings.splice(idx, 1);
             addAuctionItem(listing.itemType, listing.itemId, listing.quantity);
             saveAuctionHouseData(data);
@@ -1724,12 +2100,20 @@
 
         function buyAuctionListing(listingId) {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showAuctionLockToast();
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const data = loadAuctionHouseData();
+            if (markExpiredAuctionListings(data)) saveAuctionHouseData(data);
             const idx = data.listings.findIndex((l) => l && l.id === listingId);
             if (idx === -1) return { ok: false, reason: 'listing-not-found' };
             const listing = data.listings[idx];
+            if (listing.status === 'expired') return { ok: false, reason: 'listing-expired' };
             // Rec 2: Block self-purchase by playerId (cross-slot exploit fix) + legacy slotId check
-            if (listing.sellerSlot === eco.auction.slotId) return { ok: false, reason: 'own-listing' };
+            if (!listing.sellerProfileId && !listing.sellerPlayerId && listing.sellerSlot === eco.auction.slotId) return { ok: false, reason: 'own-listing' };
+            if (listing.sellerSlot === eco.auction.slotId && (listing.sellerProfileId || listing.sellerPlayerId || '') === eco.playerId) return { ok: false, reason: 'own-listing' };
+            if (listing.sellerProfileId && listing.sellerProfileId === eco.playerId) return { ok: false, reason: 'own-listing' };
             if (listing.sellerPlayerId && listing.sellerPlayerId === eco.playerId) return { ok: false, reason: 'own-listing' };
 
             const spend = spendCoins(listing.price, 'Auction Buy', true);
@@ -1742,7 +2126,11 @@
                 ? ECONOMY_BALANCE.auctionTransactionTaxRate : 0.08;
             const taxAmount = Math.max(0, Math.floor(listing.price * taxRate));
             const sellerProceeds = listing.price - taxAmount;
-            data.wallets[listing.sellerSlot] = Math.max(0, Math.floor((data.wallets[listing.sellerSlot] || 0))) + sellerProceeds;
+            if (listing.sellerProfileId) {
+                data.profileWallets[listing.sellerProfileId] = Math.max(0, Math.floor((data.profileWallets[listing.sellerProfileId] || 0))) + sellerProceeds;
+            } else {
+                data.wallets[listing.sellerSlot] = Math.max(0, Math.floor((data.wallets[listing.sellerSlot] || 0))) + sellerProceeds;
+            }
             data.listings.splice(idx, 1);
             saveAuctionHouseData(data);
             eco.auction.boughtCount = (eco.auction.boughtCount || 0) + 1;
@@ -1752,14 +2140,51 @@
 
         function claimAuctionEarnings() {
             const eco = ensureEconomyState();
+            if (isAuctionInteractionLocked()) {
+                showAuctionLockToast();
+                return { ok: false, reason: 'auction-locked-suspicious' };
+            }
             const data = loadAuctionHouseData();
             const slotId = eco.auction.slotId;
-            const amount = Math.max(0, Math.floor((data.wallets[slotId] || 0)));
-            if (amount <= 0) return { ok: false, reason: 'nothing-to-claim' };
+            const legacyWallet = Math.max(0, Math.floor((data.wallets[slotId] || 0)));
+            const profileWallet = Math.max(0, Math.floor(((data.profileWallets || {})[eco.playerId]) || 0));
+            const pending = Math.max(0, Math.floor(eco.auction.auctionEarningsPending || 0));
+            const withheld = Math.max(0, Math.floor(eco.auction.auctionEarningsWithheld || 0));
+            const claimPool = legacyWallet + profileWallet + pending + withheld;
+            if (claimPool <= 0) return { ok: false, reason: 'nothing-to-claim' };
+
+            eco.auction.auctionEarningsPending = claimPool;
+            const credit = addCoinsDetailed(claimPool, 'Auction Payout', {
+                silent: true,
+                // Auction escrow claims should not silently disappear into debt repayment.
+                skipWealthPressureDebtRepayment: true
+            });
+            const nextWithheld = Math.max(0, Math.floor(credit.withheldByGuards || 0));
+            eco.auction.auctionEarningsWithheld = nextWithheld;
+            eco.auction.auctionEarningsPending = 0;
+            eco.auction.auctionEarningsLastClaimResult = {
+                at: getHardenedEconomyNowMs(),
+                requested: claimPool,
+                credited: Math.max(0, Math.floor(credit.credited || 0)),
+                withheld: nextWithheld,
+                limitedAmount: Math.max(0, Math.floor(credit.limitedAmount || 0)),
+                suspiciousMultiplier: Number((((credit || {}).rateLimit) || {}).suspiciousMult || 1),
+                minuteMultiplier: Number((((credit || {}).rateLimit) || {}).minuteMult || 1),
+                sessionMultiplier: Number((((credit || {}).rateLimit) || {}).sessionMult || 1)
+            };
+
+            // Clear auction wallets only after value has been accounted into coin credit/withheld state.
             data.wallets[slotId] = 0;
+            if (data.profileWallets && eco.playerId) data.profileWallets[eco.playerId] = 0;
             saveAuctionHouseData(data);
-            addCoins(amount, 'Auction Payout', true);
             eco.auction.soldCount = (eco.auction.soldCount || 0) + 1;
             saveGame();
-            return { ok: true, amount, balance: eco.coins };
+            return {
+                ok: true,
+                amount: Math.max(0, Math.floor(credit.credited || 0)),
+                claimedGross: claimPool,
+                withheld: nextWithheld,
+                balance: eco.coins,
+                claimResult: eco.auction.auctionEarningsLastClaimResult
+            };
         }

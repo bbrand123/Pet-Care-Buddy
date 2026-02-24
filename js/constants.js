@@ -1532,9 +1532,25 @@ const ECONOMY_HARDENING_BALANCE = {
         debtResalePenaltyMax: 0.35
     },
     auction: {
+        listingExpiryMs: 48 * 60 * 60 * 1000,
         relistWindowMs: 3 * 24 * 60 * 60 * 1000,
         relistFeeStepRate: 0.02,
-        relistFeeMaxExtraRate: 0.12
+        relistFeeMaxExtraRate: 0.12,
+        // Explicit nested config for modular relist escalation (legacy flat keys kept for compatibility).
+        relistFeeEscalation: {
+            windowMs: 3 * 24 * 60 * 60 * 1000,
+            stepRate: 0.02,
+            maxExtraRate: 0.12
+        }
+    },
+    recurringSinks: {
+        enabled: true,
+        requirePrestige: true,
+        roomUpkeepBase: 6,
+        roomUpkeepPerDecoratedRoom: 2,
+        breedingPermitPerEgg: 4,
+        auctionListingUpkeepPerActiveListing: 2,
+        maxDailyTotal: 36
     }
 };
 
@@ -3163,8 +3179,9 @@ const REWARD_BUNDLES = {
     stickerSetFun: { id: 'stickerSetFun', coins: 120, modifierId: 'happyHour' },
     stickerSetSpecial: { id: 'stickerSetSpecial', coins: 200, modifierId: 'focusedTraining' },
     // Garden milestone rewards
-    gardenPlotUnlockMinor: { id: 'gardenPlotUnlockMinor', coins: 20, modifierId: null },
-    gardenPlotUnlockMajor: { id: 'gardenPlotUnlockMajor', coins: 42, modifierId: 'careRush' },
+    // Garden milestone rewards keep a small coin component, with more value shifted into modifiers.
+    gardenPlotUnlockMinor: { id: 'gardenPlotUnlockMinor', coins: 8, modifierId: 'happyHour' },
+    gardenPlotUnlockMajor: { id: 'gardenPlotUnlockMajor', coins: 18, modifierId: 'careRush' },
     gardenExpansionTier1Reward: { id: 'gardenExpansionTier1Reward', coins: 85, modifierId: 'careRush' },
     gardenExpansionTier2Reward: { id: 'gardenExpansionTier2Reward', coins: 130, modifierId: 'familyAura' },
     // Breeding discovery milestone rewards

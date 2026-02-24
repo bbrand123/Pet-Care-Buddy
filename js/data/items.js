@@ -53,6 +53,7 @@ const GARDEN_CROPS = {
         hungerValue: 20,
         happinessValue: 12,
         energyValue: 0,
+        harvestCoinBonus: 2,
         seasonBonus: ['spring', 'summer']
     },
     pumpkin: {
@@ -63,6 +64,7 @@ const GARDEN_CROPS = {
         hungerValue: 25,
         happinessValue: 10,
         energyValue: 0,
+        harvestCoinBonus: 7,
         seasonBonus: ['autumn']
     },
     sunflower: {
@@ -83,6 +85,7 @@ const GARDEN_CROPS = {
         hungerValue: 10,
         happinessValue: 0,
         energyValue: 15,
+        harvestCoinBonus: 9,
         seasonBonus: ['autumn']
     }
 };

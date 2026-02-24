@@ -274,6 +274,7 @@
                 dailyCompleted.forEach(task => showToast(`${task.icon} Daily task done: ${task.name}!`, '#FFD700'));
             }
             if (typeof claimFirstOfDayModeBonus === 'function') {
+                // Called once per plot harvest (after all yield coins), so multi-yield crops cannot trigger bonus multiple times.
                 claimFirstOfDayModeBonus('harvest', 'First Harvest Bonus');
             }
             // Check achievements after harvest
