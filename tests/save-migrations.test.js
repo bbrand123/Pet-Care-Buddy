@@ -8,6 +8,7 @@ const SaveMigrations = require('../js/save/migrate.js');
 const SaveMigrationRegistry = require('../js/save/migrations/registry.js');
 const SaveMigrationV0ToV1 = require('../js/save/migrations/v0-to-v1.js');
 const SaveMigrationV1ToV2 = require('../js/save/migrations/v1-to-v2.js');
+const SaveMigrationV2ToV3 = require('../js/save/migrations/v2-to-v3.js');
 
 const fixturesDir = path.resolve(__dirname, 'fixtures/saves');
 
@@ -19,16 +20,19 @@ function parseFixtureJson(name) {
     return JSON.parse(readFixture(name));
 }
 
-test('save migration registry is ordered and includes v0->v1 and v1->v2', () => {
+test('save migration registry is ordered and includes v0->v1, v1->v2, and v2->v3', () => {
     const migrations = SaveMigrationRegistry.MIGRATIONS;
     assert.ok(Array.isArray(migrations));
-    assert.equal(migrations.length >= 2, true);
+    assert.equal(migrations.length >= 3, true);
     assert.equal(migrations[0].fromVersion, 0);
     assert.equal(migrations[0].toVersion, 1);
     assert.equal(migrations[1].fromVersion, 1);
     assert.equal(migrations[1].toVersion, 2);
+    assert.equal(migrations[2].fromVersion, 2);
+    assert.equal(migrations[2].toVersion, 3);
     assert.equal(migrations.some((migration) => migration.name === 'legacy-v0-to-v1'), true);
     assert.equal(migrations.some((migration) => migration.name === 'household-v1-to-v2'), true);
+    assert.equal(migrations.some((migration) => migration.name === 'pity-counters-v2-to-v3'), true);
 });
 
 test('v0->v1 migration is unit-tested and records repairs', () => {
@@ -81,6 +85,31 @@ test('v1->v2 migration creates household state and repairs missing petsById', ()
     assert.equal(migrated.household.petsById['5'].needs.hunger, 40);
     assert.equal(migrated.household.lastSimulatedAt, 1700000000000);
     assert.equal(changes.some((change) => change.path === 'household'), true);
+});
+
+test('v2->v3 migration adds pity counters for economy and exploration', () => {
+    const payload = {
+        saveSchemaVersion: 2,
+        phase: 'pet',
+        lastUpdate: 1700000000000,
+        pet: { id: 'pet-1', name: 'Pip', type: 'cat' },
+        pets: [{ id: 'pet-1', name: 'Pip', type: 'cat' }],
+        household: { activePetId: 'pet-1', petsById: { 'pet-1': { id: 'pet-1' } }, relationships: {}, lastSimulatedAt: 1700000000000, simVersion: 1 },
+        economy: {},
+        exploration: {}
+    };
+    const changes = [];
+    const migrated = SaveMigrationV2ToV3.apply(payload, {
+        recordChange(change) {
+            changes.push(change);
+        }
+    });
+
+    assert.equal(migrated.saveSchemaVersion, 3);
+    assert.deepEqual(migrated.economy.pity, { mysteryEggRareMisses: 0 });
+    assert.deepEqual(migrated.exploration.pity, { expeditionRareMisses: 0 });
+    assert.equal(changes.some((change) => change.path === 'economy.pity'), true);
+    assert.equal(changes.some((change) => change.path === 'exploration.pity'), true);
 });
 
 test('parseSavePayloadJSON returns helpful parse errors', () => {

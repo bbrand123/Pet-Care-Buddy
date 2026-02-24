@@ -8,7 +8,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFSaveSchema() {
     'use strict';
 
-    const CURRENT_SCHEMA_VERSION = 2;
+    const CURRENT_SCHEMA_VERSION = 3;
     const ALLOWED_PHASES = Object.freeze(['egg', 'hatching', 'pet']);
 
     class SavePayloadError extends Error {

@@ -141,6 +141,104 @@
             }
         }
 
+        function ensureGardenRewardClaims(garden) {
+            const g = garden || gameState.garden || {};
+            if (!g._rewardClaims || typeof g._rewardClaims !== 'object' || Array.isArray(g._rewardClaims)) {
+                g._rewardClaims = { plotUnlocks: {}, expansionTiers: {} };
+            }
+            if (!g._rewardClaims.plotUnlocks || typeof g._rewardClaims.plotUnlocks !== 'object') g._rewardClaims.plotUnlocks = {};
+            if (!g._rewardClaims.expansionTiers || typeof g._rewardClaims.expansionTiers !== 'object') g._rewardClaims.expansionTiers = {};
+            return g._rewardClaims;
+        }
+
+        function getGardenMilestoneTuning() {
+            const root = (typeof PROGRESSION_REWARD_TUNING === 'object' && PROGRESSION_REWARD_TUNING) ? PROGRESSION_REWARD_TUNING : null;
+            return (root && typeof root.gardenMilestones === 'object') ? root.gardenMilestones : {};
+        }
+
+        function grantGardenMilestoneBundle(bundleId, sourceLabel) {
+            if (!bundleId) return null;
+            if (typeof applyRewardBundle === 'function') return applyRewardBundle(bundleId, sourceLabel || 'Garden Milestone');
+            const bundle = REWARD_BUNDLES && REWARD_BUNDLES[bundleId];
+            if (!bundle) return null;
+            const earnedCoins = Number(bundle.coins) > 0 ? addCoins(bundle.coins, sourceLabel || 'Garden Milestone', true) : 0;
+            const modifier = (bundle.modifierId && typeof addGameplayModifier === 'function') ? addGameplayModifier(bundle.modifierId, sourceLabel || 'Garden Milestone') : null;
+            return { bundle, earnedCoins, modifier, collectibleGranted: false };
+        }
+
+        function maybeShowNextGardenPlotBreakpointToast(garden) {
+            if (typeof showToast !== 'function' || typeof getUnlockedPlotCount !== 'function' || typeof getGardenPlotCapacity !== 'function') return;
+            const g = garden || gameState.garden;
+            if (!g) return;
+            const totalHarvests = Math.max(0, Math.floor(Number(g.totalHarvests) || 0));
+            const expansionTier = Math.max(0, Math.floor(Number(g.expansionTier) || 0));
+            const unlocked = getUnlockedPlotCount(totalHarvests, expansionTier);
+            const capacity = getGardenPlotCapacity(expansionTier);
+            if (unlocked >= capacity) return;
+            const thresholds = Array.isArray(GARDEN_PLOT_UNLOCK_THRESHOLDS) ? GARDEN_PLOT_UNLOCK_THRESHOLDS : [];
+            const nextThreshold = thresholds[unlocked];
+            if (!Number.isFinite(nextThreshold)) return;
+            const remaining = Math.max(0, Math.floor(nextThreshold - totalHarvests));
+            if (remaining <= 0 || remaining > 2) return;
+            if (!g._nextPlotHintToastAt || !Number.isFinite(g._nextPlotHintToastAt)) g._nextPlotHintToastAt = 0;
+            const now = Date.now();
+            if ((now - g._nextPlotHintToastAt) < 30000) return;
+            g._nextPlotHintToastAt = now;
+            showToast(`🌱 ${remaining} harvest${remaining === 1 ? '' : 's'} to next plot unlock.`, '#AED581');
+        }
+
+        function grantGardenPlotUnlockMilestones(prevUnlocked, newUnlocked) {
+            const garden = gameState.garden;
+            if (!garden || newUnlocked <= prevUnlocked) return [];
+            const claims = ensureGardenRewardClaims(garden);
+            const tuning = getGardenMilestoneTuning();
+            const majorPlots = new Set(Array.isArray(tuning.plotUnlockMajorPlots) ? tuning.plotUnlockMajorPlots.map((n) => Math.max(0, Math.floor(Number(n) || 0))) : []);
+            const minorBundleId = tuning.plotUnlockMinorBundleId || 'gardenPlotUnlockMinor';
+            const majorBundleId = tuning.plotUnlockMajorBundleId || 'gardenPlotUnlockMajor';
+            const rewards = [];
+            for (let plotCount = Math.max(1, prevUnlocked + 1); plotCount <= newUnlocked; plotCount++) {
+                const key = String(plotCount);
+                if (claims.plotUnlocks[key]) continue;
+                claims.plotUnlocks[key] = true;
+                const isMajor = majorPlots.has(plotCount);
+                const bundleId = isMajor ? majorBundleId : minorBundleId;
+                const result = grantGardenMilestoneBundle(bundleId, `Garden Plot ${plotCount} Unlock`);
+                if (result && typeof showToast === 'function') {
+                    const modifierText = result.modifier ? ` + ${result.modifier.emoji} ${result.modifier.name}` : '';
+                    showToast(`🪴 Plot ${plotCount} unlock bonus! +${result.earnedCoins || 0} coins${modifierText}`, isMajor ? '#81C784' : '#A5D6A7');
+                }
+                if (result && typeof recordRewardRecapEvent === 'function') {
+                    recordRewardRecapEvent(isMajor ? 'mid' : 'short', 'Garden plot unlock milestone', { plotCount, bundleId, earnedCoins: result.earnedCoins || 0 });
+                }
+                rewards.push({ plotCount, bundleId, result, isMajor });
+            }
+            return rewards;
+        }
+
+        function grantGardenExpansionTierMilestone(expansionTier, tierDef) {
+            const garden = gameState.garden;
+            if (!garden) return null;
+            const claims = ensureGardenRewardClaims(garden);
+            const key = String(Math.max(0, Math.floor(Number(expansionTier) || 0)));
+            if (!key || claims.expansionTiers[key]) return null;
+            claims.expansionTiers[key] = true;
+            const tuning = getGardenMilestoneTuning();
+            const bundleMap = (tuning && typeof tuning.expansionTierBundleIds === 'object') ? tuning.expansionTierBundleIds : {};
+            const bundleId = bundleMap[key] || null;
+            const result = grantGardenMilestoneBundle(bundleId, `Garden Expansion Tier ${key}`);
+            if (result && typeof showToast === 'function') {
+                const modifierText = result.modifier ? ` + ${result.modifier.emoji} ${result.modifier.name}` : '';
+                showToast(`🏡 ${tierDef && tierDef.name ? tierDef.name : 'Garden expansion'} bonus! +${result.earnedCoins || 0} coins${modifierText}`, '#66BB6A');
+            }
+            if (result && typeof addJournalEntry === 'function') {
+                addJournalEntry('🏡', `Garden expansion milestone: ${tierDef && tierDef.name ? tierDef.name : `Tier ${key}`}.`);
+            }
+            if (result && typeof recordRewardRecapEvent === 'function') {
+                recordRewardRecapEvent('mid', 'Garden expansion milestone', { expansionTier: Number(key), bundleId, earnedCoins: result.earnedCoins || 0 });
+            }
+            return { bundleId, result };
+        }
+
         function harvestPlot(plotIndex) {
             const garden = gameState.garden;
             if (!garden.plots[plotIndex]) return;
@@ -175,6 +273,9 @@
                 const dailyCompleted = incrementDailyProgress('harvestCount');
                 dailyCompleted.forEach(task => showToast(`${task.icon} Daily task done: ${task.name}!`, '#FFD700'));
             }
+            if (typeof claimFirstOfDayModeBonus === 'function') {
+                claimFirstOfDayModeBonus('harvest', 'First Harvest Bonus');
+            }
             // Check achievements after harvest
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
@@ -204,12 +305,14 @@
             }
 
             // Check if a new plot was unlocked
-	            const prevUnlocked = getUnlockedPlotCount(garden.totalHarvests - harvestYield, garden.expansionTier || 0);
-	            const newUnlocked = getUnlockedPlotCount(garden.totalHarvests, garden.expansionTier || 0);
+            const prevUnlocked = getUnlockedPlotCount(garden.totalHarvests - harvestYield, garden.expansionTier || 0);
+            const newUnlocked = getUnlockedPlotCount(garden.totalHarvests, garden.expansionTier || 0);
+            grantGardenPlotUnlockMilestones(prevUnlocked, newUnlocked);
             if (newUnlocked > prevUnlocked) {
                 showToast(`${crop.seedEmoji} Harvested a ${crop.name}! +${coinReward} coins. New garden plot unlocked!`, '#FF8C42');
             } else {
                 showToast(`${crop.seedEmoji} Harvested a ${crop.name}! +${coinReward} coins.`, '#FF8C42');
+                maybeShowNextGardenPlotBreakpointToast(garden);
             }
 
             if (gameState.pet) {
@@ -501,9 +604,10 @@
 	                showToast(`🪙 Need ${tier.costCoins} coins for ${tier.name}.`, '#FFA726');
 	                return { ok: false, reason: spend.reason, needed: tier.costCoins, balance: spend.balance };
 	            }
-	            garden.expansionTier = tierIndex + 1;
-	            showToast(`🏡 Expanded garden: ${tier.name} unlocked (+${tier.additionalPlots} plots)!`, '#66BB6A');
-	            saveGame();
+            garden.expansionTier = tierIndex + 1;
+            showToast(`🏡 Expanded garden: ${tier.name} unlocked (+${tier.additionalPlots} plots)!`, '#66BB6A');
+            grantGardenExpansionTierMilestone(garden.expansionTier, tier);
+            saveGame();
 	            if (gameState.currentRoom === 'garden') renderGardenUI();
 	            return { ok: true, tier, expansionTier: garden.expansionTier };
 	        }

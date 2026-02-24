@@ -2,7 +2,7 @@
   "phase": "egg",
   "eggTaps": 2,
   "lastUpdate": 1700000000000,
-  "saveSchemaVersion": 2,
+  "saveSchemaVersion": 3,
   "household": {
     "activePetId": null,
     "petsById": {},

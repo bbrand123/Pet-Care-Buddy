@@ -3156,7 +3156,101 @@ const REWARD_BUNDLES = {
     stickerSetAnimals: { id: 'stickerSetAnimals', coins: 150, modifierId: 'luckyPaws' },
     stickerSetNature: { id: 'stickerSetNature', coins: 100, modifierId: 'careRush' },
     stickerSetFun: { id: 'stickerSetFun', coins: 120, modifierId: 'happyHour' },
-    stickerSetSpecial: { id: 'stickerSetSpecial', coins: 200, modifierId: 'focusedTraining' }
+    stickerSetSpecial: { id: 'stickerSetSpecial', coins: 200, modifierId: 'focusedTraining' },
+    // Garden milestone rewards
+    gardenPlotUnlockMinor: { id: 'gardenPlotUnlockMinor', coins: 20, modifierId: null },
+    gardenPlotUnlockMajor: { id: 'gardenPlotUnlockMajor', coins: 42, modifierId: 'careRush' },
+    gardenExpansionTier1Reward: { id: 'gardenExpansionTier1Reward', coins: 85, modifierId: 'careRush' },
+    gardenExpansionTier2Reward: { id: 'gardenExpansionTier2Reward', coins: 130, modifierId: 'familyAura' },
+    // Breeding discovery milestone rewards
+    breedingDiscoveryBreed: { id: 'breedingDiscoveryBreed', coins: 36, modifierId: 'happyHour' },
+    breedingDiscoveryHybrid: { id: 'breedingDiscoveryHybrid', coins: 70, modifierId: 'familyAura' },
+    breedingDiscoveryMutation: { id: 'breedingDiscoveryMutation', coins: 80, modifierId: 'luckyPaws' },
+    // Competition collection milestone rewards
+    competitionCollectionRival: { id: 'competitionCollectionRival', coins: 55, modifierId: 'focusedTraining' },
+    competitionCollectionBoss: { id: 'competitionCollectionBoss', coins: 95, modifierId: 'focusedTraining' }
+};
+
+// Small incremental rewards to reduce "silent progress" on longer tasks/arcs.
+// Values are intentionally modest and can be tuned without changing runtime logic.
+const PROGRESSION_REWARD_TUNING = {
+    dailyTaskPartial: {
+        minTarget: 2,
+        thresholds: [
+            {
+                id: 'half',
+                ratio: 0.5,
+                coinsByLane: {
+                    fixed: 8,
+                    mode: 10,
+                    wildcard: 12,
+                    seasonal: 9,
+                    default: 9
+                }
+            }
+        ]
+    },
+    weeklyArcStep: {
+        coinsByTrackKey: {
+            totalCareActions: 14,
+            feedCount: 14,
+            harvestCount: 16,
+            parkVisits: 18,
+            minigameCount: 16,
+            expeditionCount: 22,
+            battleCount: 20,
+            bondEvents: 18,
+            hatchCount: 24,
+            discoveryEvents: 18,
+            default: 16
+        }
+    },
+    firstOfDayModeBonus: {
+        minigame: { coins: 16, modifierId: 'happyHour', label: 'First Mini-game' },
+        harvest: { coins: 14, modifierId: 'careRush', label: 'First Harvest' },
+        expedition: { coins: 20, modifierId: 'luckyPaws', label: 'First Expedition' },
+        arena: { coins: 18, modifierId: 'focusedTraining', label: 'First Arena' }
+    },
+    stickerSetPartial: {
+        thresholds: [
+            { id: 'half', ratio: 0.5, coinScale: 0.45, grantModifier: false },
+            { id: 'threeQuarter', ratio: 0.75, coinScale: 0.7, grantModifier: true }
+        ]
+    },
+    pity: {
+        mysteryEggRareMisses: 9,
+        expeditionRareMisses: 4
+    },
+    gardenMilestones: {
+        plotUnlockMajorPlots: [8, 12, 16],
+        plotUnlockMinorBundleId: 'gardenPlotUnlockMinor',
+        plotUnlockMajorBundleId: 'gardenPlotUnlockMajor',
+        expansionTierBundleIds: {
+            1: 'gardenExpansionTier1Reward',
+            2: 'gardenExpansionTier2Reward'
+        }
+    },
+    breedingDiscoveryMilestones: {
+        totalBreedings: [
+            { value: 1, bundleId: 'breedingDiscoveryBreed' },
+            { value: 5, bundleId: 'breedingDiscoveryBreed' },
+            { value: 12, bundleId: 'breedingDiscoveryHybrid' }
+        ],
+        totalHybridsCreated: [
+            { value: 1, bundleId: 'breedingDiscoveryHybrid' },
+            { value: 3, bundleId: 'breedingDiscoveryHybrid' }
+        ],
+        totalMutations: [
+            { value: 1, bundleId: 'breedingDiscoveryMutation' },
+            { value: 3, bundleId: 'breedingDiscoveryMutation' }
+        ]
+    },
+    competitionFirstClearCollections: {
+        rivalMilestones: [3, 6, 9],
+        bossMilestones: [1, 2, 3],
+        rivalBundleId: 'competitionCollectionRival',
+        bossBundleId: 'competitionCollectionBoss'
+    }
 };
 
 const PHASE_REWARD_BUNDLE_TABLE = {
@@ -7177,6 +7271,7 @@ if (typeof window !== "undefined") {
         DAILY_TASKS,
         REWARD_MODIFIERS,
         REWARD_BUNDLES,
+        PROGRESSION_REWARD_TUNING,
         BADGES,
         STICKERS,
         TROPHIES,

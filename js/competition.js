@@ -24,6 +24,7 @@
                         perMode: {},
                         bossFirstClearPaid: {},
                         rivalFirstClearPaid: {},
+                        collectionMilestones: { rivals: {}, bosses: {} },
                         lastCapToastAt: 0
                     }
                 };
@@ -58,6 +59,7 @@
                     perMode: {},
                     bossFirstClearPaid: {},
                     rivalFirstClearPaid: {},
+                    collectionMilestones: { rivals: {}, bosses: {} },
                     lastCapToastAt: 0
                 };
             }
@@ -76,6 +78,11 @@
             });
             if (!comp.rewardControl.bossFirstClearPaid || typeof comp.rewardControl.bossFirstClearPaid !== 'object') comp.rewardControl.bossFirstClearPaid = {};
             if (!comp.rewardControl.rivalFirstClearPaid || typeof comp.rewardControl.rivalFirstClearPaid !== 'object') comp.rewardControl.rivalFirstClearPaid = {};
+            if (!comp.rewardControl.collectionMilestones || typeof comp.rewardControl.collectionMilestones !== 'object' || Array.isArray(comp.rewardControl.collectionMilestones)) {
+                comp.rewardControl.collectionMilestones = { rivals: {}, bosses: {} };
+            }
+            if (!comp.rewardControl.collectionMilestones.rivals || typeof comp.rewardControl.collectionMilestones.rivals !== 'object') comp.rewardControl.collectionMilestones.rivals = {};
+            if (!comp.rewardControl.collectionMilestones.bosses || typeof comp.rewardControl.collectionMilestones.bosses !== 'object') comp.rewardControl.collectionMilestones.bosses = {};
             if (!Number.isFinite(comp.rewardControl.lastCapToastAt)) comp.rewardControl.lastCapToastAt = 0;
             return comp;
         }
@@ -109,6 +116,62 @@
             if ((now - (Number(rc.lastCapToastAt) || 0)) < 45000) return;
             rc.lastCapToastAt = now;
             showToast(message || 'Competition rewards are in diminishing returns mode.', '#90A4AE');
+        }
+
+        function getCompetitionCollectionRewardTuning() {
+            const root = (typeof PROGRESSION_REWARD_TUNING === 'object' && PROGRESSION_REWARD_TUNING) ? PROGRESSION_REWARD_TUNING : null;
+            return (root && typeof root.competitionFirstClearCollections === 'object') ? root.competitionFirstClearCollections : {};
+        }
+
+        function grantCompetitionCollectionBundle(bundleId, sourceLabel) {
+            if (!bundleId) return null;
+            if (typeof applyRewardBundle === 'function') return applyRewardBundle(bundleId, sourceLabel || 'Competition Collection');
+            const bundle = REWARD_BUNDLES && REWARD_BUNDLES[bundleId];
+            if (!bundle) return null;
+            const earnedCoins = Number(bundle.coins) > 0 ? addCoins(bundle.coins, sourceLabel || 'Competition Collection', true) : 0;
+            const modifier = (bundle.modifierId && typeof addGameplayModifier === 'function') ? addGameplayModifier(bundle.modifierId, sourceLabel || 'Competition Collection') : null;
+            return { bundle, earnedCoins, modifier, collectibleGranted: false };
+        }
+
+        function checkCompetitionFirstClearCollectionRewards(kind) {
+            const comp = initCompetitionState();
+            const rc = comp.rewardControl || {};
+            if (!rc.collectionMilestones || typeof rc.collectionMilestones !== 'object') rc.collectionMilestones = { rivals: {}, bosses: {} };
+            if (!rc.collectionMilestones.rivals || typeof rc.collectionMilestones.rivals !== 'object') rc.collectionMilestones.rivals = {};
+            if (!rc.collectionMilestones.bosses || typeof rc.collectionMilestones.bosses !== 'object') rc.collectionMilestones.bosses = {};
+
+            const tuning = getCompetitionCollectionRewardTuning();
+            const isBoss = kind === 'boss';
+            const milestones = Array.isArray(isBoss ? tuning.bossMilestones : tuning.rivalMilestones)
+                ? (isBoss ? tuning.bossMilestones : tuning.rivalMilestones)
+                : [];
+            const count = isBoss
+                ? Object.keys(comp.bossesDefeated || {}).length
+                : (Array.isArray(comp.rivalsDefeated) ? comp.rivalsDefeated.length : 0);
+            const claimMap = isBoss ? rc.collectionMilestones.bosses : rc.collectionMilestones.rivals;
+            const bundleId = isBoss ? (tuning.bossBundleId || 'competitionCollectionBoss') : (tuning.rivalBundleId || 'competitionCollectionRival');
+            const rewards = [];
+            milestones.forEach((targetValue) => {
+                const target = Math.max(1, Math.floor(Number(targetValue) || 0));
+                if (count < target) return;
+                const key = String(target);
+                if (claimMap[key]) return;
+                claimMap[key] = true;
+                const result = grantCompetitionCollectionBundle(bundleId, isBoss ? `Boss First-Clear ${target}` : `Rival First-Clear ${target}`);
+                if (result && typeof showToast === 'function') {
+                    const label = isBoss ? 'boss' : 'rival';
+                    const modifierText = result.modifier ? ` + ${result.modifier.emoji} ${result.modifier.name}` : '';
+                    showToast(`🏆 ${target} ${label} first-clears! +${result.earnedCoins || 0} coins${modifierText}`, '#FFD54F');
+                }
+                if (result && typeof addJournalEntry === 'function') {
+                    addJournalEntry('🏆', `Competition collection milestone: ${target} ${isBoss ? 'boss' : 'rival'} first-clears.`);
+                }
+                if (result && typeof recordRewardRecapEvent === 'function') {
+                    recordRewardRecapEvent('mid', 'Competition first-clear collection', { kind: isBoss ? 'boss' : 'rival', target, earnedCoins: result.earnedCoins || 0 });
+                }
+                rewards.push({ kind: isBoss ? 'boss' : 'rival', target, result });
+            });
+            return rewards;
         }
 
         function chargeCompetitionEntryFee(modeId, options) {
@@ -654,6 +717,9 @@
                     incrementDailyProgress('battleCount', 1);
                     incrementDailyProgress('masteryPoints', 2);
                 }
+                if (typeof claimFirstOfDayModeBonus === 'function') {
+                    claimFirstOfDayModeBonus('arena', 'First Arena Bonus');
+                }
                 if (typeof consumeCompetitionRewardModifiers === 'function') consumeCompetitionRewardModifiers();
                 if (typeof refreshMasteryTracks === 'function') refreshMasteryTracks();
                 saveGame();
@@ -995,6 +1061,7 @@
                     let victoryRewards = { coins: 0, summary: [] };
                     if (won) {
                         recordCompetitionRotation('bosses', bossId);
+                        const wasFirstBossClear = !comp.bossesDefeated[bossId];
                         comp.bossesDefeated[bossId] = { defeated: true, defeatedAt: Date.now() };
                         // Report #5: Boss wins now have an economy payout lane.
                         victoryRewards = buildCompetitionVictoryRewards('boss', (COMPETITION_ECONOMY_BALANCE && COMPETITION_ECONOMY_BALANCE.bossWinBaseCoins) || 40, bossDifficulty, true);
@@ -1026,6 +1093,7 @@
                             showToast(`👹 Boss Defeated: ${boss.name}! +${victoryRewards.coins}🪙.${roomText}`, '#FFD700');
                             announce(`Victory! Boss ${boss.name} defeated. Rewards include ${victoryRewards.coins} coins.${roomText}`, true);
                         }, 500);
+                        if (wasFirstBossClear) checkCompetitionFirstClearCollectionRewards('boss');
                     } else {
                         // Consolation rewards apply even if all pets fainted.
                         const consolation = Math.max(2, Math.round(4 * rewardMult));
@@ -1720,6 +1788,7 @@
                         const isFirstDefeat = !comp.rivalsDefeated.includes(rivalIdx);
                         if (isFirstDefeat) {
                             comp.rivalsDefeated.push(rivalIdx);
+                            checkCompetitionFirstClearCollectionRewards('rival');
                         }
                         if (!trainer.variantOf && rivalIdx >= comp.currentRivalIndex) {
                             comp.currentRivalIndex = rivalIdx + 1;

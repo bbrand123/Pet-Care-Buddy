@@ -34,6 +34,9 @@
                 },
                 market: { dayKey: '', stock: [] },
 	                mysteryEggsOpened: 0,
+	                pity: {
+	                    mysteryEggRareMisses: 0
+	                },
 	                auction: { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0 },
 	                totalEarned: 0,
 	                totalSpent: 0,

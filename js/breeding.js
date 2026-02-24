@@ -257,6 +257,9 @@
                 if (!gameState.hybridsDiscovered) gameState.hybridsDiscovered = {};
                 gameState.hybridsDiscovered[typeResult.type] = true;
             }
+            if (typeof checkBreedingDiscoveryMilestones === 'function') {
+                checkBreedingDiscoveryMilestones();
+            }
 
             // Add relationship points for breeding
             addRelationshipPoints(pet1.id, pet2.id, 15);

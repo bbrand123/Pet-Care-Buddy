@@ -21,6 +21,7 @@
 	                discoveredBiomes: { forest: true },
 	                lootInventory: {},
 	                lootInventoryStacks: {},
+	                pity: { expeditionRareMisses: 0 },
 	                expedition: null,
 	                expeditionHistory: [],
 	                roomTreasureCooldowns: {},
@@ -66,6 +67,9 @@
 	            if (typeof ex.discoveredBiomes.forest !== 'boolean') ex.discoveredBiomes.forest = true;
 	            if (!ex.lootInventory || typeof ex.lootInventory !== 'object') ex.lootInventory = {};
 	            if (!ex.lootInventoryStacks || typeof ex.lootInventoryStacks !== 'object' || Array.isArray(ex.lootInventoryStacks)) ex.lootInventoryStacks = {};
+	            if (!ex.pity || typeof ex.pity !== 'object' || Array.isArray(ex.pity)) ex.pity = { expeditionRareMisses: 0 };
+	            if (!Number.isFinite(ex.pity.expeditionRareMisses)) ex.pity.expeditionRareMisses = 0;
+	            ex.pity.expeditionRareMisses = Math.max(0, Math.floor(ex.pity.expeditionRareMisses));
 	            if (!Array.isArray(ex.expeditionHistory)) ex.expeditionHistory = [];
 	            if (!ex.roomTreasureCooldowns || typeof ex.roomTreasureCooldowns !== 'object') ex.roomTreasureCooldowns = {};
 	            if (!ex.treasureHunt || typeof ex.treasureHunt !== 'object') {
@@ -342,6 +346,50 @@
 	            return rewards;
 	        }
 
+        function getExplorationPityThresholdValue(key, fallbackValue) {
+            const tuning = (typeof PROGRESSION_REWARD_TUNING === 'object' && PROGRESSION_REWARD_TUNING) ? PROGRESSION_REWARD_TUNING : null;
+            const pity = tuning && typeof tuning.pity === 'object' ? tuning.pity : null;
+            const val = Number(pity && pity[key]);
+            return Math.max(1, Math.floor(Number.isFinite(val) ? val : fallbackValue));
+        }
+
+        function rewardsContainRareLoot(rewards) {
+            return (Array.isArray(rewards) ? rewards : []).some((reward) => {
+                if (!reward || !reward.id || !EXPLORATION_LOOT[reward.id]) return false;
+                return (EXPLORATION_LOOT[reward.id].rarity || 'common') === 'rare';
+            });
+        }
+
+        function pickGuaranteedRareLootId(pool) {
+            const candidates = (Array.isArray(pool) ? pool : [])
+                .filter((lootId) => EXPLORATION_LOOT[lootId] && (EXPLORATION_LOOT[lootId].rarity || 'common') === 'rare');
+            if (candidates.length > 0) return randomFromArray(candidates);
+            const fallbackRare = Object.keys(EXPLORATION_LOOT || {}).filter((lootId) => (EXPLORATION_LOOT[lootId].rarity || 'common') === 'rare');
+            return fallbackRare.length > 0 ? randomFromArray(fallbackRare) : null;
+        }
+
+        function maybeGrantExpeditionRarePityReward(explorationState, biomeId, rewards, lootPool, forced) {
+            const ex = explorationState || ensureExplorationState();
+            if (!ex.pity || typeof ex.pity !== 'object') ex.pity = { expeditionRareMisses: 0 };
+            const hasRare = rewardsContainRareLoot(rewards);
+            if (hasRare) {
+                ex.pity.expeditionRareMisses = 0;
+                return { rewards, rareHit: true, pityGranted: false };
+            }
+            if (forced) {
+                const rareLootId = pickGuaranteedRareLootId(lootPool);
+                if (rareLootId && EXPLORATION_LOOT[rareLootId]) {
+                    addLootToInventory(rareLootId, 1, { source: 'expedition', biomeId, createdAt: Date.now() });
+                    const patchedRewards = Array.isArray(rewards) ? rewards.slice() : [];
+                    patchedRewards.push({ id: rareLootId, count: 1, data: EXPLORATION_LOOT[rareLootId], pityGuaranteed: true });
+                    ex.pity.expeditionRareMisses = 0;
+                    return { rewards: patchedRewards, rareHit: true, pityGranted: true, rareLootId };
+                }
+            }
+            ex.pity.expeditionRareMisses = Math.max(0, Math.floor(Number(ex.pity.expeditionRareMisses) || 0)) + 1;
+            return { rewards, rareHit: false, pityGranted: false };
+        }
+
         function getTreasureActionLabel(roomId) {
             const room = ROOMS[roomId];
             return room && room.isOutdoor ? 'Dig' : 'Search';
@@ -556,7 +604,12 @@
             const baseRolls = 2 + Math.floor(Math.random() * 2);
             const bonusRolls = typeof consumeExpeditionRewardBonusRolls === 'function' ? consumeExpeditionRewardBonusRolls() : 0;
 	            const totalRolls = getExpeditionLootRollCount(baseRolls, (expedition.lootMultiplier || duration.lootMultiplier || 1), bonusRolls);
-	            const rewards = generateLootBundle(getBiomeLootPool(expedition.biomeId), totalRolls, { source: 'expedition', biomeId: expedition.biomeId });
+	            const lootPool = getBiomeLootPool(expedition.biomeId);
+	            const rawRewards = generateLootBundle(lootPool, totalRolls, { source: 'expedition', biomeId: expedition.biomeId });
+            const pityThreshold = getExplorationPityThresholdValue('expeditionRareMisses', 4);
+            const forceRarePity = Math.max(0, Number((((ex || {}).pity) || {}).expeditionRareMisses) || 0) >= pityThreshold;
+            const pityResult = maybeGrantExpeditionRarePityReward(ex, expedition.biomeId, rawRewards, lootPool, forceRarePity);
+	            const rewards = pityResult.rewards;
             ex.discoveredBiomes[expedition.biomeId] = true;
             ex.stats.expeditionsCompleted++;
 
@@ -596,6 +649,9 @@
                 incrementDailyProgress('discoveryEvents');
                 incrementDailyProgress('masteryPoints', 2);
             }
+            if (typeof claimFirstOfDayModeBonus === 'function') {
+                claimFirstOfDayModeBonus('expedition', 'First Expedition Bonus');
+            }
 
             const newlyUnlocked = updateExplorationUnlocks(true);
             refreshMasteryTracks();
@@ -619,6 +675,9 @@
                 if (npc) {
                     setTimeout(() => showToast(`${npc.icon} You discovered ${npc.name} in the wild!`, '#FFD54F'), 620);
                 }
+                if (pityResult && pityResult.pityGranted) {
+                    setTimeout(() => showToast(`✨ Expedition pity activated: guaranteed rare loot found!`, '#BA68C8'), 740);
+                }
                 if (newlyUnlocked.length > 0) {
                     newlyUnlocked.forEach((id, idx) => {
                         const b = EXPLORATION_BIOMES[id];
@@ -627,7 +686,11 @@
                 }
             }
 
-	            return { ok: true, rewards, npc, biome, newlyUnlocked, totalRolls, upkeepCost: expedition.upkeepCost || 0 };
+            if (pityResult && pityResult.pityGranted && typeof recordRewardRecapEvent === 'function') {
+                recordRewardRecapEvent('mid', 'Expedition pity rare', { biomeId: expedition.biomeId, lootId: pityResult.rareLootId || null });
+            }
+
+	            return { ok: true, rewards, npc, biome, newlyUnlocked, totalRolls, upkeepCost: expedition.upkeepCost || 0, pityGrantedRare: !!(pityResult && pityResult.pityGranted) };
 	        }
 
 	        function runTreasureHunt(roomId) {

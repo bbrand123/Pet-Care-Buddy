@@ -824,6 +824,10 @@
             const next = ladder.next || { label: 'Do one focused activity', progress: '', window: '20 min' };
             const longTerm = ladder.longTerm || { label: 'Build your legacy', progress: '', window: 'Milestone' };
             const memory = gameState.goalLadderMemory ? `<div class="goal-memory-hook">📝 ${escapeHTML(gameState.goalLadderMemory)}</div>` : '';
+            const recap = ladder.recap && ladder.recap.text ? `<div class="goal-memory-hook">🎁 Session rewards: ${escapeHTML(ladder.recap.text)}</div>` : '';
+            const breakpointLine = Array.isArray(ladder.breakpointHints) && ladder.breakpointHints.length > 0
+                ? `<div class="goal-memory-hook">🎯 ${escapeHTML(ladder.breakpointHints.map((h) => h && h.text ? h.text : '').filter(Boolean).join(' • '))}</div>`
+                : '';
             return `
                 <section class="goal-ladder" aria-label="Goal ladder">
                     <h3 class="goal-ladder-title">Now / Next / Long-term</h3>
@@ -844,6 +848,8 @@
                             <div class="goal-rung-progress">${escapeHTML(longTerm.progress || '')}</div>
                         </article>
                     </div>
+                    ${breakpointLine}
+                    ${recap}
                     ${memory}
                 </section>
             `;

@@ -250,6 +250,9 @@
             if (typeof eco.totalEarned !== 'number') eco.totalEarned = 0;
 	            if (typeof eco.totalSpent !== 'number') eco.totalSpent = 0;
 	            if (typeof eco.mysteryEggsOpened !== 'number') eco.mysteryEggsOpened = 0;
+	            if (!eco.pity || typeof eco.pity !== 'object' || Array.isArray(eco.pity)) eco.pity = { mysteryEggRareMisses: 0 };
+	            if (!Number.isFinite(eco.pity.mysteryEggRareMisses)) eco.pity.mysteryEggRareMisses = 0;
+	            eco.pity.mysteryEggRareMisses = Math.max(0, Math.floor(eco.pity.mysteryEggRareMisses));
 	            if (!eco.wealthPressure || typeof eco.wealthPressure !== 'object' || Array.isArray(eco.wealthPressure)) {
 	                eco.wealthPressure = { lastAppliedDate: '', lastFee: 0, lastBreakdown: null, unpaidFeeDebt: 0 };
 	            }
@@ -1422,6 +1425,9 @@
 	            }
 
 	            addCoins(tuned, 'Mini-game', true);
+	            if (typeof claimFirstOfDayModeBonus === 'function') {
+	                claimFirstOfDayModeBonus('minigame', 'First Mini-game Bonus');
+	            }
 	            return tuned;
 	        }
 
@@ -1443,48 +1449,81 @@
             return payout;
         }
 
+        function getPityThresholdValue(key, fallbackValue) {
+            const tuning = (typeof PROGRESSION_REWARD_TUNING === 'object' && PROGRESSION_REWARD_TUNING) ? PROGRESSION_REWARD_TUNING : null;
+            const pity = tuning && typeof tuning.pity === 'object' ? tuning.pity : null;
+            const val = Number(pity && pity[key]);
+            return Math.max(1, Math.floor(Number.isFinite(val) ? val : fallbackValue));
+        }
+
+        function grantMysteryEggAccessoryReward() {
+            const accId = randomFromArray(Object.keys(ACCESSORIES || {}));
+            if (!accId || !ACCESSORIES[accId]) return null;
+            if (!grantAccessoryToActivePet(accId)) {
+                addEconomyInventoryItem('accessories', accId, 1);
+            }
+            const acc = ACCESSORIES[accId];
+            return { type: 'accessory', itemId: accId, label: acc.name, emoji: acc.emoji, rarity: 'rare' };
+        }
+
+        function mysteryEggRewardIsRare(reward) {
+            if (!reward || typeof reward !== 'object') return false;
+            if (reward.type === 'accessory') return true;
+            if (reward.type === 'loot' && reward.itemId && EXPLORATION_LOOT[reward.itemId]) {
+                return (EXPLORATION_LOOT[reward.itemId].rarity || 'common') === 'rare';
+            }
+            return reward.rarity === 'rare';
+        }
+
         function openMysteryEgg() {
             const price = getMysteryEggPrice();
             const spend = spendCoins(price, 'Mystery Egg', true);
             if (!spend.ok) return { ok: false, reason: spend.reason, needed: price, balance: spend.balance };
             const eco = ensureEconomyState();
-            const roll = Math.random();
             let reward = null;
-            if (roll < 0.2) {
+            const pityThreshold = getPityThresholdValue('mysteryEggRareMisses', 9);
+            const forceRare = Math.max(0, Number((eco.pity || {}).mysteryEggRareMisses) || 0) >= pityThreshold;
+            if (forceRare) {
+                reward = grantMysteryEggAccessoryReward();
+                if (reward) reward.pityGuaranteed = true;
+            }
+            const roll = reward ? 1 : Math.random();
+            if (!reward && roll < 0.2) {
                 // Rec 12: Reduced coin range from 40-80 to 20-50 for slightly negative EV
                 const coinReward = 20 + Math.floor(Math.random() * 31);
                 addCoins(coinReward, 'Mystery Egg Bonus', true);
                 reward = { type: 'coins', amount: coinReward, label: `${coinReward} coins`, emoji: '🪙' };
-            } else if (roll < 0.45) {
+            } else if (!reward && roll < 0.45) {
                 const foodKeys = Object.keys(ECONOMY_SHOP_ITEMS.food || {});
                 const itemId = randomFromArray(foodKeys);
                 addEconomyInventoryItem('food', itemId, 1);
                 const item = ECONOMY_SHOP_ITEMS.food[itemId];
                 reward = { type: 'food', itemId, label: item.name, emoji: item.emoji };
-            } else if (roll < 0.63) {
+            } else if (!reward && roll < 0.63) {
                 const toyKeys = Object.keys(ECONOMY_SHOP_ITEMS.toys || {});
                 const itemId = randomFromArray(toyKeys);
                 addEconomyInventoryItem('toys', itemId, 1);
                 const item = ECONOMY_SHOP_ITEMS.toys[itemId];
                 reward = { type: 'toys', itemId, label: item.name, emoji: item.emoji };
-            } else if (roll < 0.79) {
+            } else if (!reward && roll < 0.79) {
                 const medKeys = Object.keys(ECONOMY_SHOP_ITEMS.medicine || {});
                 const itemId = randomFromArray(medKeys);
                 addEconomyInventoryItem('medicine', itemId, 1);
                 const item = ECONOMY_SHOP_ITEMS.medicine[itemId];
                 reward = { type: 'medicine', itemId, label: item.name, emoji: item.emoji };
-            } else if (roll < 0.93) {
+            } else if (!reward && roll < 0.93) {
                 const lootId = randomFromArray(Object.keys(EXPLORATION_LOOT));
                 addLootToInventory(lootId, 1);
                 const loot = EXPLORATION_LOOT[lootId];
-                reward = { type: 'loot', itemId: lootId, label: loot.name, emoji: loot.emoji };
+                reward = { type: 'loot', itemId: lootId, label: loot.name, emoji: loot.emoji, rarity: loot.rarity || 'common' };
             } else {
-                const accId = randomFromArray(Object.keys(ACCESSORIES));
-                if (!grantAccessoryToActivePet(accId)) {
-                    addEconomyInventoryItem('accessories', accId, 1);
-                }
-                const acc = ACCESSORIES[accId];
-                reward = { type: 'accessory', itemId: accId, label: acc.name, emoji: acc.emoji };
+                reward = grantMysteryEggAccessoryReward();
+            }
+            const rareHit = mysteryEggRewardIsRare(reward);
+            if (!eco.pity || typeof eco.pity !== 'object') eco.pity = { mysteryEggRareMisses: 0 };
+            eco.pity.mysteryEggRareMisses = rareHit ? 0 : (Math.max(0, Math.floor(Number(eco.pity.mysteryEggRareMisses) || 0)) + 1);
+            if (rareHit && reward && reward.pityGuaranteed && typeof recordRewardRecapEvent === 'function') {
+                recordRewardRecapEvent('mid', 'Mystery egg pity rare', { itemId: reward.itemId || null });
             }
             eco.mysteryEggsOpened = (eco.mysteryEggsOpened || 0) + 1;
             saveGame();
