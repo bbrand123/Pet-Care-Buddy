@@ -1415,8 +1415,8 @@ const EXPEDITION_DURATIONS = [
 
 const EXPEDITION_BALANCE = {
     // Report #2: EV control levers (diminishing scaling, rarity smoothing, upkeep).
-    durationDiminishingThreshold: 1.95,
-    durationDiminishingExponent: 0.72,
+    durationDiminishingThreshold: 2.15,
+    durationDiminishingExponent: 0.82,
     biomeRarityWeightMultiplier: {
         forest: 1.0,
         beach: 0.98,
@@ -1531,6 +1531,12 @@ const ECONOMY_HARDENING_BALANCE = {
         relistFeeStepRate: 0.02,
         relistFeeMaxExtraRate: 0.12
     }
+};
+
+const BALANCE_TELEMETRY = {
+    enabled: true,
+    rollingWindowMs: 60 * 60 * 1000,
+    maxRecentEvents: 500
 };
 
 const DUNGEON_ROOM_TYPES = [
@@ -1983,7 +1989,7 @@ const ECONOMY_BALANCE = {
     minigameRewardMultiplier: 0.88,
     harvestRewardMultiplier: 0.82,
     competitionCoinRewardMultiplier: 0.9, // Report #5
-    dailyCompletionReward: 70,
+    dailyCompletionReward: 55,
     // Deprecated: mini-game caps now come from MINIGAME_BALANCE (soft cap system). Kept for save/backward compatibility.
     minigameRewardCap: 94,
     // Deprecated: live mini-game daily soft cap uses MINIGAME_BALANCE.dailySoftCap* knobs.
@@ -2144,7 +2150,7 @@ const ECONOMY_SHOP_ITEMS = {
             id: 'strawberrySeeds',
             name: 'Strawberry Seeds',
             emoji: '🍓',
-            basePrice: 24,
+            basePrice: 28,
             cropId: 'strawberry',
             quantity: 2,
             description: 'Sweet crop with strong happiness boost.'
@@ -2153,7 +2159,7 @@ const ECONOMY_SHOP_ITEMS = {
             id: 'pumpkinSeeds',
             name: 'Pumpkin Seeds',
             emoji: '🎃',
-            basePrice: 28,
+            basePrice: 38,
             cropId: 'pumpkin',
             quantity: 2,
             description: 'Hearty seasonal harvest seeds.'
@@ -2171,7 +2177,7 @@ const ECONOMY_SHOP_ITEMS = {
             id: 'appleSeeds',
             name: 'Apple Seeds',
             emoji: '🍎',
-            basePrice: 32,
+            basePrice: 46,
             cropId: 'apple',
             quantity: 2,
             description: 'Slow but high-value tree seeds.'

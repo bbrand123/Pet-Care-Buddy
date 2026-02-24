@@ -161,7 +161,7 @@
                     gameId: 'racing',
                     gameName: 'Lane Racing',
                     score,
-                    coinScore: score * 6,
+                    coinScore: score * 5,
                     statDelta: {
                         happiness: Math.min(24, Math.round(score * 1.7)),
                         energy: -Math.min(14, Math.round(score * 1.2)),

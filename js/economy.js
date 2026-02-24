@@ -18,15 +18,159 @@
             return map[slotId] || String(slotId || 'Slot');
         }
 
-        function hashStringToUint(value) {
+	        function hashStringToUint(value) {
             let hash = 2166136261;
             const str = String(value || '');
             for (let i = 0; i < str.length; i++) {
                 hash ^= str.charCodeAt(i);
                 hash = Math.imul(hash, 16777619);
             }
-            return hash >>> 0;
-        }
+	            return hash >>> 0;
+	        }
+
+	        function getHardeningCfg(path, fallbackValue) {
+	            const root = (typeof ECONOMY_HARDENING_BALANCE !== 'undefined' && ECONOMY_HARDENING_BALANCE) ? ECONOMY_HARDENING_BALANCE : null;
+	            if (!root || !path) return fallbackValue;
+	            const parts = String(path).split('.');
+	            let cur = root;
+	            for (let i = 0; i < parts.length; i++) {
+	                if (!cur || typeof cur !== 'object' || !(parts[i] in cur)) return fallbackValue;
+	                cur = cur[parts[i]];
+	            }
+	            return cur === undefined ? fallbackValue : cur;
+	        }
+
+	        function ensureEconomySecurityState(stateObj) {
+	            const state = stateObj || gameState;
+	            if (!state.security || typeof state.security !== 'object' || Array.isArray(state.security)) state.security = {};
+	            const sec = state.security;
+	            if (typeof sec.suspicious !== 'boolean') sec.suspicious = false;
+	            if (typeof sec.suspiciousReason !== 'string') sec.suspiciousReason = '';
+	            if (!sec.coinGainMinute || typeof sec.coinGainMinute !== 'object') {
+	                sec.coinGainMinute = { windowStart: 0, earned: 0 };
+	            }
+	            if (!sec.coinGainSession || typeof sec.coinGainSession !== 'object') {
+	                sec.coinGainSession = { earned: 0 };
+	            }
+	            if (!Number.isFinite(sec.coinGainMinute.windowStart)) sec.coinGainMinute.windowStart = 0;
+	            if (!Number.isFinite(sec.coinGainMinute.earned)) sec.coinGainMinute.earned = 0;
+	            if (!Number.isFinite(sec.coinGainSession.earned)) sec.coinGainSession.earned = 0;
+	            return sec;
+	        }
+
+	        function isSuspiciousEconomyState(targetState) {
+	            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+	            return !!(ensureEconomySecurityState(state).suspicious);
+	        }
+
+	        function getSuspiciousRewardMultiplier() {
+	            return Math.max(0.02, Math.min(1, Number(getHardeningCfg('tamperPenaltyMultiplier', 0.12)) || 0.12));
+	        }
+
+	        function shouldApplySuspiciousRewardPenalty(reason) {
+	            const text = String(reason || '').toLowerCase();
+	            if (!text) return false;
+	            return text.includes('competition')
+	                || text.includes('auction payout')
+	                || text.includes('harvest')
+	                || text.includes('mini-game')
+	                || text.includes('mystery egg bonus')
+	                || text.includes('loot sold');
+	        }
+
+	        function showEconomyHardeningToast(key, message, color) {
+	            if (typeof showToast !== 'function' || !key || !message) return;
+	            if (!gameState._economyHardeningToastAt || typeof gameState._economyHardeningToastAt !== 'object') {
+	                gameState._economyHardeningToastAt = {};
+	            }
+	            const now = Date.now();
+	            const lastAt = Number(gameState._economyHardeningToastAt[key]) || 0;
+	            if ((now - lastAt) < 45000) return;
+	            gameState._economyHardeningToastAt[key] = now;
+	            showToast(message, color || '#90A4AE');
+	        }
+
+	        function applyCoinGainRateLimits(rawAmount, reason, targetState) {
+	            const state = (targetState && typeof targetState === 'object') ? targetState : gameState;
+	            const sec = ensureEconomySecurityState(state);
+	            const cfg = getHardeningCfg('coinGainRateLimit', {}) || {};
+	            const amount = Math.max(0, Math.floor(Number(rawAmount) || 0));
+	            if (amount <= 0) return { amount: 0, minuteMult: 1, sessionMult: 1, suspiciousMult: 1 };
+	            const now = Date.now();
+	            const minuteSoftCap = Math.max(100, Number(cfg.minuteSoftCap) || 1400);
+	            const minuteFalloff = Math.max(0.0001, Number(cfg.minuteFalloffPerCoin) || 0.01);
+	            const minuteMin = Math.max(0.02, Math.min(1, Number(cfg.minuteMinMultiplier) || 0.08));
+	            const sessionSoftCap = Math.max(500, Number(cfg.sessionSoftCap) || 18000);
+	            const sessionFalloff = Math.max(0.00001, Number(cfg.sessionFalloffPerCoin) || 0.0015);
+	            const sessionMin = Math.max(0.05, Math.min(1, Number(cfg.sessionMinMultiplier) || 0.2));
+	            if (!Number.isFinite(sec.coinGainMinute.windowStart) || (now - sec.coinGainMinute.windowStart) >= 60000 || sec.coinGainMinute.windowStart <= 0) {
+	                sec.coinGainMinute.windowStart = now;
+	                sec.coinGainMinute.earned = 0;
+	            }
+	            const minuteOver = Math.max(0, sec.coinGainMinute.earned - minuteSoftCap);
+	            const sessionOver = Math.max(0, sec.coinGainSession.earned - sessionSoftCap);
+	            const minuteMult = minuteOver > 0 ? Math.max(minuteMin, 1 / (1 + (minuteOver * minuteFalloff))) : 1;
+	            const sessionMult = sessionOver > 0 ? Math.max(sessionMin, 1 / (1 + (sessionOver * sessionFalloff))) : 1;
+	            const suspiciousMult = (isSuspiciousEconomyState(state) && shouldApplySuspiciousRewardPenalty(reason)) ? getSuspiciousRewardMultiplier() : 1;
+	            let finalAmount = Math.max(0, Math.floor(amount * minuteMult * sessionMult * suspiciousMult));
+	            if (amount > 0 && finalAmount <= 0 && (minuteMult < 1 || sessionMult < 1 || suspiciousMult < 1)) finalAmount = 1;
+	            sec.coinGainMinute.earned += finalAmount;
+	            sec.coinGainSession.earned += finalAmount;
+	            if (minuteMult < 0.999 || sessionMult < 0.999) {
+	                showEconomyHardeningToast('rate-limit', 'High coin gain rate detected: rewards are in diminishing mode.', '#90A4AE');
+	            }
+	            if (suspiciousMult < 1) {
+	                showEconomyHardeningToast('suspicious', 'Save integrity warning: some rewards are limited.', '#EF5350');
+	            }
+	            return { amount: finalAmount, minuteMult, sessionMult, suspiciousMult };
+	        }
+
+	        function ensureBalanceTelemetryState() {
+	            if (!gameState._balanceTelemetry || typeof gameState._balanceTelemetry !== 'object') {
+	                gameState._balanceTelemetry = { coinBySource: {}, recentCoinEvents: [] };
+	            }
+	            if (!gameState._balanceTelemetry.coinBySource || typeof gameState._balanceTelemetry.coinBySource !== 'object') {
+	                gameState._balanceTelemetry.coinBySource = {};
+	            }
+	            if (!Array.isArray(gameState._balanceTelemetry.recentCoinEvents)) {
+	                gameState._balanceTelemetry.recentCoinEvents = [];
+	            }
+	            return gameState._balanceTelemetry;
+	        }
+
+	        function recordCoinTelemetry(sourceReason, amount) {
+	            const cfg = (typeof BALANCE_TELEMETRY !== 'undefined' && BALANCE_TELEMETRY) ? BALANCE_TELEMETRY : null;
+	            if (cfg && cfg.enabled === false) return;
+	            const credited = Math.max(0, Math.floor(Number(amount) || 0));
+	            if (credited <= 0) return;
+	            const key = String(sourceReason || 'Unknown');
+	            const telemetry = ensureBalanceTelemetryState();
+	            telemetry.coinBySource[key] = Math.max(0, Math.floor(Number(telemetry.coinBySource[key]) || 0)) + credited;
+	            const now = Date.now();
+	            telemetry.recentCoinEvents.push({ at: now, amount: credited, source: key });
+	            const windowMs = Math.max(60000, Number((cfg && cfg.rollingWindowMs) || (60 * 60 * 1000)));
+	            telemetry.recentCoinEvents = telemetry.recentCoinEvents
+	                .filter((evt) => evt && (now - (Number(evt.at) || 0)) <= windowMs);
+	            const maxEvents = Math.max(50, Math.floor(Number((cfg && cfg.maxRecentEvents) || 500)));
+	            if (telemetry.recentCoinEvents.length > maxEvents) {
+	                telemetry.recentCoinEvents = telemetry.recentCoinEvents.slice(-maxEvents);
+	            }
+	        }
+
+	        function getBalanceTelemetrySnapshot() {
+	            const telemetry = ensureBalanceTelemetryState();
+	            const cfg = (typeof BALANCE_TELEMETRY !== 'undefined' && BALANCE_TELEMETRY) ? BALANCE_TELEMETRY : {};
+	            const windowMs = Math.max(60000, Number(cfg.rollingWindowMs) || (60 * 60 * 1000));
+	            const now = Date.now();
+	            const recent = telemetry.recentCoinEvents.filter((evt) => evt && (now - (Number(evt.at) || 0)) <= windowMs);
+	            const totalRecentCoins = recent.reduce((sum, evt) => sum + Math.max(0, Number(evt.amount) || 0), 0);
+	            return {
+	                windowMs,
+	                coinBySource: Object.assign({}, telemetry.coinBySource),
+	                recentCoinEvents: recent.slice(),
+	                rewardsPerHourEstimate: Math.round((totalRecentCoins * 3600000) / Math.max(1, windowMs))
+	            };
+	        }
 
         function createDefaultAuctionHouseData() {
             return { listings: [], wallets: {} };
@@ -104,9 +248,17 @@
             if (typeof eco.auction.boughtCount !== 'number') eco.auction.boughtCount = 0;
             if (typeof eco.auction.postedCount !== 'number') eco.auction.postedCount = 0;
             if (typeof eco.totalEarned !== 'number') eco.totalEarned = 0;
-            if (typeof eco.totalSpent !== 'number') eco.totalSpent = 0;
-            if (typeof eco.mysteryEggsOpened !== 'number') eco.mysteryEggsOpened = 0;
-            // Rec 2: Ensure persistent playerId exists for auction self-trade prevention
+	            if (typeof eco.totalSpent !== 'number') eco.totalSpent = 0;
+	            if (typeof eco.mysteryEggsOpened !== 'number') eco.mysteryEggsOpened = 0;
+	            if (!eco.wealthPressure || typeof eco.wealthPressure !== 'object' || Array.isArray(eco.wealthPressure)) {
+	                eco.wealthPressure = { lastAppliedDate: '', lastFee: 0, lastBreakdown: null, unpaidFeeDebt: 0 };
+	            }
+	            if (typeof eco.wealthPressure.lastAppliedDate !== 'string') eco.wealthPressure.lastAppliedDate = '';
+	            if (!Number.isFinite(eco.wealthPressure.lastFee)) eco.wealthPressure.lastFee = 0;
+	            if (!Number.isFinite(eco.wealthPressure.unpaidFeeDebt)) eco.wealthPressure.unpaidFeeDebt = 0;
+	            if (eco.wealthPressure.lastBreakdown !== null && typeof eco.wealthPressure.lastBreakdown !== 'object') eco.wealthPressure.lastBreakdown = null;
+	            ensureEconomySecurityState(state);
+	            // Rec 2: Ensure persistent playerId exists for auction self-trade prevention
             if (!eco.playerId || typeof eco.playerId !== 'string') eco.playerId = generatePlayerId();
             if (eco.starterSeedGranted !== true) {
                 eco.inventory.seeds.carrot = (eco.inventory.seeds.carrot || 0) + 4;
@@ -133,17 +285,127 @@
             return Math.max(0, Math.floor(Number(amount) || 0)).toLocaleString();
         }
 
-        function addCoins(amount, reason, silent) {
-            const eco = ensureEconomyState();
-            const add = Math.max(0, Math.floor(Number(amount) || 0));
-            if (add <= 0) return 0;
-            eco.coins += add;
-            eco.totalEarned = (eco.totalEarned || 0) + add;
-            if (!silent && typeof showToast === 'function') {
-                showToast(`🪙 +${add} coins${reason ? ` (${reason})` : ''}`, '#FFD700');
-            }
-            return add;
-        }
+	        function addCoins(amount, reason, silent) {
+	            const eco = ensureEconomyState();
+	            const rawAdd = Math.max(0, Math.floor(Number(amount) || 0));
+	            if (rawAdd <= 0) return 0;
+	            const limited = applyCoinGainRateLimits(rawAdd, reason, gameState);
+	            let add = Math.max(0, Math.floor(Number(limited.amount) || 0));
+	            const repayment = applyWealthPressureDebtRepayment(add, gameState);
+	            add = repayment.credited;
+	            if (add > 0) eco.coins += add;
+	            eco.totalEarned = (eco.totalEarned || 0) + add;
+	            recordCoinTelemetry(reason, add);
+	            if (!silent && typeof showToast === 'function') {
+	                let msg = `🪙 +${add} coins${reason ? ` (${reason})` : ''}`;
+	                if (repayment.repaid > 0) msg += ` • ${repayment.repaid} paid toward storage fee debt`;
+	                showToast(msg, '#FFD700');
+	            } else if (repayment.repaid > 0 && typeof showToast === 'function') {
+	                showToast(`🧾 ${repayment.repaid} coins auto-paid toward storage fee debt.`, '#90A4AE');
+	            }
+	            return add;
+	        }
+
+	        function estimateTradableInventoryValue(targetState) {
+	            const state = targetState || gameState;
+	            if (typeof ensureExplorationState === 'function') ensureExplorationState(state);
+	            ensureEconomyState(state);
+	            const ex = state.exploration || {};
+	            const eco = state.economy || {};
+	            let total = 0;
+	            Object.entries(ex.lootInventory || {}).forEach(([lootId, qty]) => {
+	                const count = Math.max(0, Math.floor(Number(qty) || 0));
+	                if (count <= 0) return;
+	                total += (getLootSellPrice(lootId, { skipSecurityPenalty: true }) || 0) * count;
+	            });
+	            Object.entries((((state.garden || {}).inventory) || {})).forEach(([itemId, qty]) => {
+	                const count = Math.max(0, Math.floor(Number(qty) || 0));
+	                if (count <= 0) return;
+	                const crop = GARDEN_CROPS[itemId];
+	                if (!crop) return;
+	                const base = 3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6);
+	                total += Math.max(1, base) * count;
+	            });
+	            ['crafted', 'accessories', 'decorations'].forEach((bucket) => {
+	                Object.entries((((eco.inventory || {})[bucket]) || {})).forEach(([itemId, qty]) => {
+	                    const count = Math.max(0, Math.floor(Number(qty) || 0));
+	                    if (count <= 0) return;
+	                    const shopBucket = bucket === 'decorations' ? 'decorations' : (bucket === 'accessories' ? 'accessories' : null);
+	                    const shopDef = (shopBucket && ECONOMY_SHOP_ITEMS && ECONOMY_SHOP_ITEMS[shopBucket]) ? ECONOMY_SHOP_ITEMS[shopBucket][itemId] : null;
+	                    const baseValue = shopDef ? Math.max(1, Math.floor(Number(shopDef.basePrice) || 1)) : 10;
+	                    total += Math.max(1, Math.round(baseValue * 0.55)) * count;
+	                });
+	            });
+	            return Math.max(0, Math.floor(total));
+	        }
+
+	        function applyWealthPressureDebtRepayment(earnedCoins, targetState) {
+	            const state = targetState || gameState;
+	            const eco = ensureEconomyState(state);
+	            const debt = Math.max(0, Number((((eco || {}).wealthPressure) || {}).unpaidFeeDebt) || 0);
+	            const credited = Math.max(0, Math.floor(Number(earnedCoins) || 0));
+	            if (debt <= 0 || credited <= 0) return { credited, repaid: 0 };
+	            const repay = Math.min(debt, Math.max(1, Math.floor(credited * 0.25)));
+	            eco.wealthPressure.unpaidFeeDebt = Math.max(0, Math.ceil(debt - repay));
+	            return { credited: Math.max(0, credited - repay), repaid: repay };
+	        }
+
+	        function getWealthPressureDebtPenaltyMultiplier(targetState) {
+	            const state = targetState || gameState;
+	            const eco = ensureEconomyState(state);
+	            const debt = Math.max(0, Number((((eco || {}).wealthPressure) || {}).unpaidFeeDebt) || 0);
+	            if (debt <= 0) return 1;
+	            const per100 = Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureDebtResalePenaltyPer100Coins) || getHardeningCfg('wealthPressure.debtResalePenaltyPer100Coins', 0.03)) || 0.03;
+	            const maxPenalty = Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureDebtResalePenaltyMax) || getHardeningCfg('wealthPressure.debtResalePenaltyMax', 0.35)) || 0.35;
+	            const penalty = Math.min(Math.max(0, maxPenalty), Math.max(0, (debt / 100) * per100));
+	            return Math.max(0.5, 1 - penalty);
+	        }
+
+	        function computeWealthPressureFeeBreakdown(targetState) {
+	            const state = targetState || gameState;
+	            const eco = ensureEconomyState(state);
+	            const hpCfg = getHardeningCfg('wealthPressure', {}) || {};
+	            if (hpCfg.enabled === false) return { enabled: false, fee: 0, debt: 0, weightedWealth: 0, tradableValue: 0 };
+	            const tradableValue = estimateTradableInventoryValue(state);
+	            const protectedWealth = Math.max(0, Math.floor(Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureThreshold) || hpCfg.protectedWealth || 1600)));
+	            const tradableWeight = Math.max(0, Math.min(1, Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureTradableWeight) || hpCfg.tradableValueWeight || 0.35)));
+	            const rate = Math.max(0, Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureRate) || hpCfg.dailyRate || 0.0035));
+	            const minFee = Math.max(0, Math.floor(Number((typeof ECONOMY_BALANCE !== 'undefined' && ECONOMY_BALANCE.wealthPressureMinFee) || hpCfg.minFee || 2)));
+	            const weightedWealth = Math.floor(Math.max(0, eco.coins) + (tradableValue * tradableWeight));
+	            const taxableWealth = Math.max(0, weightedWealth - protectedWealth);
+	            if (taxableWealth <= 0) {
+	                return { enabled: true, fee: 0, debt: Math.max(0, Number((eco.wealthPressure || {}).unpaidFeeDebt) || 0), weightedWealth, tradableValue, tradableWeight, protectedWealth };
+	            }
+	            const fee = Math.max(minFee, Math.floor(taxableWealth * rate));
+	            return { enabled: true, fee, debt: Math.max(0, Number((eco.wealthPressure || {}).unpaidFeeDebt) || 0), weightedWealth, tradableValue, tradableWeight, protectedWealth };
+	        }
+
+	        function applyWealthPressureFee(targetState) {
+	            const state = targetState || gameState;
+	            const eco = ensureEconomyState(state);
+	            const today = typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().slice(0, 10);
+	            if (eco.wealthPressure.lastAppliedDate === today) {
+	                return { applied: false, feePaid: 0, debtAdded: 0, repeated: true, breakdown: eco.wealthPressure.lastBreakdown || null };
+	            }
+	            const breakdown = computeWealthPressureFeeBreakdown(state);
+	            let feePaid = 0;
+	            let debtAdded = 0;
+	            if (breakdown.enabled && breakdown.fee > 0) {
+	                feePaid = Math.min(Math.max(0, eco.coins), breakdown.fee);
+	                eco.coins = Math.max(0, eco.coins - feePaid);
+	                eco.totalSpent = (eco.totalSpent || 0) + feePaid;
+	                debtAdded = Math.max(0, breakdown.fee - feePaid);
+	                if (debtAdded > 0) eco.wealthPressure.unpaidFeeDebt = Math.max(0, Number(eco.wealthPressure.unpaidFeeDebt) || 0) + debtAdded;
+	            }
+	            eco.wealthPressure.lastAppliedDate = today;
+	            eco.wealthPressure.lastFee = feePaid + debtAdded;
+	            eco.wealthPressure.lastBreakdown = Object.assign({}, breakdown, { feePaid, debtAdded, appliedAt: Date.now() });
+	            if ((feePaid + debtAdded) > 0 && typeof showToast === 'function') {
+	                const debtMsg = debtAdded > 0 ? ` ${debtAdded} added as resale-penalty debt.` : '';
+	                showToast(`📦 Storage fee: ${feePaid + debtAdded} coins (coins + stored goods value).${debtMsg}`, '#90A4AE');
+	            }
+	            return { applied: true, feePaid, debtAdded, breakdown: eco.wealthPressure.lastBreakdown };
+	        }
 
         function spendCoins(amount, reason, silent) {
             const eco = ensureEconomyState();
@@ -494,22 +756,56 @@
         }
 
         // Rec 11: Coin decay system — daily tax on hoarded coins above threshold
-        function applyCoinDecay() {
-            const eco = ensureEconomyState();
-            const threshold = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.coinDecayThreshold === 'number')
-                ? ECONOMY_BALANCE.coinDecayThreshold : 1000;
-            const rate = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.coinDecayRate === 'number')
-                ? ECONOMY_BALANCE.coinDecayRate : 0.005;
-            if (eco.coins <= threshold) return 0;
-            const excess = eco.coins - threshold;
-            const tax = Math.max(1, Math.floor(excess * rate));
-            eco.coins -= tax;
-            eco.totalSpent = (eco.totalSpent || 0) + tax;
-            if (typeof showToast === 'function') {
-                showToast(`🏦 Coin maintenance: -${tax} coins (balance over ${threshold})`, '#90A4AE');
-            }
-            return tax;
-        }
+	        function applyCoinDecay() {
+	            const eco = ensureEconomyState();
+	            const threshold = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.coinDecayThreshold === 'number')
+	                ? ECONOMY_BALANCE.coinDecayThreshold : 1000;
+	            const rate = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.coinDecayRate === 'number')
+	                ? ECONOMY_BALANCE.coinDecayRate : 0.005;
+	            const protectedWallet = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayProtectedWallet))
+	                ? Math.max(0, Math.floor(ECONOMY_BALANCE.coinDecayProtectedWallet))
+	                : Math.floor(threshold * 0.45);
+	            const decayFloor = Math.max(threshold, protectedWallet);
+	            if (eco.coins <= decayFloor) {
+	                applyWealthPressureFee();
+	                return 0;
+	            }
+	            const previousChecklist = gameState.dailyChecklist || null;
+	            const progress = previousChecklist && previousChecklist.progress ? previousChecklist.progress : {};
+	            const engagedActions = Math.max(0,
+	                Math.floor(progress.feedCount || 0) +
+	                Math.floor(progress.totalCareActions || 0) +
+	                Math.floor(progress.minigameCount || 0) +
+	                Math.floor(progress.harvestCount || 0) +
+	                Math.floor(progress.expeditionCount || 0)
+	            );
+	            const completedDaily = !!(previousChecklist && Array.isArray(previousChecklist.tasks) && previousChecklist.tasks.length > 0 && previousChecklist.tasks.every((task) => task.done));
+	            let finalRate = rate;
+	            if (completedDaily) {
+	                const dailyReduction = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayDailyCompleteReduction))
+	                    ? ECONOMY_BALANCE.coinDecayDailyCompleteReduction
+	                    : 0.4;
+	                finalRate *= Math.max(0.1, Math.min(1, dailyReduction));
+	            } else if (engagedActions >= 8) {
+	                const engagedReduction = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayEngagedReduction))
+	                    ? ECONOMY_BALANCE.coinDecayEngagedReduction
+	                    : 0.65;
+	                finalRate *= Math.max(0.1, Math.min(1, engagedReduction));
+	            }
+	            const excess = eco.coins - decayFloor;
+	            const minTax = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayMinTax))
+	                ? Math.max(1, Math.floor(ECONOMY_BALANCE.coinDecayMinTax))
+	                : 1;
+	            const tax = Math.max(minTax, Math.floor(excess * finalRate));
+	            eco.coins -= tax;
+	            eco.totalSpent = (eco.totalSpent || 0) + tax;
+	            if (typeof showToast === 'function') {
+	                const engagedText = completedDaily ? 'daily complete bonus applied' : (engagedActions >= 8 ? 'active day reduction applied' : null);
+	                showToast(`🏦 Coin maintenance: -${tax} coins${engagedText ? ` (${engagedText})` : ''}`, '#90A4AE');
+	            }
+	            applyWealthPressureFee();
+	            return tax;
+	        }
 
         // Rec 10: Check if a shop item is available in the current season
         function isShopItemAvailable(itemId) {
@@ -529,39 +825,110 @@
             return 10;
         }
 
-        function getLootSellPrice(lootId) {
-            const base = getLootSellBasePrice(lootId);
-            if (!base) return 0;
-            const sellMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.sellPriceMultiplier === 'number')
-                ? ECONOMY_BALANCE.sellPriceMultiplier
-                : 0.8;
-            // Recommendation #7: Mastery biome rank loot sell bonus (+5% for biome rank 3+)
-            // Determine which biome this loot is associated with
-            let biomeSellBonus = 0;
+	        function getLootSellPrice(lootIdOrStack, options) {
+	            let lootId = lootIdOrStack;
+	            let opts = options && typeof options === 'object' ? Object.assign({}, options) : null;
+	            if (lootIdOrStack && typeof lootIdOrStack === 'object') {
+	                if (lootIdOrStack.id) lootId = lootIdOrStack.id;
+	                else if (lootIdOrStack.lootId) lootId = lootIdOrStack.lootId;
+	                if (!opts) opts = {};
+	                if (lootIdOrStack.meta && typeof lootIdOrStack.meta === 'object') {
+	                    opts = Object.assign({}, lootIdOrStack.meta, opts);
+	                }
+	            }
+	            const base = getLootSellBasePrice(lootId);
+	            if (!base) return 0;
+	            const sellMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.sellPriceMultiplier === 'number')
+	                ? ECONOMY_BALANCE.sellPriceMultiplier
+	                : 0.8;
+	            const expeditionSellMult = (opts && opts.source === 'expedition')
+	                ? ((typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.expeditionSellPriceMultiplier === 'number')
+	                    ? ECONOMY_BALANCE.expeditionSellPriceMultiplier
+	                    : 0.78)
+	                : 1;
+	            // Recommendation #7: Mastery biome rank loot sell bonus (+5% for biome rank 3+)
+	            // Determine which biome this loot is associated with
+	            let biomeSellBonus = 0;
             if (typeof getMasteryLootSellBonus === 'function' && typeof BIOME_LOOT_POOLS !== 'undefined') {
                 for (const [biomeId, pool] of Object.entries(BIOME_LOOT_POOLS)) {
                     if (Array.isArray(pool) && pool.includes(lootId)) {
                         biomeSellBonus = Math.max(biomeSellBonus, getMasteryLootSellBonus(biomeId));
-                    }
-                }
-            }
-            return Math.max(1, Math.round(getDynamicEconomyPrice(base, 'loot', `loot:${lootId}`) * sellMult * (1 + biomeSellBonus)));
-        }
+	                    }
+	                }
+	            }
+	            const wealthDebtPenaltyMult = getWealthPressureDebtPenaltyMultiplier();
+	            const suspiciousPenaltyMult = (isSuspiciousEconomyState() && !(opts && opts.skipSecurityPenalty))
+	                ? getSuspiciousRewardMultiplier()
+	                : 1;
+	            return Math.max(1, Math.round(
+	                getDynamicEconomyPrice(base, 'loot', `loot:${lootId}`)
+	                * sellMult
+	                * expeditionSellMult
+	                * (1 + biomeSellBonus)
+	                * wealthDebtPenaltyMult
+	                * suspiciousPenaltyMult
+	            ));
+	        }
 
-        function sellExplorationLoot(lootId, count) {
-            const ex = ensureExplorationState();
-            const current = Math.max(0, Math.floor((ex.lootInventory && ex.lootInventory[lootId]) || 0));
-            const qty = Math.max(1, Math.floor(Number(count) || 1));
-            if (current < qty) return { ok: false, reason: 'not-enough-loot' };
-            const priceEach = getLootSellPrice(lootId);
-            if (priceEach <= 0) return { ok: false, reason: 'invalid-loot' };
-            ex.lootInventory[lootId] = current - qty;
-            if (ex.lootInventory[lootId] <= 0) delete ex.lootInventory[lootId];
-            const total = priceEach * qty;
-            addCoins(total, 'Loot Sold', true);
-            saveGame();
-            return { ok: true, loot: EXPLORATION_LOOT[lootId], quantity: qty, total, priceEach };
-        }
+	        function sellExplorationLoot(lootId, count) {
+	            const ex = ensureExplorationState();
+	            if (typeof ensureLootInventoryStacks === 'function') ensureLootInventoryStacks(ex);
+	            const current = Math.max(0, Math.floor((ex.lootInventory && ex.lootInventory[lootId]) || 0));
+	            const qty = Math.max(1, Math.floor(Number(count) || 1));
+	            if (current < qty) return { ok: false, reason: 'not-enough-loot' };
+	            const stacks = Array.isArray(ex.lootInventoryStacks && ex.lootInventoryStacks[lootId]) ? ex.lootInventoryStacks[lootId] : [];
+	            let remaining = qty;
+	            let grossTotal = 0;
+	            let weightedPriceSum = 0;
+	            const soldBreakdown = [];
+	            if (stacks.length > 0) {
+	                while (remaining > 0 && stacks.length > 0) {
+	                    const stack = stacks[0];
+	                    const stackQty = Math.max(0, Math.floor(Number((stack || {}).qty) || 0));
+	                    if (stackQty <= 0) {
+	                        stacks.shift();
+	                        continue;
+	                    }
+	                    const take = Math.min(remaining, stackQty);
+	                    const priceEach = getLootSellPrice({ id: lootId, meta: (stack && stack.meta) || {} });
+	                    if (priceEach <= 0) return { ok: false, reason: 'invalid-loot' };
+	                    grossTotal += priceEach * take;
+	                    weightedPriceSum += priceEach * take;
+	                    soldBreakdown.push({ qty: take, priceEach, source: ((((stack || {}).meta) || {}).source || 'generic') });
+	                    stack.qty = stackQty - take;
+	                    if (stack.qty <= 0) stacks.shift();
+	                    remaining -= take;
+	                }
+	                if (remaining > 0) {
+	                    if (typeof ensureLootInventoryStacks === 'function') ensureLootInventoryStacks(ex);
+	                    return { ok: false, reason: 'loot-stack-sync-error' };
+	                }
+	            } else {
+	                const priceEach = getLootSellPrice(lootId);
+	                if (priceEach <= 0) return { ok: false, reason: 'invalid-loot' };
+	                grossTotal = priceEach * qty;
+	                weightedPriceSum = priceEach * qty;
+	            }
+	            ex.lootInventory[lootId] = current - qty;
+	            if (ex.lootInventory[lootId] <= 0) {
+	                delete ex.lootInventory[lootId];
+	                if (ex.lootInventoryStacks) delete ex.lootInventoryStacks[lootId];
+	            }
+	            const credited = addCoins(grossTotal, 'Loot Sold', true);
+	            if (credited < grossTotal && typeof showToast === 'function') {
+	                showToast('Loot sale payout was reduced by economy safeguards.', '#90A4AE');
+	            }
+	            saveGame();
+	            return {
+	                ok: true,
+	                loot: EXPLORATION_LOOT[lootId],
+	                quantity: qty,
+	                total: credited,
+	                grossTotal,
+	                priceEach: qty > 0 ? Math.round(weightedPriceSum / qty) : 0,
+	                breakdown: soldBreakdown
+	            };
+	        }
 
         function getOwnedEconomySnapshot() {
             ensureEconomyState();
@@ -854,7 +1221,36 @@
             };
         }
 
-        function awardMiniGameCoins(gameId, scoreValue) {
+	        function resetMinigameRewardSession(reason) {
+	            gameState._sessionMinigameCount = 0;
+	            gameState._minigameRewardSession = {
+	                startedAt: Date.now(),
+	                lastActivityAt: Date.now(),
+	                resetReason: reason || 'manual'
+	            };
+	            return gameState._minigameRewardSession;
+	        }
+
+	        function ensureMinigameRewardSession() {
+	            const now = Date.now();
+	            const idleResetMs = 8 * 60 * 1000;
+	            const maxSessionMs = 30 * 60 * 1000;
+	            if (!gameState._minigameRewardSession || typeof gameState._minigameRewardSession !== 'object') {
+	                resetMinigameRewardSession('init');
+	            }
+	            const session = gameState._minigameRewardSession;
+	            const lastActivityAt = Number(session.lastActivityAt) || 0;
+	            const startedAt = Number(session.startedAt) || now;
+	            if ((lastActivityAt > 0 && (now - lastActivityAt) > idleResetMs) || (now - startedAt) > maxSessionMs) {
+	                resetMinigameRewardSession((now - lastActivityAt) > idleResetMs ? 'idle-timeout' : 'session-max');
+	            }
+	            gameState._minigameRewardSession.lastActivityAt = now;
+	            if (!Number.isFinite(gameState._minigameRewardSession.startedAt)) gameState._minigameRewardSession.startedAt = now;
+	            if (typeof gameState._sessionMinigameCount !== 'number') gameState._sessionMinigameCount = 0;
+	            return gameState._minigameRewardSession;
+	        }
+
+	        function awardMiniGameCoins(gameId, scoreValue) {
             const score = Math.max(0, Number(scoreValue) || 0);
             if (score <= 0) return 0;
             const gameBonus = {
@@ -875,9 +1271,22 @@
                 coop: 1.08
             };
             const multiplier = gameBonus[gameId] || 1;
-            const difficulty = typeof getMinigameDifficulty === 'function' ? getMinigameDifficulty(gameId) : 1;
-            const difficultyRewardMult = Math.max(0.92, Math.min(1.52, 0.96 + ((difficulty - 1) * 0.52)));
-            const payout = Math.max(3, Math.round((6 + Math.pow(score, 0.52) * 4.3) * multiplier * difficultyRewardMult));
+	            const difficulty = typeof getMinigameDifficulty === 'function' ? getMinigameDifficulty(gameId) : 1;
+	            const rewardDifficulty = gameId === 'fetch' ? 1 : difficulty;
+	            const difficultyRewardMult = Math.max(0.92, Math.min(1.52, 0.96 + ((rewardDifficulty - 1) * 0.52)));
+	            const payout = (typeof EconomyCalculations !== 'undefined' && EconomyCalculations && typeof EconomyCalculations.computeMinigameCoinPayout === 'function')
+	                ? EconomyCalculations.computeMinigameCoinPayout({
+	                    gameId,
+	                    score,
+	                    difficulty: rewardDifficulty,
+	                    economyMultiplier: 1,
+	                    petStrength: 0.5,
+	                    sessionCount: 1,
+	                    cap: Number.POSITIVE_INFINITY,
+	                    // Keep helper aligned with live base payout (pre eco/pet/session/streak caps).
+	                    mode: 'baseOnly'
+	                })
+	                : Math.max(3, Math.round((6 + Math.pow(score, 0.52) * 4.3) * multiplier * difficultyRewardMult));
             const ecoMult = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.minigameRewardMultiplier === 'number')
                 ? ECONOMY_BALANCE.minigameRewardMultiplier
                 : 1;
@@ -885,11 +1294,10 @@
             const petStrength = getPetMiniGameStrength(gameState.pet);
             const petStatRewardMult = Math.max(0.96, Math.min(1.04, 1 + ((petStrength - 0.5) * 0.08)));
 
-            // Escalating mini-game session multiplier
-            // 1st game = 1.0x, 2nd = 1.05x, 3rd = 1.1x, cap at 1.15x. Resets on session end.
-            if (typeof gameState._sessionMinigameCount !== 'number') gameState._sessionMinigameCount = 0;
-            gameState._sessionMinigameCount++;
-            const sessionMult = Math.min(1.15, 1 + (Math.max(0, gameState._sessionMinigameCount - 1) * 0.05));
+	            // Escalating mini-game session multiplier (resets on explicit session boundaries / idle timeout).
+	            ensureMinigameRewardSession();
+	            gameState._sessionMinigameCount++;
+	            const sessionMult = Math.min(1.15, 1 + (Math.max(0, gameState._sessionMinigameCount - 1) * 0.05));
             const today = typeof getTodayString === 'function' ? getTodayString() : '';
             if (!gameState._dailyMinigameEarnings || gameState._dailyMinigameEarningsDay !== today) {
                 gameState._dailyMinigameEarnings = 0;
@@ -914,7 +1322,21 @@
             const capBase = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.perRunCapBase) || 94);
             const capStage = Number((MINIGAME_BALANCE && MINIGAME_BALANCE.perRunCapByStage && MINIGAME_BALANCE.perRunCapByStage[stage]) || capBase);
             const cap = Math.max(3, Math.floor(capStage));
-            const rawTuned = Math.max(3, Math.round(payout * ecoMult * petStatRewardMult * sessionMult * streakMult * (1 + highSkillBonus) * prestigeRunMult));
+	            const rawTuned = (typeof EconomyCalculations !== 'undefined' && EconomyCalculations && typeof EconomyCalculations.computeMinigameCoinPayout === 'function')
+	                ? EconomyCalculations.computeMinigameCoinPayout({
+	                    gameId,
+	                    score,
+	                    difficulty: rewardDifficulty,
+	                    economyMultiplier: ecoMult,
+	                    petStrength,
+	                    sessionCount: Math.max(1, Number(gameState._sessionMinigameCount) || 1),
+	                    streakMult,
+	                    highSkillBonus,
+	                    prestigeMultiplier: prestigeRunMult,
+	                    cap: Number.POSITIVE_INFINITY,
+	                    diminishingMultiplier: 1
+	                })
+	                : Math.max(3, Math.round(payout * ecoMult * petStatRewardMult * sessionMult * streakMult * (1 + highSkillBonus) * prestigeRunMult));
             let tuned = Math.max(3, Math.min(cap, rawTuned));
             const perRunCapHit = tuned < rawTuned;
 
@@ -968,10 +1390,11 @@
             }
 
             if (typeof balanceDebugLog === 'function') {
-                balanceDebugLog('MinigameReward', {
+	                balanceDebugLog('MinigameReward', {
                     gameId,
                     score,
-                    difficulty,
+	                    difficulty,
+	                    rewardDifficulty,
                     payoutBase: payout,
                     tuned,
                     rawTuned,
@@ -996,11 +1419,11 @@
                         earnedAfter: gameState._dailyMinigameEarnings
                     });
                 }
-            }
+	            }
 
-            addCoins(tuned, 'Mini-game', true);
-            return tuned;
-        }
+	            addCoins(tuned, 'Mini-game', true);
+	            return tuned;
+	        }
 
         function awardHarvestCoins(cropId) {
             const crop = GARDEN_CROPS[cropId];

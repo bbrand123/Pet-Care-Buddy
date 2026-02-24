@@ -80,7 +80,7 @@
             const garden = gameState.garden;
             if (plotIndex >= MAX_GARDEN_PLOTS) return;
             // Prevent planting in locked plots
-            const unlockedPlots = getUnlockedPlotCount(garden.totalHarvests || 0);
+	            const unlockedPlots = getUnlockedPlotCount(garden.totalHarvests || 0, garden.expansionTier || 0);
             if (plotIndex >= unlockedPlots) return;
 
             // Extend plots array if needed
@@ -150,15 +150,19 @@
 
             const crop = GARDEN_CROPS[plot.cropId];
             if (!crop) return; // Guard against corrupted save data
-            if (!garden.inventory[plot.cropId]) {
-                garden.inventory[plot.cropId] = 0;
-            }
-            garden.inventory[plot.cropId]++;
-            const coinReward = awardHarvestCoins(plot.cropId);
+	            const harvestYield = Math.max(1, Math.floor(Number(crop.harvestYield) || 1));
+	            if (!garden.inventory[plot.cropId]) {
+	                garden.inventory[plot.cropId] = 0;
+	            }
+	            garden.inventory[plot.cropId] += harvestYield;
+	            let coinReward = 0;
+	            for (let i = 0; i < harvestYield; i++) {
+	                coinReward += awardHarvestCoins(plot.cropId);
+	            }
 
             // Track total harvests for progressive plot unlocking
-            if (typeof garden.totalHarvests !== 'number') garden.totalHarvests = 0;
-            garden.totalHarvests++;
+	            if (typeof garden.totalHarvests !== 'number') garden.totalHarvests = 0;
+	            garden.totalHarvests += harvestYield;
             if (typeof trackHarvest === 'function') trackHarvest();
             if (garden.totalHarvests === 1) {
                 addJournalEntry('🌱', `Harvested first ${crop.name}!`);
@@ -200,8 +204,8 @@
             }
 
             // Check if a new plot was unlocked
-            const prevUnlocked = getUnlockedPlotCount(garden.totalHarvests - 1);
-            const newUnlocked = getUnlockedPlotCount(garden.totalHarvests);
+	            const prevUnlocked = getUnlockedPlotCount(garden.totalHarvests - harvestYield, garden.expansionTier || 0);
+	            const newUnlocked = getUnlockedPlotCount(garden.totalHarvests, garden.expansionTier || 0);
             if (newUnlocked > prevUnlocked) {
                 showToast(`${crop.seedEmoji} Harvested a ${crop.name}! +${coinReward} coins. New garden plot unlocked!`, '#FF8C42');
             } else {
@@ -446,13 +450,48 @@
             return true;
         }
 
-        function openSeedPicker(plotIndex) {
+	        function openSeedPicker(plotIndex) {
             const existing = document.querySelector('.seed-picker-overlay');
             if (existing) {
                 // Pop stale escape handler before removing the old overlay
                 if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
                 existing.remove();
-            }
+	        }
+
+	        function getGardenExpansionStatus() {
+	            const garden = gameState.garden || {};
+	            const expansionTier = Math.max(0, Math.floor(Number(garden.expansionTier) || 0));
+	            const nextTier = (Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS[expansionTier] : null) || null;
+	            const capacity = getGardenPlotCapacity(expansionTier);
+	            const unlockedPlots = getUnlockedPlotCount(garden.totalHarvests || 0, expansionTier);
+	            return { expansionTier, nextTier, capacity, unlockedPlots };
+	        }
+
+	        function unlockNextGardenExpansionTier() {
+	            const garden = gameState.garden;
+	            if (!garden) return { ok: false, reason: 'no-garden' };
+	            const tierIndex = Math.max(0, Math.floor(Number(garden.expansionTier) || 0));
+	            if (tierIndex >= GARDEN_EXPANSION_TIERS.length) {
+	                showToast('🏡 Garden is fully expanded!', '#66BB6A');
+	                return { ok: false, reason: 'max-tier' };
+	            }
+	            const tier = GARDEN_EXPANSION_TIERS[tierIndex];
+	            const totalHarvests = Math.max(0, Math.floor(Number(garden.totalHarvests) || 0));
+	            if (totalHarvests < Math.max(0, Math.floor(Number(tier.requiredHarvests) || 0))) {
+	                showToast(`🌾 Need ${tier.requiredHarvests} total harvests for ${tier.name}.`, '#FFA726');
+	                return { ok: false, reason: 'harvest-gated', neededHarvests: tier.requiredHarvests, totalHarvests };
+	            }
+	            const spend = spendCoins(Math.max(0, Math.floor(Number(tier.costCoins) || 0)), 'Garden Expansion', true);
+	            if (!spend.ok) {
+	                showToast(`🪙 Need ${tier.costCoins} coins for ${tier.name}.`, '#FFA726');
+	                return { ok: false, reason: spend.reason, needed: tier.costCoins, balance: spend.balance };
+	            }
+	            garden.expansionTier = tierIndex + 1;
+	            showToast(`🏡 Expanded garden: ${tier.name} unlocked (+${tier.additionalPlots} plots)!`, '#66BB6A');
+	            saveGame();
+	            if (gameState.currentRoom === 'garden') renderGardenUI();
+	            return { ok: true, tier, expansionTier: garden.expansionTier };
+	        }
 
             const season = gameState.season || getCurrentSeason();
             const overlay = document.createElement('div');
@@ -596,7 +635,7 @@
 
             // Render plots
             let plotsHTML = '';
-            const unlockedPlots = getUnlockedPlotCount(garden.totalHarvests || 0);
+	            const unlockedPlots = getUnlockedPlotCount(garden.totalHarvests || 0, garden.expansionTier || 0);
             for (let i = 0; i < MAX_GARDEN_PLOTS; i++) {
                 const plot = garden.plots[i] || null;
                 const isLocked = i >= unlockedPlots;
@@ -682,12 +721,27 @@
                 `;
             }
 
-            gardenSection.innerHTML = `
-                <div class="garden-title"><span aria-hidden="true">🌱 ${seasonData ? seasonData.icon : ''}</span> My Garden</div>
-                <div class="garden-subtitle" style="font-size:0.82rem;color:#6d4c41;margin-bottom:8px;">Seed stock: ${Object.entries((gameState.economy && gameState.economy.inventory && gameState.economy.inventory.seeds) || {}).filter(([, c]) => c > 0).map(([cropId, count]) => `${(GARDEN_CROPS[cropId] ? GARDEN_CROPS[cropId].seedEmoji : '🌱')}x${count}`).join(' · ') || 'None'}</div>
-                <div class="garden-plots">${plotsHTML}</div>
-                ${inventoryHTML}
-            `;
+	            const expansionStatus = getGardenExpansionStatus();
+	            const nextExpansion = expansionStatus.nextTier;
+	            const harvests = Math.max(0, Math.floor(Number(garden.totalHarvests) || 0));
+	            const expansionLine = nextExpansion
+	                ? `${nextExpansion.name}: +${nextExpansion.additionalPlots} plots • ${nextExpansion.costCoins} coins • needs ${nextExpansion.requiredHarvests} harvests`
+	                : 'All garden expansions unlocked';
+	            const canBuyExpansion = !!nextExpansion
+	                && harvests >= Math.max(0, Number(nextExpansion.requiredHarvests) || 0)
+	                && (typeof getCoinBalance !== 'function' || getCoinBalance() >= Math.max(0, Number(nextExpansion.costCoins) || 0));
+	            gardenSection.innerHTML = `
+	                <div class="garden-title"><span aria-hidden="true">🌱 ${seasonData ? seasonData.icon : ''}</span> My Garden</div>
+	                <div class="garden-subtitle" style="font-size:0.82rem;color:#6d4c41;margin-bottom:8px;">Seed stock: ${Object.entries((gameState.economy && gameState.economy.inventory && gameState.economy.inventory.seeds) || {}).filter(([, c]) => c > 0).map(([cropId, count]) => `${(GARDEN_CROPS[cropId] ? GARDEN_CROPS[cropId].seedEmoji : '🌱')}x${count}`).join(' · ') || 'None'}</div>
+	                <div class="garden-inventory" style="margin-bottom:8px;">
+	                    <strong><span aria-hidden="true">🏡</span> Garden Expansion:</strong>
+	                    <div class="garden-plot-status">Tier ${expansionStatus.expansionTier}/${GARDEN_EXPANSION_TIERS.length} • Capacity ${expansionStatus.capacity}/${MAX_GARDEN_PLOTS} • Unlocked ${expansionStatus.unlockedPlots}</div>
+	                    <div class="garden-plot-status">${escapeHTML(expansionLine)}</div>
+	                    ${nextExpansion ? `<div class="garden-inventory-items"><button class="garden-inventory-item" id="garden-expand-btn" ${canBuyExpansion ? '' : 'disabled'} aria-label="Unlock ${escapeHTML(nextExpansion.name)}">Unlock ${escapeHTML(nextExpansion.name)}</button></div>` : ''}
+	                </div>
+	                <div class="garden-plots">${plotsHTML}</div>
+	                ${inventoryHTML}
+	            `;
 
             // Add event listeners to empty plots (role="button" divs)
             gardenSection.querySelectorAll('.garden-plot.empty').forEach(plotEl => {
@@ -731,14 +785,20 @@
                 });
             });
 
-            // Add event listeners to inventory items (feed pet)
-            gardenSection.querySelectorAll('[data-feed-crop]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const cropId = btn.getAttribute('data-feed-crop');
-                    feedFromGarden(cropId);
-                });
-            });
-        }
+	            // Add event listeners to inventory items (feed pet)
+	            gardenSection.querySelectorAll('[data-feed-crop]').forEach(btn => {
+	                btn.addEventListener('click', () => {
+	                    const cropId = btn.getAttribute('data-feed-crop');
+	                    feedFromGarden(cropId);
+	                });
+	            });
+	            const expandBtn = gardenSection.querySelector('#garden-expand-btn');
+	            if (expandBtn) {
+	                expandBtn.addEventListener('click', () => {
+	                    unlockNextGardenExpansionTier();
+	                });
+	            }
+	        }
 
         // ==================== SEASONAL ACTIVITY ====================
 

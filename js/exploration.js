@@ -15,15 +15,24 @@
             skyZone: false
         };
 
-        function createDefaultExplorationState() {
-            return {
-                biomeUnlocks: Object.assign({}, EXPLORATION_DEFAULT_UNLOCKS),
-                discoveredBiomes: { forest: true },
-                lootInventory: {},
-                expedition: null,
-                expeditionHistory: [],
-                roomTreasureCooldowns: {},
-                npcEncounters: [],
+	        function createDefaultExplorationState() {
+	            return {
+	                biomeUnlocks: Object.assign({}, EXPLORATION_DEFAULT_UNLOCKS),
+	                discoveredBiomes: { forest: true },
+	                lootInventory: {},
+	                lootInventoryStacks: {},
+	                expedition: null,
+	                expeditionHistory: [],
+	                roomTreasureCooldowns: {},
+	                treasureHunt: {
+	                    globalCooldownEndsAt: 0,
+	                    lastRunAt: 0,
+	                    lastRoomId: null,
+	                    recentRuns: [],
+	                    roomSwitchCount: 0,
+	                    repeatCount: 0
+	                },
+	                npcEncounters: [],
                 dungeon: {
                     active: false,
                     seed: 0,
@@ -53,12 +62,22 @@
             Object.keys(EXPLORATION_DEFAULT_UNLOCKS).forEach((id) => {
                 if (typeof ex.biomeUnlocks[id] !== 'boolean') ex.biomeUnlocks[id] = EXPLORATION_DEFAULT_UNLOCKS[id];
             });
-            if (!ex.discoveredBiomes || typeof ex.discoveredBiomes !== 'object') ex.discoveredBiomes = { forest: true };
-            if (typeof ex.discoveredBiomes.forest !== 'boolean') ex.discoveredBiomes.forest = true;
-            if (!ex.lootInventory || typeof ex.lootInventory !== 'object') ex.lootInventory = {};
-            if (!Array.isArray(ex.expeditionHistory)) ex.expeditionHistory = [];
-            if (!ex.roomTreasureCooldowns || typeof ex.roomTreasureCooldowns !== 'object') ex.roomTreasureCooldowns = {};
-            if (!Array.isArray(ex.npcEncounters)) ex.npcEncounters = [];
+	            if (!ex.discoveredBiomes || typeof ex.discoveredBiomes !== 'object') ex.discoveredBiomes = { forest: true };
+	            if (typeof ex.discoveredBiomes.forest !== 'boolean') ex.discoveredBiomes.forest = true;
+	            if (!ex.lootInventory || typeof ex.lootInventory !== 'object') ex.lootInventory = {};
+	            if (!ex.lootInventoryStacks || typeof ex.lootInventoryStacks !== 'object' || Array.isArray(ex.lootInventoryStacks)) ex.lootInventoryStacks = {};
+	            if (!Array.isArray(ex.expeditionHistory)) ex.expeditionHistory = [];
+	            if (!ex.roomTreasureCooldowns || typeof ex.roomTreasureCooldowns !== 'object') ex.roomTreasureCooldowns = {};
+	            if (!ex.treasureHunt || typeof ex.treasureHunt !== 'object') {
+	                ex.treasureHunt = { globalCooldownEndsAt: 0, lastRunAt: 0, lastRoomId: null, recentRuns: [], roomSwitchCount: 0, repeatCount: 0 };
+	            }
+	            if (typeof ex.treasureHunt.globalCooldownEndsAt !== 'number') ex.treasureHunt.globalCooldownEndsAt = 0;
+	            if (typeof ex.treasureHunt.lastRunAt !== 'number') ex.treasureHunt.lastRunAt = 0;
+	            if (typeof ex.treasureHunt.lastRoomId !== 'string' && ex.treasureHunt.lastRoomId !== null) ex.treasureHunt.lastRoomId = null;
+	            if (!Array.isArray(ex.treasureHunt.recentRuns)) ex.treasureHunt.recentRuns = [];
+	            if (typeof ex.treasureHunt.roomSwitchCount !== 'number') ex.treasureHunt.roomSwitchCount = 0;
+	            if (typeof ex.treasureHunt.repeatCount !== 'number') ex.treasureHunt.repeatCount = 0;
+	            if (!Array.isArray(ex.npcEncounters)) ex.npcEncounters = [];
             if (!ex.dungeon || typeof ex.dungeon !== 'object') {
                 ex.dungeon = { active: false, seed: 0, rooms: [], currentIndex: 0, log: [], rewards: [], startedAt: 0 };
             }
@@ -77,15 +96,73 @@
                 if (typeof ex.stats[k] !== 'number') ex.stats[k] = 0;
             });
 
-            if (ex.expedition && typeof ex.expedition === 'object') {
+	            if (ex.expedition && typeof ex.expedition === 'object') {
                 if (typeof ex.expedition.startedAt !== 'number') ex.expedition.startedAt = Date.now();
                 if (typeof ex.expedition.endAt !== 'number') ex.expedition.endAt = ex.expedition.startedAt;
                 if (typeof ex.expedition.lootMultiplier !== 'number') ex.expedition.lootMultiplier = 1;
                 if (!ex.expedition.durationId) ex.expedition.durationId = 'scout';
-            }
+	            }
 
-            return ex;
-        }
+	            ensureLootInventoryStacks(ex);
+
+	            return ex;
+	        }
+
+	        function normalizeLootStackMeta(meta) {
+	            const input = (meta && typeof meta === 'object') ? meta : {};
+	            return {
+	                source: typeof input.source === 'string' ? input.source : 'generic',
+	                createdAt: Number.isFinite(input.createdAt) ? Math.floor(input.createdAt) : Date.now(),
+	                biomeId: typeof input.biomeId === 'string' ? input.biomeId : null
+	            };
+	        }
+
+	        function ensureLootInventoryStacks(explorationState) {
+	            const ex = explorationState || ensureExplorationState();
+	            if (!ex || typeof ex !== 'object') return;
+	            if (!ex.lootInventory || typeof ex.lootInventory !== 'object') ex.lootInventory = {};
+	            if (!ex.lootInventoryStacks || typeof ex.lootInventoryStacks !== 'object' || Array.isArray(ex.lootInventoryStacks)) ex.lootInventoryStacks = {};
+
+	            Object.keys(ex.lootInventory).forEach((lootId) => {
+	                const totalQty = Math.max(0, Math.floor(Number(ex.lootInventory[lootId]) || 0));
+	                if (totalQty <= 0) {
+	                    delete ex.lootInventory[lootId];
+	                    delete ex.lootInventoryStacks[lootId];
+	                    return;
+	                }
+	                const rawStacks = Array.isArray(ex.lootInventoryStacks[lootId]) ? ex.lootInventoryStacks[lootId] : [];
+	                const cleanStacks = [];
+	                let runningQty = 0;
+	                rawStacks.forEach((stack) => {
+	                    if (!stack || typeof stack !== 'object') return;
+	                    const qty = Math.max(0, Math.floor(Number(stack.qty) || 0));
+	                    if (qty <= 0) return;
+	                    const nextQty = Math.min(qty, Math.max(0, totalQty - runningQty));
+	                    if (nextQty <= 0) return;
+	                    cleanStacks.push({ qty: nextQty, meta: normalizeLootStackMeta(stack.meta) });
+	                    runningQty += nextQty;
+	                });
+	                if (runningQty < totalQty) {
+	                    cleanStacks.push({ qty: totalQty - runningQty, meta: normalizeLootStackMeta({ source: 'generic' }) });
+	                    runningQty = totalQty;
+	                }
+	                if (runningQty > totalQty) {
+	                    let overflow = runningQty - totalQty;
+	                    while (overflow > 0 && cleanStacks.length > 0) {
+	                        const last = cleanStacks[cleanStacks.length - 1];
+	                        const take = Math.min(overflow, last.qty);
+	                        last.qty -= take;
+	                        overflow -= take;
+	                        if (last.qty <= 0) cleanStacks.pop();
+	                    }
+	                }
+	                ex.lootInventoryStacks[lootId] = cleanStacks;
+	            });
+
+	            Object.keys(ex.lootInventoryStacks).forEach((lootId) => {
+	                if (!ex.lootInventory[lootId] || ex.lootInventory[lootId] <= 0) delete ex.lootInventoryStacks[lootId];
+	            });
+	        }
 
         function getExplorationStageKey(pet) {
             const stage = pet && pet.growthStage;
@@ -187,45 +264,65 @@
             return BIOME_LOOT_POOLS[biomeId] || BIOME_LOOT_POOLS.forest || ['ancientCoin'];
         }
 
-        function addLootToInventory(lootId, count) {
-            const ex = ensureExplorationState();
-            if (!EXPLORATION_LOOT[lootId]) return;
-            const safeCount = Math.max(1, Math.floor(Number(count) || 1));
-            ex.lootInventory[lootId] = (ex.lootInventory[lootId] || 0) + safeCount;
-        }
+	        function addLootToInventory(lootId, count, meta) {
+	            const ex = ensureExplorationState();
+	            if (!EXPLORATION_LOOT[lootId]) return;
+	            const safeCount = Math.max(1, Math.floor(Number(count) || 1));
+	            ex.lootInventory[lootId] = (ex.lootInventory[lootId] || 0) + safeCount;
+	            ensureLootInventoryStacks(ex);
+	            const normalizedMeta = normalizeLootStackMeta(meta);
+	            if (!Array.isArray(ex.lootInventoryStacks[lootId])) ex.lootInventoryStacks[lootId] = [];
+	            const stacks = ex.lootInventoryStacks[lootId];
+	            const last = stacks.length > 0 ? stacks[stacks.length - 1] : null;
+	            if (last && last.meta && last.meta.source === normalizedMeta.source && last.meta.biomeId === normalizedMeta.biomeId) {
+	                last.qty = Math.max(0, Math.floor(Number(last.qty) || 0)) + safeCount;
+	                if (!Number.isFinite(last.meta.createdAt)) last.meta.createdAt = normalizedMeta.createdAt;
+	            } else {
+	                stacks.push({ qty: safeCount, meta: normalizedMeta });
+	            }
+	        }
 
-        function getLootDropWeight(lootId) {
-            const loot = EXPLORATION_LOOT[lootId];
-            const rarity = loot && loot.rarity ? loot.rarity : 'common';
-            if (rarity === 'rare') return 0.3;
-            if (rarity === 'uncommon') return 0.65;
-            return 1;
-        }
+	        function getLootDropWeight(lootId, options) {
+	            const loot = EXPLORATION_LOOT[lootId];
+	            const rarity = loot && loot.rarity ? loot.rarity : 'common';
+	            let weight = 1;
+	            if (rarity === 'rare') weight = 0.3;
+	            else if (rarity === 'uncommon') weight = 0.65;
+	            const ctx = options && typeof options === 'object' ? options : null;
+	            if (ctx && ctx.source === 'expedition' && rarity !== 'common') {
+	                const biomeId = ctx.biomeId || 'forest';
+	                const biomeMult = (typeof EXPEDITION_BALANCE !== 'undefined' && EXPEDITION_BALANCE && EXPEDITION_BALANCE.biomeRarityWeightMultiplier)
+	                    ? (Number(EXPEDITION_BALANCE.biomeRarityWeightMultiplier[biomeId]) || 1)
+	                    : 1;
+	                weight *= Math.max(0.65, Math.min(1.2, biomeMult));
+	            }
+	            return Math.max(0.05, weight);
+	        }
 
-        function pickWeightedLootId(pool) {
-            const candidates = (Array.isArray(pool) ? pool : [])
-                .filter((lootId) => !!EXPLORATION_LOOT[lootId]);
-            if (candidates.length === 0) return null;
-            let total = 0;
-            candidates.forEach((lootId) => {
-                total += getLootDropWeight(lootId);
-            });
-            if (total <= 0) return randomFromArray(candidates);
-            let roll = Math.random() * total;
-            for (const lootId of candidates) {
-                roll -= getLootDropWeight(lootId);
-                if (roll <= 0) return lootId;
-            }
-            return candidates[candidates.length - 1];
-        }
+	        function pickWeightedLootId(pool, options) {
+	            const candidates = (Array.isArray(pool) ? pool : [])
+	                .filter((lootId) => !!EXPLORATION_LOOT[lootId]);
+	            if (candidates.length === 0) return null;
+	            let total = 0;
+	            candidates.forEach((lootId) => {
+	                total += getLootDropWeight(lootId, options);
+	            });
+	            if (total <= 0) return randomFromArray(candidates);
+	            let roll = Math.random() * total;
+	            for (const lootId of candidates) {
+	                roll -= getLootDropWeight(lootId, options);
+	                if (roll <= 0) return lootId;
+	            }
+	            return candidates[candidates.length - 1];
+	        }
 
-        function generateLootBundle(lootPool, rolls) {
-            const pool = Array.isArray(lootPool) && lootPool.length > 0 ? lootPool : ['ancientCoin'];
-            const rewardMap = {};
-            const totalRolls = Math.max(1, Math.floor(rolls || 1));
-            for (let i = 0; i < totalRolls; i++) {
-                const lootId = pickWeightedLootId(pool);
-                if (!lootId || !EXPLORATION_LOOT[lootId]) continue;
+	        function generateLootBundle(lootPool, rolls, options) {
+	            const pool = Array.isArray(lootPool) && lootPool.length > 0 ? lootPool : ['ancientCoin'];
+	            const rewardMap = {};
+	            const totalRolls = Math.max(1, Math.floor(rolls || 1));
+	            for (let i = 0; i < totalRolls; i++) {
+	                const lootId = pickWeightedLootId(pool, options);
+	                if (!lootId || !EXPLORATION_LOOT[lootId]) continue;
                 const rarity = EXPLORATION_LOOT[lootId].rarity || 'common';
                 let amount = 1;
                 if (rarity === 'common' && Math.random() < 0.18) amount++;
@@ -236,23 +333,79 @@
             const rewards = Object.entries(rewardMap).map(([id, count]) => ({
                 id,
                 count,
-                data: EXPLORATION_LOOT[id]
-            }));
-            rewards.forEach((reward) => addLootToInventory(reward.id, reward.count));
-            return rewards;
-        }
+	                data: EXPLORATION_LOOT[id]
+	            }));
+	            const rewardMeta = (options && typeof options === 'object')
+	                ? { source: options.source || 'generic', biomeId: options.biomeId || null, createdAt: Date.now() }
+	                : { source: 'generic', createdAt: Date.now() };
+	            rewards.forEach((reward) => addLootToInventory(reward.id, reward.count, rewardMeta));
+	            return rewards;
+	        }
 
         function getTreasureActionLabel(roomId) {
             const room = ROOMS[roomId];
             return room && room.isOutdoor ? 'Dig' : 'Search';
         }
 
-        function getTreasureCooldownRemaining(roomId) {
-            const ex = ensureExplorationState();
-            const cooldownMs = GAME_BALANCE.timing.treasureCooldownMs;
-            const lastAt = ex.roomTreasureCooldowns[roomId] || 0;
-            return Math.max(0, (lastAt + cooldownMs) - Date.now());
-        }
+	        function getTreasureHuntEnergyCost() {
+	            const base = Math.max(1, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.energyCost) || 5));
+	            const pet = gameState.pet || (gameState.pets && gameState.pets[gameState.activePetIndex]);
+	            const stage = pet && pet.growthStage ? pet.growthStage : 'baby';
+	            if (stage === 'baby') return Math.max(1, base - 1);
+	            return base;
+	        }
+
+	        function clampTreasureSuccessChance(value) {
+	            const min = Math.max(0.05, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.successChanceMin) || 0.2));
+	            return Math.max(min, Math.min(0.9, Number(value) || min));
+	        }
+
+	        function getTreasureHuntPreview(roomId) {
+	            const ex = ensureExplorationState();
+	            const now = Date.now();
+	            const t = ex.treasureHunt || {};
+	            const antiFarmWindowMs = Math.max(30000, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.antiFarmWindowMs) || (3 * 60 * 1000)));
+	            const penaltyResetMs = Math.max(30000, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.penaltyResetMs) || (4 * 60 * 1000)));
+	            const roomSwapPenaltyStep = Math.max(0, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.roomSwapPenaltyStep) || 0.07));
+	            const repeatPenaltyStep = Math.max(0, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.repeatPenaltyStep) || 0.05));
+	            const maxPenaltyStacks = Math.max(1, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.maxPenaltyStacks) || 6));
+	            const cooldownMs = Math.max(1000, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.globalCooldownMs) || GAME_BALANCE.timing.treasureCooldownMs));
+	            const successChanceBase = Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.successChanceBase) || 0.48);
+	            const extraRollChanceBase = Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.extraRollChanceBase) || 0.22);
+
+	            const lastRunAt = Number(t.lastRunAt) || 0;
+	            const inActiveWindow = (now - lastRunAt) <= antiFarmWindowMs;
+	            const resetPenalty = (now - lastRunAt) > penaltyResetMs;
+	            let roomSwitchCount = resetPenalty ? 0 : (Number(t.roomSwitchCount) || 0);
+	            let repeatCount = resetPenalty ? 0 : (Number(t.repeatCount) || 0);
+	            const lastRoomId = typeof t.lastRoomId === 'string' ? t.lastRoomId : null;
+	            if (inActiveWindow && lastRoomId) {
+	                if (lastRoomId !== roomId) roomSwitchCount += 1;
+	                else repeatCount += 1;
+	            } else if (!inActiveWindow) {
+	                roomSwitchCount = 0;
+	                repeatCount = 0;
+	            }
+	            const penaltyStacks = Math.min(maxPenaltyStacks, Math.max(0, roomSwitchCount + repeatCount));
+	            let successChance = successChanceBase - (roomSwitchCount * roomSwapPenaltyStep) - (repeatCount * repeatPenaltyStep);
+	            successChance = clampTreasureSuccessChance(successChance);
+	            const extraRollChance = Math.max(0, Math.min(0.9, extraRollChanceBase - (penaltyStacks * 0.08)));
+	            return {
+	                cooldownRemainingMs: Math.max(0, (Number(t.globalCooldownEndsAt) || 0) - now),
+	                cooldownMs,
+	                energyCost: getTreasureHuntEnergyCost(),
+	                penaltyStacks,
+	                roomSwitchCount,
+	                repeatCount,
+	                successChance,
+	                extraRollChance
+	            };
+	        }
+
+	        function getTreasureCooldownRemaining(roomId) {
+	            const preview = getTreasureHuntPreview(roomId);
+	            return Math.max(0, Number(preview.cooldownRemainingMs) || 0);
+	        }
 
         function resolvePetTypeForNpc(type) {
             if ((typeof getAllPetTypeData === 'function' && getAllPetTypeData(type)) || PET_TYPES[type]) {
@@ -308,7 +461,7 @@
             }
         }
 
-        function abandonExpedition(silent) {
+	        function abandonExpedition(silent) {
             const ex = ensureExplorationState();
             if (!ex.expedition) return { ok: false, reason: 'no-expedition' };
             const abandoned = ex.expedition;
@@ -316,11 +469,31 @@
             saveGame();
             if (!silent) {
                 showToast('🧭 Expedition ended early. No rewards were collected.', '#FFA726');
-            }
+	        }
+
+	        function getExpeditionUpkeepCost(biomeId, duration) {
+	            const safeDuration = duration || EXPEDITION_DURATIONS[0] || { ms: 40000 };
+	            const mins = Math.max(0.5, Number(safeDuration.ms || 0) / 60000);
+	            const baseCost = Number((EXPEDITION_BALANCE && EXPEDITION_BALANCE.upkeepBaseCoins) || 0);
+	            const perMinute = Number((EXPEDITION_BALANCE && EXPEDITION_BALANCE.upkeepPerMinute) || 0);
+	            const biomeMult = Number((EXPEDITION_BALANCE && EXPEDITION_BALANCE.biomeUpkeepMultiplier && EXPEDITION_BALANCE.biomeUpkeepMultiplier[biomeId]) || 1);
+	            return Math.max(0, Math.round((baseCost + (mins * perMinute)) * biomeMult));
+	        }
+
+	        function getExpeditionLootRollCount(baseRolls, lootMultiplier, bonusRolls) {
+	            const threshold = Math.max(1, Number((EXPEDITION_BALANCE && EXPEDITION_BALANCE.durationDiminishingThreshold) || 1.95));
+	            const exponent = Math.max(0.3, Number((EXPEDITION_BALANCE && EXPEDITION_BALANCE.durationDiminishingExponent) || 0.72));
+	            const rawMult = Math.max(0.2, Number(lootMultiplier) || 1);
+	            const diminishedMult = rawMult <= threshold
+	                ? rawMult
+	                : threshold + Math.pow(Math.max(0, rawMult - threshold), exponent);
+	            const total = Math.round((Math.max(1, Number(baseRolls) || 1) * diminishedMult) + Math.max(0, Number(bonusRolls) || 0));
+	            return Math.max(2, total);
+	        }
             return { ok: true, abandoned };
         }
 
-        function startExpedition(biomeId, durationId) {
+	        function startExpedition(biomeId, durationId) {
             const ex = ensureExplorationState();
             updateExplorationUnlocks(true);
             if (ex.expedition) return { ok: false, reason: 'already-running' };
@@ -333,13 +506,20 @@
             if (!pet) return { ok: false, reason: 'no-pet' };
             const stage = getExplorationStageKey(pet);
             const cadence = getExpeditionCadence(stage, ex.stats && ex.stats.expeditionsCompleted);
-            const roomIdAtStart = (typeof gameState.currentRoom === 'string' && ROOMS[gameState.currentRoom]) ? gameState.currentRoom : 'bedroom';
-            const roomYieldMultiplier = (typeof getRoomSystemMultiplier === 'function') ? getRoomSystemMultiplier('exploration', roomIdAtStart) : 1;
-            const adjustedDurationMs = Math.max(20000, Math.round((Number(duration.ms) || 45000) * cadence.durationMultiplier));
-            const adjustedLootMultiplier = Math.max(0.6, (Number(duration.lootMultiplier) || 1) * cadence.lootMultiplier * roomYieldMultiplier);
+	            const roomIdAtStart = (typeof gameState.currentRoom === 'string' && ROOMS[gameState.currentRoom]) ? gameState.currentRoom : 'bedroom';
+	            const roomYieldMultiplier = (typeof getRoomSystemMultiplier === 'function') ? getRoomSystemMultiplier('exploration', roomIdAtStart) : 1;
+	            const adjustedDurationMs = Math.max(20000, Math.round((Number(duration.ms) || 45000) * cadence.durationMultiplier));
+	            const adjustedLootMultiplier = Math.max(0.6, (Number(duration.lootMultiplier) || 1) * cadence.lootMultiplier * roomYieldMultiplier);
+	            const upkeepCost = getExpeditionUpkeepCost(biomeId, { ...duration, ms: adjustedDurationMs });
+	            if (upkeepCost > 0) {
+	                const spend = spendCoins(upkeepCost, 'Expedition Upkeep', true);
+	                if (!spend.ok) {
+	                    return { ok: false, reason: spend.reason, needed: upkeepCost, balance: spend.balance };
+	                }
+	            }
 
-            const now = Date.now();
-            ex.expedition = {
+	            const now = Date.now();
+	            ex.expedition = {
                 biomeId,
                 petId: pet.id,
                 petName: pet.name || ((typeof getAllPetTypeData === 'function' && getAllPetTypeData(pet.type) ? getAllPetTypeData(pet.type).name : 'Pet')),
@@ -349,17 +529,18 @@
                 endAt: now + adjustedDurationMs,
                 lootMultiplier: adjustedLootMultiplier,
                 stageAtStart: stage,
-                roomIdAtStart,
-                roomYieldMultiplier,
-                cadence
-            };
+	                roomIdAtStart,
+	                roomYieldMultiplier,
+	                cadence,
+	                upkeepCost
+	            };
             saveGame();
             const adjustedDuration = {
                 ...duration,
                 ms: adjustedDurationMs
             };
-            return { ok: true, expedition: ex.expedition, biome: EXPLORATION_BIOMES[biomeId], duration: adjustedDuration, adjustedDurationMs };
-        }
+	            return { ok: true, expedition: ex.expedition, biome: EXPLORATION_BIOMES[biomeId], duration: adjustedDuration, adjustedDurationMs, upkeepCost };
+	        }
 
         function resolveExpeditionIfReady(forceResolve, silent) {
             const ex = ensureExplorationState();
@@ -374,8 +555,8 @@
             const duration = EXPEDITION_DURATIONS.find((d) => d.id === expedition.durationId) || EXPEDITION_DURATIONS[0];
             const baseRolls = 2 + Math.floor(Math.random() * 2);
             const bonusRolls = typeof consumeExpeditionRewardBonusRolls === 'function' ? consumeExpeditionRewardBonusRolls() : 0;
-            const totalRolls = Math.max(2, Math.round(baseRolls * (expedition.lootMultiplier || duration.lootMultiplier || 1)) + Math.max(0, bonusRolls));
-            const rewards = generateLootBundle(getBiomeLootPool(expedition.biomeId), totalRolls);
+	            const totalRolls = getExpeditionLootRollCount(baseRolls, (expedition.lootMultiplier || duration.lootMultiplier || 1), bonusRolls);
+	            const rewards = generateLootBundle(getBiomeLootPool(expedition.biomeId), totalRolls, { source: 'expedition', biomeId: expedition.biomeId });
             ex.discoveredBiomes[expedition.biomeId] = true;
             ex.stats.expeditionsCompleted++;
 
@@ -400,10 +581,12 @@
                 biomeId: expedition.biomeId,
                 biomeName: biome.name,
                 petName: expedition.petName || 'Pet',
-                durationMs: expedition.durationMs || duration.ms,
-                rewards: rewards.map((r) => ({ id: r.id, count: r.count })),
-                npcId: npc ? npc.id : null
-            };
+	                durationMs: expedition.durationMs || duration.ms,
+	                rewards: rewards.map((r) => ({ id: r.id, count: r.count })),
+	                npcId: npc ? npc.id : null,
+	                rolls: totalRolls,
+	                upkeepCost: expedition.upkeepCost || 0
+	            };
             ex.expeditionHistory.unshift(historyEntry);
             if (ex.expeditionHistory.length > 15) ex.expeditionHistory = ex.expeditionHistory.slice(0, 15);
             ex.expedition = null;
@@ -444,31 +627,58 @@
                 }
             }
 
-            return { ok: true, rewards, npc, biome, newlyUnlocked };
-        }
+	            return { ok: true, rewards, npc, biome, newlyUnlocked, totalRolls, upkeepCost: expedition.upkeepCost || 0 };
+	        }
 
-        function runTreasureHunt(roomId) {
-            const ex = ensureExplorationState();
-            const room = ROOMS[roomId];
-            if (!room) return { ok: false, reason: 'invalid-room' };
-            const remaining = getTreasureCooldownRemaining(roomId);
-            if (remaining > 0) return { ok: false, reason: 'cooldown', remainingMs: remaining };
+	        function runTreasureHunt(roomId) {
+	            const ex = ensureExplorationState();
+	            const room = ROOMS[roomId];
+	            if (!room) return { ok: false, reason: 'invalid-room' };
+	            const preview = getTreasureHuntPreview(roomId);
+	            const remaining = Math.max(0, preview.cooldownRemainingMs || 0);
+	            if (remaining > 0) return { ok: false, reason: 'cooldown', remainingMs: remaining, preview };
+	            const pet = gameState.pet || (gameState.pets && gameState.pets[gameState.activePetIndex]);
+	            const energyCost = Math.max(0, preview.energyCost || 0);
+	            if (!pet || Number(pet.energy || 0) < energyCost) {
+	                return { ok: false, reason: 'insufficient-energy', needed: energyCost, current: pet ? Number(pet.energy || 0) : 0, preview };
+	            }
+	            pet.energy = clamp((Number(pet.energy) || 0) - energyCost, 0, 100);
 
-            ex.roomTreasureCooldowns[roomId] = Date.now();
-            const foundTreasure = Math.random() < 0.48;
-            const action = getTreasureActionLabel(roomId);
-            const lootPool = ROOM_TREASURE_POOLS[roomId] || ['ancientCoin'];
-            const roomYieldMultiplier = (typeof getRoomSystemMultiplier === 'function') ? getRoomSystemMultiplier('exploration', roomId) : 1;
-            const extraRollChance = Math.min(0.4, 0.15 + Math.max(0, roomYieldMultiplier - 1) * 0.45);
-            const rewards = foundTreasure ? generateLootBundle(lootPool, 1 + (Math.random() < extraRollChance ? 1 : 0)) : [];
+	            const now = Date.now();
+	            const t = ex.treasureHunt;
+	            const antiFarmWindowMs = Math.max(30000, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.antiFarmWindowMs) || (3 * 60 * 1000)));
+	            const penaltyResetMs = Math.max(30000, Number((TREASURE_HUNT_BALANCE && TREASURE_HUNT_BALANCE.penaltyResetMs) || (4 * 60 * 1000)));
+	            const elapsed = now - (Number(t.lastRunAt) || 0);
+	            if (elapsed > penaltyResetMs) {
+	                t.roomSwitchCount = 0;
+	                t.repeatCount = 0;
+	            }
+	            if (elapsed <= antiFarmWindowMs && t.lastRoomId) {
+	                if (t.lastRoomId !== roomId) t.roomSwitchCount = Math.max(0, Number(t.roomSwitchCount || 0) + 1);
+	                else t.repeatCount = Math.max(0, Number(t.repeatCount || 0) + 1);
+	            } else {
+	                t.roomSwitchCount = 0;
+	                t.repeatCount = 0;
+	            }
+	            t.lastRoomId = roomId;
+	            t.lastRunAt = now;
+	            t.globalCooldownEndsAt = now + Math.max(1000, Number(preview.cooldownMs) || 0);
+	            t.recentRuns.push({ at: now, roomId });
+	            t.recentRuns = t.recentRuns.filter((entry) => entry && (now - Number(entry.at || 0)) <= antiFarmWindowMs);
 
-            if (foundTreasure) {
-                ex.stats.treasuresFound++;
-                if (gameState.pet) {
-                    const happyGain = Math.max(3, Math.round(6 * roomYieldMultiplier));
-                    gameState.pet.happiness = clamp(gameState.pet.happiness + happyGain, 0, 100);
-                }
-            }
+	            ex.roomTreasureCooldowns[roomId] = now;
+	            const foundTreasure = Math.random() < Math.max(0, Math.min(1, preview.successChance || 0.2));
+	            const action = getTreasureActionLabel(roomId);
+	            const lootPool = ROOM_TREASURE_POOLS[roomId] || ['ancientCoin'];
+	            const rolls = 1 + ((Math.random() < Math.max(0, Math.min(1, preview.extraRollChance || 0))) ? 1 : 0);
+	            const rewards = foundTreasure ? generateLootBundle(lootPool, rolls, { source: 'treasure', roomId }) : [];
+
+	            if (foundTreasure) {
+	                ex.stats.treasuresFound++;
+	                if (gameState.pet) {
+	                    gameState.pet.happiness = clamp(gameState.pet.happiness + 6, 0, 100);
+	                }
+	            }
 
             let npc = null;
             const biomeId = getRoomBiomeForTreasure(roomId);
@@ -480,15 +690,19 @@
             }
 
             saveGame();
-            return {
-                ok: true,
-                action,
-                foundTreasure,
-                rewards,
-                npc,
-                room
-            };
-        }
+	            return {
+	                ok: true,
+	                action,
+	                foundTreasure,
+	                rewards,
+	                npc,
+	                room,
+	                energyCost,
+	                cooldownMs: preview.cooldownMs,
+	                penaltyStacks: preview.penaltyStacks,
+	                successChance: preview.successChance
+	            };
+	        }
 
         function createSeededRng(seed) {
             let s = (seed >>> 0) || 123456789;

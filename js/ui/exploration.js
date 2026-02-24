@@ -252,12 +252,13 @@
                         const biomeId = btn.getAttribute('data-start-expedition');
                         const res = startExpedition(biomeId, selectedDurationId);
                         if (!res || !res.ok) {
-                            const reasonMap = {
-                                'already-running': 'An expedition is already active.',
-                                'dungeon-active': 'Finish your dungeon crawl first.',
-                                'locked-biome': 'This biome is still locked.',
-                                'no-pet': 'You need an active pet to explore.'
-                            };
+	                            const reasonMap = {
+	                                'already-running': 'An expedition is already active.',
+	                                'dungeon-active': 'Finish your dungeon crawl first.',
+	                                'locked-biome': 'This biome is still locked.',
+	                                'no-pet': 'You need an active pet to explore.',
+	                                'insufficient-funds': 'Not enough coins for expedition upkeep.'
+	                            };
                             showToast(`🧭 ${reasonMap[res.reason] || 'Could not start expedition.'}`, '#FFA726');
                             return;
                         }
@@ -425,4 +426,3 @@
             const closeBtn = overlay.querySelector('#explore-close-btn');
             if (closeBtn) closeBtn.focus();
         }
-

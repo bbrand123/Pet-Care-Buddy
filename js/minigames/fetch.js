@@ -1,6 +1,7 @@
         // ==================== FETCH MINI-GAME ====================
 
-        let fetchState = null;
+	        let fetchState = null;
+	        const FETCH_GAME_TIME_LIMIT_MS = 30000;
 
         function startFetchGame() {
             if (!gameState.pet) {
@@ -10,16 +11,20 @@
                 return;
             }
             const fetchDiff = getMinigameDifficulty('fetch');
-            fetchState = {
-                score: 0,
-                phase: 'ready', // 'ready', 'thrown', 'fetching', 'returning'
+	            fetchState = {
+	                score: 0,
+	                phase: 'ready', // 'ready', 'thrown', 'fetching', 'returning'
                 ballX: 50,
                 ballY: 160,
                 petX: 45,
                 targetX: 0,
-                difficulty: fetchDiff,
-                _timeouts: []
-            };
+	                difficulty: fetchDiff,
+	                startedAt: Date.now(),
+	                endsAt: Date.now() + FETCH_GAME_TIME_LIMIT_MS,
+	                timeLimitMs: FETCH_GAME_TIME_LIMIT_MS,
+	                _timeouts: [],
+	                _intervals: []
+	            };
 
             renderFetchGame();
             announce('Fetch game started! Click the field or press Enter to throw the ball!');
@@ -42,7 +47,7 @@
             overlay.innerHTML = `
                 <div class="fetch-game">
                     <h2 class="fetch-game-title">🎾 Fetch!</h2>
-                    <p class="fetch-game-score" id="fetch-score">Fetched: ${fetchState.score}</p>
+	                    <p class="fetch-game-score" id="fetch-score">Fetched: ${fetchState.score} · Time: <span id="fetch-timer">${Math.ceil(fetchState.timeLimitMs / 1000)}s</span></p>
                     <div class="fetch-field" id="fetch-field" role="button" aria-label="Click or press Enter to throw the ball" tabindex="0">
                         <div class="fetch-field-clouds" aria-hidden="true">☁️ ☁️</div>
                         <div class="fetch-field-flowers" aria-hidden="true">🌸 🌼 🌷 🌻</div>
@@ -120,10 +125,34 @@
             fetchState._escapeHandler = fetchEscapeHandler;
             trapFocus(overlay);
 
-            throwBtn.focus();
-            updateFetchExitButtons();
-            fetchState._updateExitButtons = updateFetchExitButtons;
-        }
+	            throwBtn.focus();
+	            startFetchGameTimer();
+	            updateFetchExitButtons();
+	            fetchState._updateExitButtons = updateFetchExitButtons;
+	        }
+
+	        function startFetchGameTimer() {
+	            if (!fetchState || fetchState._ended) return;
+	            const updateTimerDisplay = () => {
+	                if (!fetchState || fetchState._ended) return;
+	                const timerEl = document.getElementById('fetch-timer');
+	                if (!timerEl) return;
+	                const remainingMs = Math.max(0, (Number(fetchState.endsAt) || 0) - Date.now());
+	                timerEl.textContent = `${Math.ceil(remainingMs / 1000)}s`;
+	            };
+	            updateTimerDisplay();
+	            fetchState._intervals.push(setInterval(updateTimerDisplay, 250));
+	            fetchState._timeouts.push(setTimeout(() => {
+	                if (!fetchState || fetchState._ended) return;
+	                const instruction = document.getElementById('fetch-instruction');
+	                if (instruction) {
+	                    instruction.textContent = 'Time is up!';
+	                    instruction.className = 'fetch-instruction highlight';
+	                }
+	                announce(`Fetch time is up! Final score: ${fetchState.score}.`);
+	                endFetchGame('timeout');
+	            }, Math.max(100, (Number(fetchState.endsAt) || Date.now()) - Date.now())));
+	        }
 
         function handleFetchThrow(e) {
             if (!fetchState || fetchState._ended || fetchState.phase !== 'ready') return;
@@ -169,8 +198,8 @@
                 shadow.style.opacity = '0.05';
             }
 
-            // Duration multiplier: higher difficulty → lower value → shorter timeouts → faster game
-            const fetchSpeed = 1 / fetchState.difficulty;
+	            // Keep pacing fixed so difficulty changes do not increase cycles/minute.
+	            const fetchSpeed = 1;
 
             // Phase 2: Ball drops down to ground
             fetchState._timeouts.push(setTimeout(() => {
@@ -276,17 +305,20 @@
             setTimeout(() => reward.remove(), 1000);
         }
 
-        function endFetchGame() {
-            dismissMiniGameExitDialog();
+	        function endFetchGame(endReason) {
+	            dismissMiniGameExitDialog();
             if (fetchState && fetchState._escapeHandler) {
                 popModalEscape(fetchState._escapeHandler);
             }
             if (fetchState) {
                 fetchState._ended = true;
             }
-            if (fetchState && fetchState._timeouts) {
-                fetchState._timeouts.forEach(id => clearTimeout(id));
-            }
+	            if (fetchState && fetchState._timeouts) {
+	                fetchState._timeouts.forEach(id => clearTimeout(id));
+	            }
+	            if (fetchState && fetchState._intervals) {
+	                fetchState._intervals.forEach(id => clearInterval(id));
+	            }
 
             const overlay = document.querySelector('.fetch-game-overlay');
             if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
@@ -312,7 +344,8 @@
                 updateWellnessBar();
                 saveGame();
 
-                announce(`Fetch game over! ${fetchState.score} catches! Happiness +${bonus}! Coins +${coinReward}!${bestMsg}`);
+	                const reasonSuffix = endReason === 'timeout' ? ' Time limit reached.' : '';
+	                announce(`Fetch game over! ${fetchState.score} catches! Happiness +${bonus}! Coins +${coinReward}!${bestMsg}${reasonSuffix}`);
                 if (isNewBest) {
                     showToast(`New high score in Fetch: ${fetchState.score}!`, '#FFD700');
                     showMinigameConfetti();
@@ -334,8 +367,11 @@
                     medal: getMiniGameMedal(fetchState.score, { bronze: 3, silver: 5, gold: 8 })
                 });
             } else {
-                restorePostMiniGameState();
-            }
+	                if (endReason === 'timeout' && typeof showToast === 'function') {
+	                    showToast('⏱️ Fetch time is up!', '#90A4AE');
+	                }
+	                restorePostMiniGameState();
+	            }
 
             fetchState = null;
         }

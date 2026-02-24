@@ -356,7 +356,7 @@
 
                 gameState.pet.happiness = clamp(gameState.pet.happiness + happinessBonus, 0, 100);
                 gameState.pet.energy = clamp(gameState.pet.energy - energyCost, 0, 100);
-                const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins('simonsays', roundsCompleted * 10) : 0;
+                const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins('simonsays', roundsCompleted * 8) : 0;
                 const previousBest = Number((gameState.minigameHighScores || {}).simonsays || 0);
                 const isNewBest = updateMinigameHighScore('simonsays', roundsCompleted);
                 const bestMsg = isNewBest ? ' New best!' : '';

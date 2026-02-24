@@ -185,7 +185,7 @@
                     gameId: 'cooking',
                     gameName: 'Cooking Lab',
                     score: recipes,
-                    coinScore: recipes * 10,
+                    coinScore: recipes * 7,
                     statDelta: {
                         hunger: Math.min(24, recipes * 5),
                         happiness: Math.min(20, recipes * 4),

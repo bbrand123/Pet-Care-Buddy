@@ -124,7 +124,7 @@
                 gameId: 'tournament',
                 gameName: 'Tournament Cup',
                 score,
-                coinScore: wins * 12 + championBonus * 8,
+                coinScore: wins * 9 + championBonus * 6,
                 statDelta: {
                     happiness: Math.min(30, 8 + wins * 4 + championBonus * 3),
                     energy: -Math.min(14, 6 + wins * 2),

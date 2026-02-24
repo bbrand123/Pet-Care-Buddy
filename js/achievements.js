@@ -447,9 +447,10 @@
                     }
                 }
                 // Rec 11: Apply coin decay on new day (before daily tasks reset)
-                if (gameState.dailyChecklist && gameState.dailyChecklist.date) {
-                    if (typeof applyCoinDecay === 'function') applyCoinDecay();
-                }
+	                if (gameState.dailyChecklist && gameState.dailyChecklist.date) {
+	                    if (typeof applyCoinDecay === 'function') applyCoinDecay();
+	                    if (typeof applyWealthPressureFee === 'function') applyWealthPressureFee();
+	                }
                 // Rec 1: Reset daily minigame earnings counter
                 gameState._dailyMinigameEarnings = 0;
                 gameState._dailyMinigameEarningsDay = today;
@@ -1184,7 +1185,7 @@
             // Between major milestones (dead zones), grant streakDays × 2 coins daily as a fallback
             let streakDripCoins = 0;
             if (!hitMilestoneToday && streak.current > 1) {
-                streakDripCoins = streak.current * 2;
+                streakDripCoins = streak.current;
                 addCoins(streakDripCoins, 'Streak Drip', true);
             }
 

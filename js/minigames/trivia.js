@@ -141,7 +141,7 @@
                     gameId: 'trivia',
                     gameName: 'Animal Trivia',
                     score,
-                    coinScore: score * 9,
+                    coinScore: score * 7,
                     statDelta: {
                         happiness: Math.min(24, score * 5),
                         energy: -Math.max(2, total - score)

@@ -18,6 +18,16 @@ test('minigame payout increases with score and respects cap', () => {
     assert.equal(capped, 40);
 });
 
+test('minigame base payout mode matches live curve inputs deterministically', () => {
+    const payout = EconomyCalculations.computeMinigameCoinPayout({
+        gameId: 'fetch',
+        score: 64,
+        difficulty: 1,
+        mode: 'baseOnly'
+    });
+    assert.equal(payout, 42);
+});
+
 test('harvest payout applies seasonal boost deterministically', () => {
     const crop = { hungerValue: 8, happinessValue: 6, energyValue: 4, seasonBonus: ['summer'] };
     const offSeason = EconomyCalculations.computeHarvestCoinPayout({ crop, currentSeason: 'winter', economyMultiplier: 1 });

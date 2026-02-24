@@ -1868,13 +1868,15 @@
                 if (typeof runTreasureHunt !== 'function') return;
                 const roomId = gameState.currentRoom || 'bedroom';
                 const result = runTreasureHunt(roomId);
-                if (!result || !result.ok) {
-                    if (result && result.reason === 'cooldown') {
-                        const sec = Math.max(1, Math.ceil((result.remainingMs || 0) / 1000));
-                        showCooldownToast('treasure-hunt', `🕒 ${sec}s until you can ${typeof getTreasureActionLabel === 'function' ? getTreasureActionLabel(roomId).toLowerCase() : 'search'} again.`);
-                    } else {
-                        showToast('No hidden treasures right now.', '#FFA726');
-                    }
+	                if (!result || !result.ok) {
+	                    if (result && result.reason === 'cooldown') {
+	                        const sec = Math.max(1, Math.ceil((result.remainingMs || 0) / 1000));
+	                        showCooldownToast('treasure-hunt', `🕒 ${sec}s until you can ${typeof getTreasureActionLabel === 'function' ? getTreasureActionLabel(roomId).toLowerCase() : 'search'} again.`);
+	                    } else if (result && result.reason === 'insufficient-energy') {
+	                        showToast(`⚡ Need ${result.needed || 0} energy to ${typeof getTreasureActionLabel === 'function' ? getTreasureActionLabel(roomId).toLowerCase() : 'search'}.`, '#FFA726');
+	                    } else {
+	                        showToast('No hidden treasures right now.', '#FFA726');
+	                    }
                     return;
                 }
 

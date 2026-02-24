@@ -150,7 +150,7 @@
                     gameId: 'fishing',
                     gameName: 'Pond Fishing',
                     score: catches,
-                    coinScore: catches * 8,
+                    coinScore: catches * 6,
                     statDelta: {
                         happiness: Math.min(22, catches * 4),
                         energy: -Math.min(10, Math.max(2, finalState.misses + 2)),

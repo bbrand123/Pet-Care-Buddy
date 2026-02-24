@@ -33,12 +33,18 @@
                     crafted: {}
                 },
                 market: { dayKey: '', stock: [] },
-                mysteryEggsOpened: 0,
-                auction: { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0 },
-                totalEarned: 0,
-                totalSpent: 0
-            };
-        }
+	                mysteryEggsOpened: 0,
+	                auction: { slotId: 'slotA', soldCount: 0, boughtCount: 0, postedCount: 0 },
+	                totalEarned: 0,
+	                totalSpent: 0,
+	                wealthPressure: {
+	                    lastAppliedDate: '',
+	                    lastFee: 0,
+	                    lastBreakdown: null,
+	                    unpaidFeeDebt: 0
+	                }
+	            };
+	        }
 
         function createDefaultMiniGameExpansionState() {
             return {
@@ -84,14 +90,16 @@
             lastUpdate: Date.now(),
             timeOfDay: 'day', // 'day', 'sunset', 'night', 'sunrise'
             currentRoom: 'bedroom', // 'bedroom', 'kitchen', 'bathroom', 'backyard', 'park', 'garden'
-            exploration: {
-                biomeUnlocks: { forest: true, beach: false, mountain: false, cave: false, skyIsland: false, underwater: false, skyZone: false },
-                discoveredBiomes: { forest: true },
-                lootInventory: {},
-                expedition: null,
-                expeditionHistory: [],
-                roomTreasureCooldowns: {},
-                npcEncounters: [],
+	            exploration: {
+	                biomeUnlocks: { forest: true, beach: false, mountain: false, cave: false, skyIsland: false, underwater: false, skyZone: false },
+	                discoveredBiomes: { forest: true },
+	                lootInventory: {},
+	                lootInventoryStacks: {},
+	                expedition: null,
+	                expeditionHistory: [],
+	                roomTreasureCooldowns: {},
+	                treasureHunt: { globalCooldownEndsAt: 0, lastRunAt: 0, lastRoomId: null, recentRuns: [], roomSwitchCount: 0, repeatCount: 0 },
+	                npcEncounters: [],
                 dungeon: { active: false, seed: 0, rooms: [], currentIndex: 0, log: [], rewards: [], startedAt: 0 },
                 stats: { expeditionsCompleted: 0, treasuresFound: 0, dungeonsCleared: 0, npcsBefriended: 0, npcsAdopted: 0 }
             },
@@ -114,12 +122,13 @@
             },
             roomUpgrades: {},
             roomCustomizations: {},
-            garden: {
-                plots: [], // { cropId, stage, growTicks, watered }
-                inventory: {}, // { cropId: count }
-                lastGrowTick: Date.now(),
-                totalHarvests: 0
-            },
+	            garden: {
+	                plots: [], // { cropId, stage, growTicks, watered }
+	                inventory: {}, // { cropId: count }
+	                lastGrowTick: Date.now(),
+	                totalHarvests: 0,
+	                expansionTier: 0
+	            },
             minigamePlayCounts: {}, // { gameId: playCount } — tracks replays for difficulty scaling
             minigameHighScores: {}, // { gameId: bestScore } — persisted best scores
             minigameScoreHistory: {}, // { gameId: [score, score, score] } — last 3 scores per game
@@ -1414,16 +1423,17 @@
 
                     // Add garden if missing (for existing saves)
                     if (!parsed.garden || typeof parsed.garden !== 'object') {
-                        parsed.garden = {
-                            plots: [],
-                            inventory: {},
-                            lastGrowTick: Date.now(),
-                            totalHarvests: 0
-                        };
-                    }
-                    if (!parsed.garden.plots) parsed.garden.plots = [];
-                    if (!parsed.garden.inventory) parsed.garden.inventory = {};
-                    if (!parsed.garden.lastGrowTick) parsed.garden.lastGrowTick = Date.now();
+	                        parsed.garden = {
+	                            plots: [],
+	                            inventory: {},
+	                            lastGrowTick: Date.now(),
+	                            totalHarvests: 0,
+	                            expansionTier: 0
+	                        };
+	                    }
+	                    if (!parsed.garden.plots) parsed.garden.plots = [];
+	                    if (!parsed.garden.inventory) parsed.garden.inventory = {};
+	                    if (!parsed.garden.lastGrowTick) parsed.garden.lastGrowTick = Date.now();
                     if (typeof parsed.garden.totalHarvests !== 'number') {
                         // Infer minimum harvests from existing state to keep used plots unlocked
                         let inferredHarvests = 0;
@@ -1435,9 +1445,25 @@
                                 inferredHarvests = Math.max(inferredHarvests, GARDEN_PLOT_UNLOCK_THRESHOLDS[pi]);
                             }
                             inferredHarvests = Math.max(inferredHarvests, invTotal);
-                        }
-                        parsed.garden.totalHarvests = inferredHarvests;
-                    }
+	                        }
+	                        parsed.garden.totalHarvests = inferredHarvests;
+	                    }
+	                    if (typeof parsed.garden.expansionTier !== 'number' || !Number.isFinite(parsed.garden.expansionTier)) {
+	                        parsed.garden.expansionTier = 0;
+	                    }
+	                    parsed.garden.expansionTier = Math.max(0, Math.min(
+	                        Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS.length : 0,
+	                        Math.floor(parsed.garden.expansionTier)
+	                    ));
+	                    const highestOccupiedPlotIndex = Array.isArray(parsed.garden.plots)
+	                        ? parsed.garden.plots.reduce((max, p, i) => p ? i : max, -1)
+	                        : -1;
+	                    if (highestOccupiedPlotIndex >= 0) {
+	                        while (parsed.garden.expansionTier < (Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS.length : 0)
+	                            && getGardenPlotCapacity(parsed.garden.expansionTier) <= highestOccupiedPlotIndex) {
+	                            parsed.garden.expansionTier++;
+	                        }
+	                    }
 
                     // Add multi-pet system fields if missing (for existing saves)
                     if (!Array.isArray(parsed.pets)) {
@@ -1605,9 +1631,15 @@
 	                    } else {
 	                        _lastSavedStorageSnapshot = saved;
 	                    }
-                    // Reset session-local transient state (Recommendations #1, #2)
-                    parsed._sessionMinigameCount = 0;
-                    parsed._careActionTimestamps = [];
+	                    // Reset session-local transient state (Recommendations #1, #2)
+	                    parsed._sessionMinigameCount = 0;
+	                    parsed._minigameRewardSession = null;
+	                    parsed._careActionTimestamps = [];
+	                    if (parsed.security && parsed.security.coinGainSession) parsed.security.coinGainSession.earned = 0;
+	                    if (parsed.security && parsed.security.coinGainMinute) {
+	                        parsed.security.coinGainMinute.windowStart = 0;
+	                        parsed.security.coinGainMinute.earned = 0;
+	                    }
 
                     return parsed;
                 }
@@ -2035,11 +2067,12 @@
         // ==================== VISIBILITY HANDLING ====================
 
         // Handle page visibility changes
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                // Page is hidden, save current state
-                saveGame();
-            } else {
+	        document.addEventListener('visibilitychange', () => {
+	            if (document.hidden) {
+	                if (typeof resetMinigameRewardSession === 'function') resetMinigameRewardSession('background');
+	                // Page is hidden, save current state
+	                saveGame();
+	            } else {
                 // Page is visible again, apply any decay that occurred while away
                 if (gameState.phase === 'pet' && gameState.pet) {
                     // Pause the decay timer while we overwrite pet stats to avoid
@@ -2180,9 +2213,12 @@
             gameState.season = getCurrentSeason();
 
             // Ensure garden state exists
-            if (!gameState.garden || typeof gameState.garden !== 'object') {
-                gameState.garden = { plots: [], inventory: {}, lastGrowTick: Date.now(), totalHarvests: 0 };
-            }
+	            if (!gameState.garden || typeof gameState.garden !== 'object') {
+	                gameState.garden = { plots: [], inventory: {}, lastGrowTick: Date.now(), totalHarvests: 0, expansionTier: 0 };
+	            }
+	            if (typeof gameState.garden.expansionTier !== 'number' || !Number.isFinite(gameState.garden.expansionTier)) {
+	                gameState.garden.expansionTier = 0;
+	            }
 
             // Ensure adultsRaised exists
             if (typeof gameState.adultsRaised !== 'number') {
