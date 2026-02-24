@@ -2723,6 +2723,20 @@
                         </div>
                     `
                     : '';
+                const playerProfile = status.playerProfile || (typeof getRetentionPlayerProfile === 'function' ? getRetentionPlayerProfile() : null);
+                const playerProfileHTML = (playerProfile && playerProfile.style)
+                    ? `<p class="journey-subtitle">Play style: ${escapeHTML(String(playerProfile.style))}${Number(playerProfile.confidence) > 0 ? ` (${Math.round(Number(playerProfile.confidence) * 100)}%)` : ''}</p>`
+                    : '';
+                const visibleRewards = status.visibleRewards || (typeof getRetentionVisibleRewardsSummary === 'function' ? getRetentionVisibleRewardsSummary() : null);
+                const visibleRewardsHTML = (visibleRewards && Array.isArray(visibleRewards.rows))
+                    ? `
+                        <div class="journey-emotional-prompt" role="group" aria-label="Visible unlocks">
+                            <p><strong>🪄 Permanent Visible Unlocks</strong></p>
+                            <p>${(visibleRewards.rows || []).map((row) => `${escapeHTML(row.label)} ${Math.floor(row.count || 0)}`).join(' · ')}</p>
+                            ${Array.isArray(visibleRewards.recent) && visibleRewards.recent.length ? `<p>Recent: ${escapeHTML(visibleRewards.recent.map((r) => `${r.icon || '✨'} ${r.title || r.id || 'unlock'}`).join(' · '))}</p>` : ''}
+                        </div>
+                    `
+                    : '';
                 const emotionalPrompt = (typeof getRetentionEmotionalPrompt === 'function') ? getRetentionEmotionalPrompt() : null;
                 const emotionalPromptHTML = (emotionalPrompt && emotionalPrompt.title)
                     ? `
@@ -2759,8 +2773,10 @@
 	                    <h2 id="journey-title" class="journey-title">🧭 30-Day Journey</h2>
 	                    <p class="journey-subtitle">Day ${status.day} · ${escapeHTML(status.chapter ? status.chapter.label : 'Journey')}</p>
 	                    <p class="journey-subtitle">Journey Tokens: ${status.tokens} · Bond XP: ${status.bondXp} (Level ${status.bondLevel})</p>
+                        ${playerProfileHTML}
                         ${comebackQuestHTML}
                         ${seasonalJourneyHTML}
+                        ${visibleRewardsHTML}
                         ${emotionalPromptHTML}
 	                    <div class="journey-track-list" role="list" aria-label="Journey tracks">
 	                        <div class="journey-track" role="listitem" aria-label="Bond track ${bond.completed} of ${bond.total}">

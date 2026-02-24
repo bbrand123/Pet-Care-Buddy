@@ -27,6 +27,7 @@
         emotePack: { id: 'emotePack', cost: 10, type: 'emote', title: 'Emote Pack', stock: 2, tier: 'weekly' },
         photoFrame: { id: 'photoFrame', cost: 12, type: 'photoFrame', title: 'Photo Frame', stock: 1, tier: 'weekly' },
         ambientVariant: { id: 'ambientVariant', cost: 14, type: 'ambient', title: 'Ambient Variant', stock: 1, tier: 'weekly' },
+        idleAnimation: { id: 'idleAnimation', cost: 13, type: 'idleAnimation', title: 'Idle Animation', stock: 1, tier: 'weekly' },
         roomProp: { id: 'roomProp', cost: 16, type: 'roomProp', title: 'Room Prop', stock: 1, tier: 'weekly' },
         heirloomRoomProp: { id: 'heirloomRoomProp', cost: 24, type: 'roomProp', title: 'Heirloom Prop', stock: 1, tier: 'limited', limited: true },
         legendaryEmoteSet: { id: 'legendaryEmoteSet', cost: 22, type: 'emote', title: 'Legendary Emotes', stock: 1, tier: 'limited', limited: true },
@@ -34,7 +35,7 @@
     });
     const JOURNEY_TOKEN_STORE_ROTATION = Object.freeze({
         core: ['story', 'cosmetic', 'bond', 'codex'],
-        weeklyPool: ['emotePack', 'photoFrame', 'ambientVariant', 'roomProp'],
+        weeklyPool: ['emotePack', 'photoFrame', 'ambientVariant', 'idleAnimation', 'roomProp'],
         weeklySlots: 3,
         limitedPool: ['heirloomRoomProp', 'legendaryEmoteSet', 'ambientSuite'],
         maxWeeksRetained: 8
@@ -310,6 +311,9 @@
                 }
             }
         }
+        if (completedNow.length > 0 && root.MLFRetentionRewardEffects && typeof root.MLFRetentionRewardEffects.playRewardMoment === 'function') {
+            try { root.MLFRetentionRewardEffects.playRewardMoment('objectiveComplete'); } catch (_) {}
+        }
         if (objectives.length > 0 && objectives.every((obj) => !!entry.completedObjectives[obj.id])) {
             if (!Number.isFinite(entry.chapterCompletedAt) || entry.chapterCompletedAt <= 0) {
                 entry.chapterCompletedAt = Date.now();
@@ -320,6 +324,9 @@
                 addJourneyTokensRaw(record.journeyState, chapterTokens, 'chapter:' + chapter.id);
                 record._journeyMutated = true;
                 entry.claimedRewards.chapter = { at: Date.now(), tokens: chapterTokens };
+                if (root.MLFRetentionRewardEffects && typeof root.MLFRetentionRewardEffects.playRewardMoment === 'function') {
+                    try { root.MLFRetentionRewardEffects.playRewardMoment('chapterComplete'); } catch (_) {}
+                }
             }
         }
         return completedNow;
@@ -365,6 +372,8 @@
             seasonalJourney: (root.MLFSeasonalJourney && typeof root.MLFSeasonalJourney.getCurrentSeasonalJourney === 'function')
                 ? root.MLFSeasonalJourney.getCurrentSeasonalJourney()
                 : null,
+            visibleRewards: (typeof root.getRetentionVisibleRewardsSummary === 'function') ? root.getRetentionVisibleRewardsSummary() : null,
+            playerProfile: (typeof root.getRetentionPlayerProfile === 'function') ? root.getRetentionPlayerProfile() : null,
             chapterObjectives: objectives.map((item) => ({
                 id: item.id,
                 label: item.label,
@@ -758,6 +767,18 @@
     }
 
     function addRetentionUnlock(kind, unlockId, fallbackCoins) {
+        if (root.MLFRetentionVisibleRewards && typeof root.MLFRetentionVisibleRewards.grantVisibleReward === 'function') {
+            try {
+                const visible = root.MLFRetentionVisibleRewards.grantVisibleReward(kind, unlockId);
+                if (visible && visible.ok) {
+                    if (!visible.duplicate) {
+                        return { granted: true, duplicate: false, fallbackCoins: 0, id: visible.reward && visible.reward.id, kind };
+                    }
+                    const coins = addCoinsFallback(fallbackCoins || 25, `Journey duplicate ${kind}`);
+                    return { granted: false, duplicate: true, fallbackCoins: coins, id: visible.reward && visible.reward.id, kind };
+                }
+            } catch (_) {}
+        }
         const gs = getState();
         if (!gs || !isObject(gs.meta) || !isObject(gs.meta.retentionUnlocks)) {
             const coins = addCoinsFallback(fallbackCoins || 25, 'Journey unlock fallback');
@@ -767,6 +788,7 @@
             : kind === 'ambient' ? 'ambientVariants'
             : kind === 'emote' ? 'emotePacks'
             : kind === 'photoFrame' ? 'photoFrames'
+            : kind === 'idleAnimation' ? 'idleAnimations'
             : null;
         if (!mapKey || !Array.isArray(gs.meta.retentionUnlocks[mapKey])) {
             const coins = addCoinsFallback(fallbackCoins || 25, 'Journey unlock fallback');
@@ -847,6 +869,12 @@
             fallbackCoins = grant.fallbackCoins || 0;
             grantedUnlock = grant.granted ? { type: 'photoFrame', id: unlockId } : null;
             message = grant.granted ? 'Photo frame unlocked.' : `Duplicate photo frame converted to ${fallbackCoins} coins.`;
+        } else if (reward.type === 'idleAnimation') {
+            const unlockId = reward.unlockId || reward.id;
+            const grant = addRetentionUnlock('idleAnimation', unlockId, 29);
+            fallbackCoins = grant.fallbackCoins || 0;
+            grantedUnlock = grant.granted ? { type: 'idleAnimation', id: unlockId } : null;
+            message = grant.granted ? 'Idle animation unlocked.' : `Duplicate idle animation converted to ${fallbackCoins} coins.`;
         } else if (reward.type === 'currency') {
             fallbackCoins = addCoinsFallback(reward.coins || 20, 'Journey currency reward');
             message = `Converted to ${fallbackCoins} coins.`;
@@ -868,6 +896,17 @@
 
         if (typeof root.saveGame === 'function') {
             try { root.saveGame({ silentIndicator: true, source: 'journey-token-redeem' }); } catch (_) {}
+        }
+        if (root.MLFRetentionRewardEffects && typeof root.MLFRetentionRewardEffects.playRewardMoment === 'function') {
+            try { root.MLFRetentionRewardEffects.playRewardMoment('rewardClaim'); } catch (_) {}
+        }
+        if (typeof root.recordRetentionStyleAction === 'function') {
+            try {
+                const styleAction = (reward.type === 'cosmetic' || reward.type === 'roomProp' || reward.type === 'ambient' || reward.type === 'emote' || reward.type === 'photoFrame' || reward.type === 'idleAnimation')
+                    ? 'collection'
+                    : (reward.type === 'bond' ? 'care' : 'journey');
+                root.recordRetentionStyleAction(styleAction, 1);
+            } catch (_) {}
         }
         return {
             ok: true,
@@ -926,6 +965,8 @@
             comebackQuest: current.comebackQuest || null,
             seasonalJourney: current.seasonalJourney || null,
             tokenStore: getJourneyTokenStoreInventory(),
+            visibleRewards: current.visibleRewards || null,
+            playerProfile: current.playerProfile || null,
             chapterObjectives: current.chapterObjectives,
             trackProgress: {
                 bond: byTrack.bond || { completed: 0, total: 0, pct: 0 },

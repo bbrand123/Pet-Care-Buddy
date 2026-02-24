@@ -1,0 +1,33 @@
+P3 Retention Personalization / Visible Rewards / Haptics / Experiments - What To Test
+
+1. Personalization profile classification
+- Play several sessions emphasizing one loop (care / explore / collecting token-store rewards).
+- Open app with `?dev=true` and verify retention debug panel shows a stable style classification + confidence.
+- Verify emotional prompt/Journey suggestion shifts based on style (e.g. explorer prefers Explore CTA).
+
+2. Permanent visible rewards in HUD + store
+- Open Journey modal and confirm token store includes visible reward categories:
+  - room props
+  - idle animations
+  - emote packs
+  - ambient variants
+  - photo frames
+- Redeem one visible reward and confirm:
+  - Journey modal reflects stock/remaining changes
+  - HUD Journey card shows updated visible reward summary counts
+  - Duplicate redemption converts to fallback coins
+
+3. Reward moment haptics + animation sequencing (iPhone)
+- Redeem a Journey token reward and verify a short distinct haptic pattern fires with a fast UI pulse (non-blocking).
+- Complete a comeback quest and verify reward haptic/animation sequence fires.
+- Complete a Journey objective/chapter and verify feedback is short and does not block continuing play.
+
+4. Experiment manager / flags (dev)
+- Open `?dev=true` retention debug panel.
+- Toggle `Experiments` on/off and verify debug panel updates assignment summary.
+- Confirm no crashes when experiments are enabled with `pacingV2Enabled` on/off.
+
+5. Regression checks
+- Journey HUD, Journey modal, reminders, and token store still load with existing saves.
+- Save/load after visible reward unlocks preserves counts and summary.
+- E2E core gameplay flow (care/minigame/save recovery) remains unchanged.

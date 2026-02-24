@@ -86,6 +86,14 @@
             telemetryCaptureEnabled: true,
             telemetryUploadEnabled: false,
             telemetryEndpoint: '',
+            pacingV2Enabled: false,
+            reminderPrioritizationV2Enabled: false,
+            comebackQuestsEnabled: true,
+            journeyTokenStoreRotationEnabled: true,
+            householdRetentionBeatsEnabled: true,
+            personalizationEnabled: true,
+            rewardMomentEffectsEnabled: true,
+            experimentsEnabled: false,
             devAdminEnabled: false
         };
         const fromConstants = (typeof RETENTION_FEATURE_FLAGS !== 'undefined' && RETENTION_FEATURE_FLAGS && isObject(RETENTION_FEATURE_FLAGS))

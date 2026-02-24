@@ -123,6 +123,8 @@ Runtime retention flags live in `RETENTION_FEATURE_FLAGS` in `js/constants.js` a
 - `comebackQuestsEnabled` (default `true`, P2 comeback quest generation + HUD/reminder hooks)
 - `journeyTokenStoreRotationEnabled` (default `true`, P2 rotating weekly Journey token store stock)
 - `householdRetentionBeatsEnabled` (default `true`, P2 household sim retention alerts)
+- `personalizationEnabled` (default `true`, P3 player-style classification + tailored prompts)
+- `rewardMomentEffectsEnabled` (default `true`, P3 non-blocking reward haptics/animation sequencing)
 - `experimentsEnabled` (default `false`, reserved for P3)
 
 ### Retention P1 Tuning (flag-gated)
@@ -171,13 +173,28 @@ When `RETENTION_FEATURE_FLAGS.pacingV2Enabled` is enabled, runtime pacing helper
 - `js/sim/household-simulator.js` + `js/state/household-state.js`
   - Emits relationship/mood retention beats and converts them into reminder-center household alerts with one-tap follow-up actions
 
+### Retention P3 Modules (Personalization / Reward Presence / Experiments)
+
+- `js/retention/personalization.js`
+  - Classifies play style (`care-focused`, `collector`, `explorer`, `breeder`)
+  - Persists `playerProfile.style` + confidence and tailors emotional prompts/Journey suggestions
+- `js/retention/visible-rewards.js`
+  - Permanent visible reward catalogs (room props, idle animations, emotes, ambient variants, photo frames)
+  - Summary API for HUD/Journey modal representation
+- `js/retention/reward-effects.js`
+  - Non-blocking reward moment sequencing (fast haptics + UI animation pulses)
+  - Uses iOS native `window.webkit.messageHandlers.haptics` bridge when available
+- `js/retention/experiments.js`
+  - Deterministic A/B assignments, local dev overrides, and tuning override hooks
+  - Feeds `getRetentionP1Tuning()` when `experimentsEnabled` is on
+
 ### Save Migration Notes (Journey Retention v4)
 
 - Save schema is now `v4` (`saveSchemaVersion: 4`).
 - `v3 -> v4` adds `journeyRetention` with chapter-local state.
 - Migration intentionally initializes per-chapter progress as safe baselines/deltas and does not auto-complete future chapters retroactively.
 - Older saves without `journeyRetention` are normalized during load and persisted on next save.
-- P2 runtime state (`journeyRetention.tokenStore`, `journeyRetention.seasonal`, `meta.householdRetentionAlerts`, `meta.reactivation.comebackQuest`) is lazily initialized and preserved by the v4 normalizer (no schema bump required).
+- P2/P3 runtime state (`journeyRetention.tokenStore`, `journeyRetention.seasonal`, `meta.householdRetentionAlerts`, `meta.reactivation.comebackQuest`, `meta.retentionUnlocks`, `playerProfile`) is lazily initialized and preserved by the v4 normalizer (no schema bump required).
 
 ### Adding New Features
 

@@ -275,11 +275,17 @@
         const objective = (chapter.objectives || []).find((o) => o && o.id === objectiveId);
         if (!objective) return getCurrentSeasonalJourney();
         if (!isObject(ctx.progress.progress)) ctx.progress.progress = {};
+        const wasComplete = !!(ctx.progress.completedObjectives && ctx.progress.completedObjectives[objectiveId]);
         ctx.progress.progress[objectiveId] = clampInt(ctx.progress.progress[objectiveId], 0) + add;
         if (clampInt(ctx.progress.progress[objectiveId], 0) >= clampInt(objective.target, 1)) {
             ctx.progress.completedObjectives[objectiveId] = { at: Date.now() };
         }
         ctx.progress.updatedAt = Date.now();
+        if (!wasComplete && ctx.progress.completedObjectives && ctx.progress.completedObjectives[objectiveId]) {
+            if (root.MLFRetentionRewardEffects && typeof root.MLFRetentionRewardEffects.playRewardMoment === 'function') {
+                try { root.MLFRetentionRewardEffects.playRewardMoment('objectiveComplete'); } catch (_) {}
+            }
+        }
         return getCurrentSeasonalJourney();
     }
 

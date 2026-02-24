@@ -20,7 +20,9 @@
             backlogDripLabel: 'Comeback drip',
             emotionalPromptTitle: 'Right now',
             comebackQuestLabel: 'Comeback quest',
-            seasonalJourneyLabel: 'Seasonal loop'
+            seasonalJourneyLabel: 'Seasonal loop',
+            playerStyleLabel: 'Play style',
+            visibleRewardsLabel: 'Visible rewards'
         }),
         streak: Object.freeze({
             quickClaimCta: 'Claim',
@@ -42,6 +44,9 @@
         telemetry: Object.freeze({
             debugTitle: 'Retention Debug',
             funnelTitle: 'Retention funnels'
+        }),
+        personalization: Object.freeze({
+            styleTitle: 'Play style'
         })
     });
 });

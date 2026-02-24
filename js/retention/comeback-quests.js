@@ -235,6 +235,9 @@
                 if (rewardResult.bondXp > 0) parts.push(`+${rewardResult.bondXp} Bond XP`);
                 try { root.showToast(`✨ Comeback quest complete${parts.length ? ` (${parts.join(' · ')})` : ''}`, '#81C784'); } catch (_) {}
             }
+            if (root.MLFRetentionRewardEffects && typeof root.MLFRetentionRewardEffects.playRewardMoment === 'function') {
+                try { root.MLFRetentionRewardEffects.playRewardMoment('comebackComplete'); } catch (_) {}
+            }
         }
         if (typeof root.saveGame === 'function') {
             try { root.saveGame({ silentIndicator: true, source: 'comeback-quest' }); } catch (_) {}

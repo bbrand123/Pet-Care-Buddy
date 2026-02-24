@@ -316,6 +316,8 @@
                             nextReward: current.nextReward || null,
                             comebackQuest: current.comebackQuest || null,
                             seasonalJourney: current.seasonalJourney || null,
+                            visibleRewards: current.visibleRewards || null,
+                            playerProfile: current.playerProfile || null,
                             chapterComplete: !!current.chapterComplete,
                             trackProgress: { bond: { pct: 0, completed: 0, total: 0 }, mastery: { pct: 0, completed: 0, total: 0 }, collection: { pct: 0, completed: 0, total: 0 } }
                         };
@@ -346,7 +348,9 @@
                     nextRewardLabel: 'Next reward',
                     chapterComplete: 'Chapter complete! Open Journey to review rewards.',
                     comebackQuestLabel: 'Comeback quest',
-                    seasonalJourneyLabel: 'Seasonal loop'
+                    seasonalJourneyLabel: 'Seasonal loop',
+                    playerStyleLabel: 'Play style',
+                    visibleRewardsLabel: 'Visible rewards'
                 };
             }
 
@@ -368,6 +372,15 @@
                 const seasonalJourney = status.seasonalJourney
                     ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.seasonalJourneyLabel || 'Seasonal loop')}:</strong> ${escapeHTML((status.seasonalJourney.icon || '✨') + ' ' + (status.seasonalJourney.title || 'Seasonal Journey'))} (${Math.floor(status.seasonalJourney.completedObjectives || 0)}/${Math.floor(status.seasonalJourney.totalObjectives || 0)})</p>`
                     : '';
+                const playerProfile = status.playerProfile && status.playerProfile.style
+                    ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.playerStyleLabel || 'Play style')}:</strong> ${escapeHTML(String(status.playerProfile.style))}${Number(status.playerProfile.confidence) > 0 ? ` (${Math.round(Number(status.playerProfile.confidence) * 100)}%)` : ''}</p>`
+                    : '';
+                const visibleRows = status.visibleRewards && Array.isArray(status.visibleRewards.rows)
+                    ? status.visibleRewards.rows.filter((row) => Number(row && row.count) > 0).slice(0, 3)
+                    : [];
+                const visibleRewards = status.visibleRewards
+                    ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.visibleRewardsLabel || 'Visible rewards')}:</strong> ${visibleRows.length ? visibleRows.map((row) => `${escapeHTML(row.label)} ${Math.floor(row.count || 0)}`).join(' · ') : '0'}</p>`
+                    : '';
 	            return `
 	                <section class="journey-status-panel" id="journey-status-panel" role="region" aria-label="30 day journey status">
 	                    <div class="journey-status-head">
@@ -383,6 +396,8 @@
 	                    <p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.nextRewardLabel)}:</strong> ${rewardCopy}</p>
                         ${comebackQuest}
                         ${seasonalJourney}
+                        ${playerProfile}
+                        ${visibleRewards}
                         ${backlogDrip}
 	                </section>
 	            `;
@@ -566,6 +581,8 @@
                 const telemetrySnapshot = telemetry && typeof telemetry.getDebugSnapshot === 'function' ? telemetry.getDebugSnapshot() : null;
                 const funnels = telemetrySnapshot && telemetrySnapshot.funnels ? telemetrySnapshot.funnels : null;
                 const flags = telemetrySnapshot && telemetrySnapshot.flags ? telemetrySnapshot.flags : null;
+                const experiments = (typeof MLFRetentionExperiments !== 'undefined' && MLFRetentionExperiments && typeof MLFRetentionExperiments.getDebugSnapshot === 'function') ? MLFRetentionExperiments.getDebugSnapshot() : null;
+                const playerProfile = (typeof getRetentionPlayerProfile === 'function') ? getRetentionPlayerProfile() : null;
 	            const details = enabled ? `
 	                <div class="retention-debug-details">
 	                    <div>Streak: ${snapshot.streak.current} (freeze ${snapshot.streak.freezeTokens})</div>
@@ -579,11 +596,14 @@
                         <div>Telemetry queue: ${telemetrySnapshot.queueLength} · Backoff: ${Math.round((telemetrySnapshot.backoffMs || 0) / 1000)}s</div>
                         <div>Funnels: D1 ${funnels ? funnels.D1.pct : 0}% · D7 ${funnels ? funnels.D7.pct : 0}% · D14 ${funnels ? funnels.D14.pct : 0}% · D30 ${funnels ? funnels.D30.pct : 0}%</div>
                         <div>Upload: ${flags && flags.telemetryUploadEnabled ? 'on' : 'off'} · Capture: ${flags && flags.telemetryCaptureEnabled ? 'on' : 'off'}</div>
+                        ${playerProfile ? `<div>Style: ${escapeHTML(playerProfile.style || 'care-focused')} · Confidence ${Math.round((Number(playerProfile.confidence) || 0) * 100)}%</div>` : ''}
+                        ${experiments ? `<div>Experiments: ${experiments.enabled ? 'on' : 'off'} · pacing ${escapeHTML((experiments.assignments && experiments.assignments.pacing_curve_v1) || 'control')} · reminder ${escapeHTML((experiments.assignments && experiments.assignments.reminder_timing_v1) || 'control')}</div>` : ''}
                     </div>
                     <div class="retention-debug-admin-actions" role="group" aria-label="Retention feature flags">
                         <button id="retention-flag-journey" type="button">${flags && flags.journeyEnabled ? 'Journey: on' : 'Journey: off'}</button>
                         <button id="retention-flag-seasonal" type="button">${flags && flags.seasonalJourneyEnabled ? 'Seasonal: on' : 'Seasonal: off'}</button>
                         <button id="retention-flag-telemetry-upload" type="button">${flags && flags.telemetryUploadEnabled ? 'Upload: on' : 'Upload: off'}</button>
+                        <button id="retention-flag-experiments" type="button">${flags && flags.experimentsEnabled ? 'Experiments: on' : 'Experiments: off'}</button>
                     </div>
                     ${(telemetrySnapshot.recent || []).length > 0 ? `
                         <div class="retention-debug-details" aria-label="Recent telemetry events">
@@ -2042,6 +2062,12 @@
                     if (!(typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.getRuntimeFlags === 'function' && typeof MLFRetentionTelemetry.setFlag === 'function')) return;
                     const flags = MLFRetentionTelemetry.getRuntimeFlags();
                     MLFRetentionTelemetry.setFlag('telemetryUploadEnabled', !flags.telemetryUploadEnabled);
+                    renderPetPhase();
+                });
+                safeAddClick('retention-flag-experiments', () => {
+                    if (!(typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.getRuntimeFlags === 'function' && typeof MLFRetentionTelemetry.setFlag === 'function')) return;
+                    const flags = MLFRetentionTelemetry.getRuntimeFlags();
+                    MLFRetentionTelemetry.setFlag('experimentsEnabled', !flags.experimentsEnabled);
                     renderPetPhase();
                 });
 	            const reminderCenter = document.getElementById('reminder-center-banner');

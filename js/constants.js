@@ -3513,6 +3513,8 @@ const RETENTION_FEATURE_FLAGS = {
     comebackQuestsEnabled: true,
     journeyTokenStoreRotationEnabled: true,
     householdRetentionBeatsEnabled: true,
+    personalizationEnabled: true,
+    rewardMomentEffectsEnabled: true,
     experimentsEnabled: false
 };
 
@@ -3567,7 +3569,20 @@ function isRetentionFeatureFlagEnabled(flagName) {
 }
 
 function getRetentionP1Tuning() {
-    return isRetentionFeatureFlagEnabled('pacingV2Enabled') ? RETENTION_P1_TUNING : null;
+    if (!isRetentionFeatureFlagEnabled('pacingV2Enabled')) return null;
+    let tuning = RETENTION_P1_TUNING;
+    if (typeof applyRetentionExperimentTuningOverrides === 'function') {
+        try {
+            const overridden = applyRetentionExperimentTuningOverrides(tuning);
+            if (overridden) tuning = overridden;
+        } catch (e) {}
+    } else if (typeof MLFRetentionExperiments !== 'undefined' && MLFRetentionExperiments && typeof MLFRetentionExperiments.applyTuningOverrides === 'function') {
+        try {
+            const overridden = MLFRetentionExperiments.applyTuningOverrides(tuning);
+            if (overridden) tuning = overridden;
+        } catch (e) {}
+    }
+    return tuning;
 }
 
 function getGrowthThresholdsForStage(stage) {

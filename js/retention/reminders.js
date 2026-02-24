@@ -271,6 +271,9 @@
         if (typeof root.recordSeasonalJourneyActivity === 'function') {
             try { root.recordSeasonalJourneyActivity(activityKey, 1); } catch (_) {}
         }
+        if (typeof root.recordRetentionStyleAction === 'function') {
+            try { root.recordRetentionStyleAction(activityKey, 1); } catch (_) {}
+        }
         return true;
     }
 
@@ -302,55 +305,73 @@
             const emotionalStrings = (typeof root.MLFRetentionStrings !== 'undefined' && root.MLFRetentionStrings && root.MLFRetentionStrings.emotional)
                 ? root.MLFRetentionStrings.emotional
                 : { comebackCta: 'Resume comeback quest' };
-            return {
+            const prompt = {
                 title: comebackQuest.title || 'Comeback quest',
                 body: `${comebackQuest.body || 'Complete your comeback quest.'} (${Math.max(0, Number(comebackQuest.progress) || 0)}/${Math.max(1, Number(comebackQuest.target) || 1)})`,
                 ctaLabel: emotionalStrings.comebackCta || 'Resume comeback quest',
                 actionType: 'comeback'
             };
+            return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+                ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+                : prompt;
         }
 
         if (streak.current > 0 && !streak.todayBonusClaimed) {
-            return {
+            const prompt = {
                 title: 'Keep your streak warm',
                 body: `Your ${streak.current}-day streak bonus is ready. One tap now keeps the routine easy.`,
                 ctaLabel: 'Claim streak',
                 actionType: 'streak'
             };
+            return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+                ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+                : prompt;
         }
         if (awayDays >= 2) {
-            return {
+            const prompt = {
                 title: 'Ease back into the routine',
                 body: 'Start with one familiar activity to rebuild momentum. Your Journey can drip catch-up rewards over the next few logins.',
                 ctaLabel: 'Open Journey',
                 actionType: 'journey'
             };
+            return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+                ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+                : prompt;
         }
         if (relationshipPoints >= 80 && Array.isArray(gs.pets) && gs.pets.length >= 2) {
-            return {
+            const prompt = {
                 title: 'Your household bond is growing',
                 body: 'A quick social interaction can turn this relationship progress into a visible memory beat.',
                 ctaLabel: 'Open Social',
                 actionType: 'social'
             };
+            return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+                ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+                : prompt;
         }
         if (lastActivity === 'expedition' || lastActivity === 'explore') {
-            return {
+            const prompt = {
                 title: 'Resume your last adventure',
                 body: bondLevel >= 3 ? 'Your pet remembers the last expedition. A short explore run will feel rewarding right away.' : 'A quick expedition is a strong momentum-builder for this session.',
                 ctaLabel: 'Explore',
                 actionType: 'explore'
             };
+            return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+                ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+                : prompt;
         }
         if (lastActivity === 'harvest' || (gs.garden && Number(gs.garden.totalHarvests) > 0)) {
-            return {
+            const prompt = {
                 title: 'Your garden can pay off now',
                 body: 'A short garden check-in often converts into instant rewards and a calmer care loop.',
                 ctaLabel: 'Go to Garden',
                 actionType: 'garden'
             };
+            return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+                ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+                : prompt;
         }
-        return {
+        const prompt = {
             title: bondLevel >= 3 ? 'Your pet notices your routine' : 'Build today’s bond',
             body: bondLevel >= 3
                 ? 'A short care session plus one activity keeps the emotional momentum strong.'
@@ -358,6 +379,9 @@
             ctaLabel: 'Open Journey',
             actionType: 'journey'
         };
+        return (root.MLFRetentionPersonalization && typeof root.MLFRetentionPersonalization.tailorPrompt === 'function')
+            ? (root.MLFRetentionPersonalization.tailorPrompt(prompt) || prompt)
+            : prompt;
     }
 
     const api = Object.freeze({
