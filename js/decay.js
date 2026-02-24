@@ -235,8 +235,28 @@
                         }
                     }
 
+                    let householdBackgroundTickApplied = false;
+                    if (gameState.pets && gameState.pets.length > 1 && typeof MLFHouseholdState !== 'undefined' && MLFHouseholdState && typeof MLFHouseholdState.tickHouseholdOnState === 'function') {
+                        try {
+                            syncActivePetToArray();
+                            const nowMs = Date.now();
+                            const lastSimulatedAt = gameState.household && Number.isFinite(Number(gameState.household.lastSimulatedAt))
+                                ? Number(gameState.household.lastSimulatedAt)
+                                : (nowMs - 30000);
+                            const dtMs = Math.max(0, nowMs - lastSimulatedAt);
+                            if (dtMs >= 5000) {
+                                MLFHouseholdState.tickHouseholdOnState(gameState, dtMs, nowMs, {
+                                    skipActivePetNeeds: true
+                                });
+                                householdBackgroundTickApplied = true;
+                            } else {
+                                MLFHouseholdState.ensureHouseholdState(gameState, nowMs);
+                            }
+                        } catch (_) {}
+                    }
+
                     // Apply passive decay to non-active pets (gentler rate)
-                    if (gameState.pets && gameState.pets.length > 1) {
+                    if (!householdBackgroundTickApplied && gameState.pets && gameState.pets.length > 1) {
                         // Sync active pet to array first so its decayed stats are preserved
                         syncActivePetToArray();
                         gameState.pets.forEach((p, idx) => {

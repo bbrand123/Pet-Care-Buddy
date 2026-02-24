@@ -1348,6 +1348,10 @@
                                 <span class="top-action-btn-label" aria-hidden="true">Explore</span>
                                 ${explorationAlerts > 0 ? `<span class="explore-alert-badge" aria-hidden="true">${Math.min(9, explorationAlerts)}</span>` : ''}
                             </button>
+                            <button class="top-action-btn" id="household-btn" type="button" aria-haspopup="dialog" title="Household Summary" aria-label="Household summary">
+                                <span class="top-action-btn-icon" aria-hidden="true">🏠</span>
+                                <span class="top-action-btn-label" aria-hidden="true">Household</span>
+                            </button>
                             <button class="top-action-btn" id="tools-btn" type="button" aria-haspopup="dialog" title="More tools" aria-label="More tools">
                                 <span class="top-action-btn-icon" aria-hidden="true">🧰</span>
                                 <span class="top-action-btn-label" aria-hidden="true">Tools</span>
@@ -1756,6 +1760,9 @@
 	            safeAddClick('journey-btn', () => {
 	                if (typeof showJourneyModal === 'function') showJourneyModal();
 	            });
+                safeAddClick('household-btn', () => {
+                    if (typeof showHouseholdSummaryModal === 'function') showHouseholdSummaryModal();
+                });
 	            safeAddClick('daily-btn', () => {
 	                if (typeof markCoachChecklistProgress === 'function') markCoachChecklistProgress('complete_daily');
 	            });

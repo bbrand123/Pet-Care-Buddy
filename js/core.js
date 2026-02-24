@@ -128,6 +128,13 @@
             pets: [], // Array of all pet objects
             activePetIndex: 0, // Index of the currently active/displayed pet
             relationships: {}, // { "petId1-petId2": { points, lastInteraction, interactionHistory } }
+            household: {
+                activePetId: null,
+                petsById: {},
+                relationships: {},
+                lastSimulatedAt: Date.now(),
+                simVersion: 1
+            }, // Persistent background household simulation state
             adoptingAdditional: false, // True when adopting an additional egg (don't reset state)
             nextPetId: 1, // Auto-incrementing ID for unique pet identification
             // Achievement & daily systems
@@ -740,6 +747,38 @@
             state.nextPetId = Math.max(candidateNext, maxId + 1);
         }
 
+        function ensureHouseholdStateForRuntime(targetState, nowMs) {
+            if (!targetState || typeof targetState !== 'object') return;
+            if (typeof MLFHouseholdState === 'undefined' || !MLFHouseholdState || typeof MLFHouseholdState.ensureHouseholdState !== 'function') return;
+            try {
+                MLFHouseholdState.ensureHouseholdState(targetState, nowMs);
+            } catch (err) {
+                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
+                    MLFDiagnostics.warn('HOUSEHOLD', 'Failed to ensure household state.', {
+                        error: String(err && err.message ? err.message : err)
+                    });
+                }
+            }
+        }
+
+        function simulateHouseholdToNowForRuntime(targetState, nowMs, options) {
+            if (!targetState || typeof targetState !== 'object') return null;
+            if (typeof MLFHouseholdState === 'undefined' || !MLFHouseholdState || typeof MLFHouseholdState.simulateHouseholdToNowOnState !== 'function') {
+                ensureHouseholdStateForRuntime(targetState, nowMs);
+                return null;
+            }
+            try {
+                return MLFHouseholdState.simulateHouseholdToNowOnState(targetState, nowMs, options);
+            } catch (err) {
+                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
+                    MLFDiagnostics.warn('HOUSEHOLD', 'Household catch-up simulation failed; continuing with legacy state.', {
+                        error: String(err && err.message ? err.message : err)
+                    });
+                }
+                return null;
+            }
+        }
+
         const _escapeDiv = document.createElement('div');
         function escapeHTML(str) {
             _escapeDiv.textContent = str;
@@ -1135,12 +1174,24 @@
 	        function saveGame(options) {
 	            try {
 	                const saveOptions = (options && typeof options === 'object') ? options : null;
+                    const nowMs = Date.now();
 	                ensureExplorationState();
 	                ensureEconomyState();
 	                ensureMiniGameExpansionState();
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
-                gameState.lastUpdate = Date.now();
+                if (gameState.phase === 'pet') {
+                    simulateHouseholdToNowForRuntime(gameState, nowMs, {
+                        tickOptions: {
+                            skipActivePetNeeds: true
+                        }
+                    });
+                    ensureHouseholdStateForRuntime(gameState, nowMs);
+                    if (gameState.household && typeof gameState.household === 'object') {
+                        gameState.household.lastSimulatedAt = nowMs;
+                    }
+                }
+                gameState.lastUpdate = nowMs;
 	                if (typeof StateManager === 'undefined' || !StateManager || typeof StateManager.serialize !== 'function') {
 	                    throw new Error('StateManager.serialize is required for the canonical save path.');
 	                }
@@ -1461,7 +1512,53 @@
                         parsed.pet = parsed.pets[parsed.activePetIndex];
                     }
 
-                    if (typeof MLFSaveOfflineSimulation !== 'undefined' && MLFSaveOfflineSimulation && typeof MLFSaveOfflineSimulation.applyOfflineSimulation === 'function') {
+                    const nowMs = Date.now();
+                    const activeBeforeHouseholdSim = parsed.pet ? {
+                        hunger: parsed.pet.hunger,
+                        cleanliness: parsed.pet.cleanliness,
+                        happiness: parsed.pet.happiness,
+                        energy: parsed.pet.energy
+                    } : null;
+
+                    ensureHouseholdStateForRuntime(parsed, nowMs);
+
+                    const hasHouseholdSim = (typeof MLFHouseholdState !== 'undefined' && MLFHouseholdState && typeof MLFHouseholdState.simulateHouseholdToNowOnState === 'function');
+                    if (hasHouseholdSim) {
+                        try {
+                            if (typeof MLFSaveOfflineSimulation !== 'undefined' && MLFSaveOfflineSimulation && typeof MLFSaveOfflineSimulation.applyGardenOfflineGrowth === 'function') {
+                                MLFSaveOfflineSimulation.applyGardenOfflineGrowth(parsed, {
+                                    now: nowMs,
+                                    getCurrentSeason,
+                                    seasons: SEASONS,
+                                    gardenCrops: GARDEN_CROPS
+                                });
+                            }
+                            const simResult = simulateHouseholdToNowForRuntime(parsed, nowMs) || {};
+                            parsed.timeOfDay = getTimeOfDay();
+                            if (activeBeforeHouseholdSim && parsed.pet && parsed.lastUpdate) {
+                                const minutesPassed = Math.max(0, Math.round((nowMs - parsed.lastUpdate) / 60000));
+                                if (minutesPassed >= 5) {
+                                    parsed._offlineChanges = {
+                                        minutes: minutesPassed,
+                                        hunger: (parsed.pet.hunger || 0) - (activeBeforeHouseholdSim.hunger || 0),
+                                        cleanliness: (parsed.pet.cleanliness || 0) - (activeBeforeHouseholdSim.cleanliness || 0),
+                                        happiness: (parsed.pet.happiness || 0) - (activeBeforeHouseholdSim.happiness || 0),
+                                        energy: (parsed.pet.energy || 0) - (activeBeforeHouseholdSim.energy || 0)
+                                    };
+                                }
+                            }
+                            if (simResult && simResult.meta && simResult.meta.catchUpClamped && typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function') {
+                                MLFDiagnostics.log('HOUSEHOLD', 'Household offline catch-up was clamped.', simResult.meta);
+                            }
+                        } catch (offlineSimulationError) {
+                            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
+                                MLFDiagnostics.warn('LOAD', 'Household offline simulation failed; continuing with loaded state.', {
+                                    error: String(offlineSimulationError && offlineSimulationError.message ? offlineSimulationError.message : offlineSimulationError)
+                                });
+                            }
+                            parsed.timeOfDay = getTimeOfDay();
+                        }
+                    } else if (typeof MLFSaveOfflineSimulation !== 'undefined' && MLFSaveOfflineSimulation && typeof MLFSaveOfflineSimulation.applyOfflineSimulation === 'function') {
                         try {
                             MLFSaveOfflineSimulation.applyOfflineSimulation(parsed, {
                                 getCurrentSeason,
@@ -1679,6 +1776,15 @@
                 gameState.pets = [];
                 gameState.activePetIndex = 0;
                 gameState.relationships = {};
+                gameState.household = {
+                    activePetId: null,
+                    petsById: {},
+                    relationships: {},
+                    lastSimulatedAt: Date.now(),
+                    simVersion: (typeof MLFHouseholdSimulator !== 'undefined' && MLFHouseholdSimulator && Number.isInteger(MLFHouseholdSimulator.SIM_VERSION))
+                        ? MLFHouseholdSimulator.SIM_VERSION
+                        : 1
+                };
             }
             saveGame();
         }
@@ -1968,6 +2074,7 @@
                         if (saved.minigameHighScores) gameState.minigameHighScores = saved.minigameHighScores;
                         if (saved.minigameScoreHistory) gameState.minigameScoreHistory = saved.minigameScoreHistory;
                         if (saved.relationships) gameState.relationships = saved.relationships;
+                        if (saved.household) gameState.household = saved.household;
                         if (saved.furniture) gameState.furniture = saved.furniture;
                         if (saved.roomUnlocks) gameState.roomUnlocks = saved.roomUnlocks;
                         if (saved.roomUpgrades) gameState.roomUpgrades = saved.roomUpgrades;
@@ -2056,6 +2163,7 @@
                 const hydratedRoot = StateManager.hydrate(saved, { reason: 'init-load' });
                 if (hydratedRoot) gameState = hydratedRoot;
             }
+            ensureHouseholdStateForRuntime(gameState, Date.now());
             if (!saved && _loadError) {
                 showSaveRecoveryDialog();
             }

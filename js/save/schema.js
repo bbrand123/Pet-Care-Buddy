@@ -8,7 +8,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFSaveSchema() {
     'use strict';
 
-    const CURRENT_SCHEMA_VERSION = 1;
+    const CURRENT_SCHEMA_VERSION = 2;
     const ALLOWED_PHASES = Object.freeze(['egg', 'hatching', 'pet']);
 
     class SavePayloadError extends Error {
@@ -77,6 +77,45 @@
             throw createValidationError(
                 'Invalid save payload at "' + path + '"; expected an object.',
                 { code: 'INVALID_PET_OBJECT', path, value: pet }
+            );
+        }
+    }
+
+    function assertHouseholdObject(household, path) {
+        if (!isObject(household)) {
+            throw createValidationError(
+                'Invalid save payload at "' + path + '"; expected an object.',
+                { code: 'INVALID_HOUSEHOLD_OBJECT', path, value: household }
+            );
+        }
+        if (household.activePetId != null && typeof household.activePetId !== 'string' && typeof household.activePetId !== 'number') {
+            throw createValidationError(
+                'Invalid "household.activePetId"; expected a string, number, or null.',
+                { code: 'INVALID_HOUSEHOLD_ACTIVE_PET_ID', path: path + '.activePetId', value: household.activePetId }
+            );
+        }
+        if (household.petsById != null && !isObject(household.petsById)) {
+            throw createValidationError(
+                'Invalid "household.petsById"; expected an object map.',
+                { code: 'INVALID_HOUSEHOLD_PETS_BY_ID', path: path + '.petsById', value: household.petsById }
+            );
+        }
+        if (household.relationships != null && !isObject(household.relationships)) {
+            throw createValidationError(
+                'Invalid "household.relationships"; expected an object map.',
+                { code: 'INVALID_HOUSEHOLD_RELATIONSHIPS', path: path + '.relationships', value: household.relationships }
+            );
+        }
+        if (household.lastSimulatedAt != null && (!Number.isFinite(household.lastSimulatedAt) || household.lastSimulatedAt < 0)) {
+            throw createValidationError(
+                'Invalid "household.lastSimulatedAt"; expected a finite timestamp number.',
+                { code: 'INVALID_HOUSEHOLD_LAST_SIMULATED_AT', path: path + '.lastSimulatedAt', value: household.lastSimulatedAt }
+            );
+        }
+        if (household.simVersion != null && (!Number.isInteger(household.simVersion) || household.simVersion < 0)) {
+            throw createValidationError(
+                'Invalid "household.simVersion"; expected a non-negative integer.',
+                { code: 'INVALID_HOUSEHOLD_SIM_VERSION', path: path + '.simVersion', value: household.simVersion }
             );
         }
     }
@@ -151,6 +190,15 @@
 
         if (payload.pet != null) {
             assertPetObject(payload.pet, 'pet');
+        }
+
+        if (payload.household != null) {
+            assertHouseholdObject(payload.household, 'household');
+        } else if (mode === 'final' && schemaVersion >= 2) {
+            throw createValidationError(
+                'Missing required field "household" in schema v2+ save payload.',
+                { code: 'MISSING_HOUSEHOLD', path: 'household' }
+            );
         }
 
         if (mode === 'final' && payload.phase === 'pet') {

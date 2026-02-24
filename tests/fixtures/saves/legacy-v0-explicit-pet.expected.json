@@ -1,18 +1,51 @@
 {
-  "saveSchemaVersion": 1,
+  "saveSchemaVersion": 2,
   "phase": "pet",
   "lastUpdate": 1700000000000,
   "activePetIndex": 0,
   "pet": {
     "name": "Nova",
     "type": "furry",
-    "birthdate": 1699990000000
+    "birthdate": 1699990000000,
+    "id": "pet-1"
   },
   "pets": [
     {
       "name": "Nova",
       "type": "furry",
-      "birthdate": 1699990000000
+      "birthdate": 1699990000000,
+      "id": "pet-1"
     }
-  ]
+  ],
+  "household": {
+    "activePetId": "pet-1",
+    "petsById": {
+      "pet-1": {
+        "name": "Nova",
+        "type": "furry",
+        "birthdate": 1699990000000,
+        "id": "pet-1",
+        "needs": {
+          "hunger": 70,
+          "energy": 70,
+          "fun": 70,
+          "hygiene": 70
+        },
+        "hunger": 70,
+        "energy": 70,
+        "happiness": 70,
+        "cleanliness": 70,
+        "mood": "neutral",
+        "traits": {},
+        "schedule": {},
+        "currentActivity": null,
+        "location": {
+          "roomId": "bedroom"
+        }
+      }
+    },
+    "relationships": {},
+    "lastSimulatedAt": 1700000000000,
+    "simVersion": 1
+  }
 }

@@ -6,10 +6,14 @@ A virtual pet game built with vanilla JavaScript, HTML, and CSS, shipped primari
 
 ### Core Gameplay
 - **13 Pet Types**: Dogs, cats, bunnies, birds, hamsters, turtles, fish, frogs, hedgehogs, pandas, penguins, unicorns 🦄, and dragons 🐉
+- **Multi-Pet Household**: Keep multiple pets in one household save with a player-selected active pet
 - **Growth System**: Pets grow from Baby → Child → Adult based on care actions
 - **4 Core Needs**: Hunger, Cleanliness, Happiness, Energy
 - **Dynamic Day/Night Cycle**: Real-time based with mood effects
 - **Weather & Seasons**: Affects pet mood and gameplay bonuses
+- **Background Pet Autonomy**: Non-active pets eat, sleep, play, socialize, and idle on their own
+- **Persistent Offline Progress**: Household simulation catches up deterministically after app restarts/resume
+- **Pet Relationships**: Pets build familiarity/affinity over time and can become friends or rivals
 
 ### Customization
 - **4 Egg Types**: Different eggs hint at what pet will hatch (furry, feathery, scaly, magical)
@@ -42,6 +46,7 @@ The shipped runtime (including the iOS app web view) boots through a single ES m
 Key runtime areas:
 
 - `js/core.js` + extracted game-domain files (`js/economy.js`, `js/garden.js`, `js/decay.js`, etc.)
+- `js/sim/*` + `js/state/household-state.js` (deterministic household simulation, autonomy, relationship logic, legacy state sync bridge)
 - `js/ui/*` (rendering, actions, notifications, modals, settings, feature modules)
 - `js/minigames/framework.js` + `js/minigames/*` implementations
 - `js/registries/*` (minigame descriptors, content-pack application registries)
@@ -86,6 +91,8 @@ If you maintain a web demo build, GitHub Pages can still be used (`https://[your
 - `js/game.js`, `js/ui.js`, and `js/minigames.js` are legacy monoliths and are not loaded in production.
 - Runtime load order is centralized in generated manifests, not HTML script-tag order.
 - `StateManager` is the real state write/event path via a proxied `gameState` root and emits structured state events (`state:changed`, `state:replaced`) through `EventBus`.
+- Household background simulation is implemented as pure modules in `js/sim/*` and synchronized with existing runtime state via `js/state/household-state.js`.
+- Current saves maintain legacy `pets` / `pet` / `activePetIndex` compatibility while also storing `household` (`petsById`, `activePetId`, relationships, `lastSimulatedAt`, `simVersion`).
 - Minigame metadata lives in `js/config/minigame-descriptors.js` and is registered through `js/registries/minigame-registry.js`.
 - Content packs apply through `js/registries/content-registries.js` instead of mutating global registries directly in the pack loader.
 - Extension-point and boundary guidance for contributors lives in `docs/RUNTIME_BOUNDARIES.md`.
@@ -199,6 +206,7 @@ This CI lane is intentionally lightweight and does not replace iOS simulator/dev
 Coverage includes:
 
 - Garden systems (existing)
+- Household simulation (autonomy, relationships, deterministic catch-up)
 - StateManager proxy/event behavior
 - Economy payout calculations
 - Minigame descriptor registry validation
@@ -219,7 +227,9 @@ The shipping product is the native iOS app embedding this runtime in `WKWebView`
 ## 🔄 Migration Notes
 
 - Save storage key remains `myLittleFriend` (existing saves should continue to load).
-- Save payloads now include explicit `saveSchemaVersion` and are upgraded through ordered migrations.
+- Save payloads include explicit `saveSchemaVersion` and are upgraded through ordered migrations.
+- Current save schema (`v2`) adds a persistent `household` object used for multi-pet background simulation and offline catch-up.
+- Legacy single-pet / older multi-pet saves are migrated into the household format while keeping compatibility fields used by existing runtime/UI code.
 - `StateManager` now emits real structured events through `EventBus`; listeners can subscribe to `state:changed` / `state:replaced`.
 - Production and `test.html` now boot via `js/main.js`; custom scripts/tests that depended on HTML script order should wait for `window.__MLF_RUNTIME_READY__` or the `mlf:runtime-ready` event.
 

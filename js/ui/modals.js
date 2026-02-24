@@ -1483,6 +1483,15 @@
                     pets: [],
                     activePetIndex: 0,
                     relationships: {},
+                    household: {
+                        activePetId: null,
+                        petsById: {},
+                        relationships: {},
+                        lastSimulatedAt: Date.now(),
+                        simVersion: (typeof MLFHouseholdSimulator !== 'undefined' && MLFHouseholdSimulator && Number.isInteger(MLFHouseholdSimulator.SIM_VERSION))
+                            ? MLFHouseholdSimulator.SIM_VERSION
+                            : 1
+                    },
                     nextPetId: 1,
                     achievements: preservedAchievements,
                     roomsVisited: preservedRoomsVisited,
@@ -1609,6 +1618,159 @@
                     ${tabs}
                 </nav>
             `;
+        }
+
+        function showHouseholdSummaryModal() {
+            if (!Array.isArray(gameState.pets) || gameState.pets.length === 0) {
+                showToast('No household pets to show yet.', '#90A4AE');
+                return;
+            }
+
+            const existing = document.querySelector('.household-summary-overlay');
+            if (existing) {
+                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                existing.remove();
+            }
+
+            const petsById = {};
+            gameState.pets.forEach((pet) => {
+                if (pet && pet.id != null) petsById[String(pet.id)] = pet;
+            });
+            const householdRelationships = (gameState.household && gameState.household.relationships) ? gameState.household.relationships : {};
+            const legacyRelationships = gameState.relationships || {};
+
+            function getActivityLabelForPet(pet) {
+                const activity = (pet && pet.currentActivity && typeof pet.currentActivity === 'object')
+                    ? pet.currentActivity
+                    : null;
+                if (!activity || !activity.type) return 'Idle';
+                const type = String(activity.type);
+                const labels = {
+                    eat: 'Eating',
+                    sleep: 'Sleeping',
+                    play: 'Playing',
+                    socialize: 'Socializing',
+                    idle: 'Idle',
+                    exploreRoom: 'Exploring'
+                };
+                const label = labels[type] || (type.charAt(0).toUpperCase() + type.slice(1));
+                if (type === 'socialize' && activity.targetPetId != null) {
+                    const target = petsById[String(activity.targetPetId)];
+                    const targetName = target ? (target.name || ((getAllPetTypeData(target.type) || {}).name) || 'pet') : 'another pet';
+                    return `${label} with ${targetName}`;
+                }
+                return label;
+            }
+
+            function getRelationshipHighlightText(pet) {
+                if (!pet || pet.id == null) return 'No relationship highlights yet';
+                const petId = String(pet.id);
+                if (typeof MLFSimRelationships !== 'undefined' && MLFSimRelationships && typeof MLFSimRelationships.getRelationshipHighlightsForPet === 'function' && householdRelationships && Object.keys(householdRelationships).length > 0) {
+                    const highlights = MLFSimRelationships.getRelationshipHighlightsForPet(petId, householdRelationships);
+                    const parts = [];
+                    if (highlights.bestFriend && Array.isArray(highlights.bestFriend.tags) && highlights.bestFriend.tags.includes('friend')) {
+                        const bf = petsById[String(highlights.bestFriend.petId)];
+                        if (bf) parts.push(`Best friend: ${bf.name || 'Pet'}`);
+                    }
+                    if (highlights.rival && Array.isArray(highlights.rival.tags) && highlights.rival.tags.includes('rival')) {
+                        const rv = petsById[String(highlights.rival.petId)];
+                        if (rv) parts.push(`Rival: ${rv.name || 'Pet'}`);
+                    }
+                    if (parts.length > 0) return parts.join(' · ');
+                }
+
+                let bestLegacy = null;
+                Object.keys(legacyRelationships).forEach((key) => {
+                    if (String(key).split('-').indexOf(petId) === -1) return;
+                    const rel = legacyRelationships[key];
+                    const points = Number(rel && rel.points) || 0;
+                    const otherId = String(key).split('-').find((part) => part !== petId);
+                    if (!otherId) return;
+                    if (!bestLegacy || points > bestLegacy.points) bestLegacy = { otherId, points };
+                });
+                if (bestLegacy && bestLegacy.points > 0) {
+                    const other = petsById[String(bestLegacy.otherId)];
+                    if (other) return `Closest bond: ${other.name || 'Pet'}`;
+                }
+                return 'No relationship highlights yet';
+            }
+
+            const petCardsHTML = gameState.pets.map((pet, idx) => {
+                if (!pet) return '';
+                const petData = getAllPetTypeData(pet.type) || PET_TYPES[pet.type] || { emoji: '🐾', name: 'Pet' };
+                const name = escapeHTML(pet.name || petData.name || 'Pet');
+                const isActive = idx === gameState.activePetIndex;
+                const activityLabel = escapeHTML(getActivityLabelForPet(pet));
+                const relHighlight = escapeHTML(getRelationshipHighlightText(pet));
+                return `
+                    <article class="household-summary-card" role="listitem" aria-label="${name}${isActive ? ', active pet' : ''}">
+                        <div class="household-summary-card-head">
+                            <div>
+                                <h3 class="household-summary-pet-name">${petData.emoji} ${name}${isActive ? ' (Active)' : ''}</h3>
+                                <p class="household-summary-activity">Activity: ${activityLabel}</p>
+                            </div>
+                            ${isActive ? '<button class="modal-btn" type="button" data-household-switch-disabled="true" disabled aria-label="Already active">Active</button>' : `<button class="modal-btn confirm" type="button" data-household-switch="${idx}" aria-label="Switch to ${name}">Switch</button>`}
+                        </div>
+                        <div class="household-summary-stats" role="group" aria-label="${name} quick stats">
+                            <span>Hunger ${Math.round(Number(pet.hunger) || 0)}%</span>
+                            <span>Energy ${Math.round(Number(pet.energy) || 0)}%</span>
+                            <span>Fun ${Math.round(Number(pet.happiness) || 0)}%</span>
+                        </div>
+                        <p class="household-summary-rel">${relHighlight}</p>
+                    </article>
+                `;
+            }).join('');
+
+            const overlay = document.createElement('div');
+            overlay.className = 'household-summary-overlay modal-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', 'Household Summary');
+            overlay.innerHTML = `
+                <div class="modal-content" style="max-width:680px;max-height:85vh;overflow:auto;">
+                    <h2 class="modal-title">Household Summary</h2>
+                    <p class="modal-message">All pets continue living in the background, even when they are not active.</p>
+                    <div role="list" aria-label="Household pets" style="display:grid;gap:10px;margin:12px 0;">
+                        ${petCardsHTML}
+                    </div>
+                    <div class="modal-buttons">
+                        <button class="modal-btn cancel" id="household-summary-close" type="button">Close</button>
+                    </div>
+                    <div class="sr-only" aria-live="polite" id="household-summary-live"></div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const closeBtn = overlay.querySelector('#household-summary-close');
+            if (closeBtn) closeBtn.focus();
+
+            function closeHouseholdSummary() {
+                popModalEscape(closeHouseholdSummary);
+                animateModalClose(overlay, () => {
+                    const trigger = document.getElementById('household-btn');
+                    if (trigger) trigger.focus();
+                });
+            }
+
+            overlay.querySelectorAll('[data-household-switch]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const idx = Number(btn.getAttribute('data-household-switch'));
+                    if (!Number.isInteger(idx)) return;
+                    syncActivePetToArray();
+                    if (switchActivePet(idx)) {
+                        const live = overlay.querySelector('#household-summary-live');
+                        if (live && gameState.pet) live.textContent = `Switched active pet to ${gameState.pet.name || 'pet'}.`;
+                        closeHouseholdSummary();
+                        renderPetPhase();
+                    }
+                });
+            });
+
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeHouseholdSummary(); });
+            if (closeBtn) closeBtn.addEventListener('click', closeHouseholdSummary);
+            pushModalEscape(closeHouseholdSummary);
+            overlay._closeOverlay = closeHouseholdSummary;
+            trapFocus(overlay);
         }
 
         // ==================== PET INTERACTION SYSTEM ====================

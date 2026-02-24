@@ -16,6 +16,12 @@
 
 - Use the **modular runtime files** in `js/` and split CSS sources as the source of truth.
 - Avoid reintroducing monolithic logic from legacy combined files unless explicitly requested.
+- For multi-pet/background behavior, prefer the household simulation modules:
+  - `js/sim/household-simulator.js`
+  - `js/sim/autonomy.js`
+  - `js/sim/relationships.js`
+  - `js/state/household-state.js` (sync bridge between new household save state and legacy runtime fields)
+- Keep simulation rules pure/testable; UI should consume synced state from existing runtime hooks.
 
 ## Developer Workflow Guidance
 
@@ -24,3 +30,4 @@
 - Regenerate manifests with `npm run gen:runtime` when runtime file order or manifest-managed files change.
 - Use `RELEASE_CHECKLIST_IOS.md` for every TestFlight/App Store candidate (save persistence, lifecycle resume, audio, haptics, external links, diagnostics).
 - Follow `docs/RUNTIME_BOUNDARIES.md` for approved extension points (state, save, UI, registries, boot/runtime).
+- When changing save schema or household simulation persistence, update `js/save/schema.js`, `js/save/migrations/*`, and the save fixtures/tests in `tests/save-migrations.test.js`.
