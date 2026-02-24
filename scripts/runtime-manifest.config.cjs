@@ -63,6 +63,7 @@ const GAME_RUNTIME_FILES = [
 
 const UI_RUNTIME_FILES = [
   './ui/rendering.js',
+  './ui/emotional-feedback.js',
   './ui/actions.js',
   './ui/notifications.js',
   './ui/animations.js',

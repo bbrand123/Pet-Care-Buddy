@@ -224,6 +224,7 @@
         ];
         const _toastAnnounceLastByText = new Map();
         const _audioCaptionToastLastByText = new Map();
+        const _momentAnnounceLastByKey = new Map();
         const _toastQueue = [];
         let _toastQueueTimer = null;
         const _deferredToastBatch = [];
@@ -319,6 +320,96 @@
             setUiBusyState();
         }
 
+        function getMomentSummaryContainer() {
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                document.body.appendChild(container);
+            }
+            if (!container.classList.contains('toast-container')) {
+                container.classList.add('toast-container');
+            }
+            return container;
+        }
+
+        function momentMetaListHTML(meta) {
+            if (!Array.isArray(meta) || meta.length === 0) return '';
+            const items = meta.slice(0, 4).map((row) => {
+                const type = escapeHTML(String((row && row.type) || 'meta'));
+                const text = escapeHTML(String((row && row.text) || ''));
+                return `<li class="moment-summary-meta-item" data-meta-type="${type}">${text}</li>`;
+            }).join('');
+            return `<ul class="moment-summary-meta" aria-label="Additional updates">${items}</ul>`;
+        }
+
+        function showMomentSummary(plan, options = {}) {
+            if (!plan) return null;
+            const container = getMomentSummaryContainer();
+            const key = String(options.key || `moment-${Date.now()}`);
+            const replace = !!options.replace;
+            let card = Array.from(container.querySelectorAll('.moment-summary-card')).find((el) => el.getAttribute('data-moment-key') === key) || null;
+            if (!card) {
+                card = document.createElement('aside');
+                card.className = 'moment-summary-card';
+                card.setAttribute('data-moment-key', key);
+                card.setAttribute('role', 'status');
+                card.setAttribute('aria-live', 'polite');
+                card.setAttribute('aria-atomic', 'true');
+                container.appendChild(card);
+            }
+            const tier = plan.tier || 'Routine';
+            const mode = plan.uiMode || 'inline';
+            const reaction = plan.petReaction || {};
+            const main = plan.mainResult || {};
+            card.classList.toggle('is-update', replace);
+            card.setAttribute('data-tier', String(tier).toLowerCase());
+            card.setAttribute('data-ui-mode', String(mode));
+            card.innerHTML = `
+                <div class="moment-summary-inner">
+                    <div class="moment-summary-row moment-summary-pet">
+                        <span class="moment-summary-emote" aria-hidden="true">${escapeHTML(String(reaction.emote || '💛'))}</span>
+                        <span class="moment-summary-text">${escapeHTML(String(reaction.text || 'Your pet felt cared for.'))}</span>
+                    </div>
+                    <div class="moment-summary-row moment-summary-main">
+                        <span class="moment-summary-label" aria-hidden="true">${tier === 'Routine' ? 'Care' : 'Moment'}</span>
+                        <span class="moment-summary-text">${escapeHTML(String(main.text || 'Care completed.'))}</span>
+                    </div>
+                    ${momentMetaListHTML(plan.meta)}
+                </div>
+            `;
+            clearOnboardingTooltips();
+            setUiBusyState();
+
+            if (options.announce && typeof announce === 'function') {
+                const announceText = sanitizeToastText(options.announceText || [
+                    reaction.text || '',
+                    main.text || '',
+                    Array.isArray(plan.meta) ? plan.meta.slice(0, 2).map((m) => m && m.text ? m.text : '').join(' ') : ''
+                ].join(' '));
+                if (announceText) {
+                    const now = Date.now();
+                    const last = _momentAnnounceLastByKey.get(key) || 0;
+                    if (now - last > 700) {
+                        _momentAnnounceLastByKey.set(key, now);
+                        announce(announceText, { source: 'status', dedupeMs: 600 });
+                    }
+                }
+            }
+
+            if (card._momentRemoveTimer) clearTimeout(card._momentRemoveTimer);
+            const dwellMs = (mode === 'ceremony') ? 5200 : (mode === 'banner' ? 4200 : 3200);
+            card._momentRemoveTimer = setTimeout(() => {
+                if (!card.parentNode) return;
+                card.classList.add('toast-exiting');
+                setTimeout(() => {
+                    if (card.parentNode) card.remove();
+                    setUiBusyState();
+                }, 260);
+            }, dwellMs);
+            return card;
+        }
+
         function isMiniGameActive() {
             return !!document.querySelector('.fetch-game-overlay, .hideseek-game-overlay, .bubblepop-game-overlay, .matching-game-overlay, .simonsays-game-overlay, .coloring-game-overlay');
         }
@@ -403,6 +494,17 @@
             const safeMessage = escapeHTML(plainText);
             const priority = isCriticalToast(plainText, options) ? 'critical' : 'normal';
             addToNotificationHistory(plainText);
+            if (priority !== 'critical' && !(options && options.bypassMomentCapture) && typeof window !== 'undefined'
+                && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.captureLegacyToast === 'function') {
+                try {
+                    const captured = window.MLFEmotionalFeedback.captureLegacyToast({
+                        message: plainText,
+                        color,
+                        options
+                    });
+                    if (captured) return;
+                } catch (e) {}
+            }
             const item = { safeMessage, color, plainText, priority };
             if (isGameplayTrafficHigh() && priority !== 'critical') {
                 queueDeferredToast(item);
@@ -440,10 +542,10 @@
         // can emit events instead of calling UI functions directly.
         if (typeof EventBus !== 'undefined' && typeof EVENTS !== 'undefined') {
             EventBus.on(EVENTS.TOAST_REQUESTED, function (data) {
-                if (data && data.message) {
-                    showToast(data.message, data.color || data.type, data.options);
-                }
-            });
+            if (data && data.message) {
+                showToast(data.message, data.color || data.type, data.options);
+            }
+        });
             EventBus.on(EVENTS.ANNOUNCEMENT_REQUESTED, function (data) {
                 if (data && data.message && typeof announce === 'function') {
                     announce(data.message, data.options || data.assertive || false);
@@ -465,6 +567,8 @@
             const categoryPrefix = category ? `[${category}] ` : '';
 	            showToast(`🔊 ${categoryPrefix}${captionText}`, '#90A4AE', { announce: true });
 	        });
+
+        window.showMomentSummary = showMomentSummary;
 
             const REWARD_PRESENTATION_TOKENS = Object.freeze({
                 coinColors: ['#FFD54F', '#FFEE58', '#FFC107'],

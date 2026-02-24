@@ -1630,6 +1630,10 @@
             const rewardHappyFlat = (typeof getRewardHappinessFlatBonus === 'function') ? getRewardHappinessFlatBonus() : 0;
             let message = '';
             let careDecisionResult = null;
+            const actionCountBefore = (gameState && gameState.caretakerActionCounts && Number(gameState.caretakerActionCounts[action])) || 0;
+            const firstTimeAction = actionCountBefore <= 0;
+            let careAffinity = 'neutral';
+            let primaryReactionEmoji = '';
 
             switch (action) {
                 case 'feed': {
@@ -1658,6 +1662,9 @@
                         return;
                     }
                     careDecisionResult = getCareDecisionMultiplier('feed', pet, beforeStats);
+                    const feedPref = typeof getPreferenceModifier === 'function' ? getPreferenceModifier(pet, 'feed') : 1;
+                    if (feedPref > 1) careAffinity = 'love';
+                    else if (feedPref < 1) careAffinity = 'dislike';
                     message = performStandardFeed(pet, careDecisionResult);
                     break;
                 }
@@ -1673,6 +1680,8 @@
                         : randomFromArray(FEEDBACK_MESSAGES.wash);
                     if (washPref < 1) message = `😨 ${pet.name || 'Pet'} didn't enjoy that... ${message}`;
                     else if (washPref > 1) message = `💕 ${pet.name || 'Pet'} loved that! ${message}`;
+                    if (washPref > 1) careAffinity = 'love';
+                    else if (washPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('sparkle', 'pet-scrub-shake');
                     if (sparkles) createBubbles(sparkles);
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.wash);
@@ -1690,6 +1699,8 @@
                         : randomFromArray(FEEDBACK_MESSAGES.play);
                     if (playPref < 1) message = `😨 ${pet.name || 'Pet'} wasn't into it... ${message}`;
                     else if (playPref > 1) message = `💕 ${pet.name || 'Pet'} LOVED playing! ${message}`;
+                    if (playPref > 1) careAffinity = 'love';
+                    else if (playPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('wiggle', 'pet-happy-bounce');
                     if (sparkles) createHearts(sparkles);
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.play);
@@ -1707,9 +1718,11 @@
                     if (sleepTime === 'night') {
                         sleepBonus = 35; // deep sleep at night
                         sleepAnnounce = 'Your pet had a wonderful deep sleep!';
+                        careAffinity = 'tired';
                     } else if (sleepTime === 'sunset') {
                         sleepBonus = 27; // good evening rest
                         sleepAnnounce = 'Your pet had a cozy evening rest!';
+                        careAffinity = 'tired';
                     } else if (sleepTime === 'sunrise') {
                         sleepBonus = 27; // nice morning sleep-in
                         sleepAnnounce = 'Your pet slept in a little!';
@@ -1736,6 +1749,7 @@
                         ? getExpandedFeedbackMessage('medicine', pet.personality, pet.growthStage)
                         : randomFromArray(FEEDBACK_MESSAGES.medicine);
                     if (medPref < 1) message = `😨 ${pet.name || 'Pet'} doesn't like medicine! ${message}`;
+                    if (medPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('heal-anim');
                     if (sparkles) createMedicineParticles(sparkles);
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.medicine);
@@ -1758,6 +1772,8 @@
                         : randomFromArray(FEEDBACK_MESSAGES.groom);
                     if (groomPref < 1) message = `😨 ${pet.name || 'Pet'} squirmed through grooming! ${message}`;
                     else if (groomPref > 1) message = `💕 ${pet.name || 'Pet'} loved the pampering! ${message}`;
+                    if (groomPref > 1) careAffinity = 'love';
+                    else if (groomPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('groom-anim');
                     if (sparkles) createGroomParticles(sparkles);
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.groom);
@@ -1779,6 +1795,8 @@
                         : randomFromArray(FEEDBACK_MESSAGES.exercise);
                     if (exPref < 1) message = `😨 ${pet.name || 'Pet'} got tired quickly! ${message}`;
                     else if (exPref > 1) message = `💕 ${pet.name || 'Pet'} had an amazing workout! ${message}`;
+                    if (exPref > 1) careAffinity = 'love';
+                    else if (exPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('exercise-anim');
                     if (sparkles) createExerciseParticles(sparkles);
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.exercise);
@@ -1804,6 +1822,7 @@
                     message = `${treat.emoji} ${treatMsg}`;
                     if (prefs && treat.name === prefs.favoriteTreat) {
                         message = `${treat.emoji} 💕 FAVORITE treat! ${treatMsg}`;
+                        careAffinity = 'love';
                     }
                     if (petContainer) petContainer.classList.add('treat-anim');
                     if (sparkles) createTreatParticles(sparkles, treat.emoji);
@@ -1824,6 +1843,8 @@
                         : randomFromArray(FEEDBACK_MESSAGES.cuddle);
                     if (cuddlePref < 1) message = `😨 ${pet.name || 'Pet'} squirmed away! ${message}`;
                     else if (cuddleMod > 1.2) message = `💕 ${pet.name || 'Pet'} melted into your arms! ${message}`;
+                    if (cuddleMod > 1.2) careAffinity = 'love';
+                    else if (cuddlePref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('cuddle-anim');
                     if (sparkles) createCuddleParticles(sparkles);
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.cuddle);
@@ -1841,17 +1862,32 @@
                     const stageData = GROWTH_STAGES[stageKey] || GROWTH_STAGES.baby;
                     const stageBalance = (typeof getStageBalance === 'function') ? getStageBalance(stageKey) : { neglectThreshold: 20 };
                     const focusNeedLabel = getCareNeedLabel(careDecisionResult.lowestNeed);
+                    const pushCareMeta = (text) => {
+                        if (!text) return false;
+                        if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushCareMeta === 'function') {
+                            try { return !!window.MLFEmotionalFeedback.pushCareMeta({ text, type: 'coach' }); } catch (e) {}
+                        }
+                        return false;
+                    };
                     if (careDecisionResult.repeatApplied && careDecisionResult.focused) {
-                        showToast(`🔁 Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. 🎯 Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}.`, '#FFA726', { announce: false });
+                        if (!pushCareMeta(`Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}.`)) {
+                            showToast(`🔁 Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. 🎯 Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}.`, '#FFA726', { announce: false });
+                        }
                         announce(`Repeat penalty active. Focus bonus on ${focusNeedLabel}.`);
                     } else if (careDecisionResult.repeatApplied) {
-                        showToast(`🔁 Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. Rotate actions to restore full gains.`, '#FFA726', { announce: false });
+                        if (!pushCareMeta(`Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. Rotate actions for fuller gains.`)) {
+                            showToast(`🔁 Repeat penalty -${careDecisionResult.repeatPenaltyPct}% active. Rotate actions to restore full gains.`, '#FFA726', { announce: false });
+                        }
                         announce('Tip: repeat penalty active. Rotate care actions for better gains.');
                     } else if (careDecisionResult.focused) {
-                        showToast(`🎯 Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}. ${stageData.label} pressure starts near ${Math.round(stageBalance.neglectThreshold || 20)}.`, '#4FC3F7', { announce: false });
+                        if (!pushCareMeta(`Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}.`)) {
+                            showToast(`🎯 Focus bonus +${careDecisionResult.focusBonusPct}% on ${focusNeedLabel}. ${stageData.label} pressure starts near ${Math.round(stageBalance.neglectThreshold || 20)}.`, '#4FC3F7', { announce: false });
+                        }
                         announce(`Focus bonus active on ${focusNeedLabel}.`);
                     } else if (careDecisionResult.offTarget) {
-                        showToast(`🎯 No focus bonus: ${focusNeedLabel} is the lowest need right now. (${stageData.label} pressure near ${Math.round(stageBalance.neglectThreshold || 20)})`, '#4FC3F7', { announce: false });
+                        if (!pushCareMeta(`No focus bonus: ${focusNeedLabel} is the lowest need right now.`)) {
+                            showToast(`🎯 No focus bonus: ${focusNeedLabel} is the lowest need right now. (${stageData.label} pressure near ${Math.round(stageBalance.neglectThreshold || 20)})`, '#4FC3F7', { announce: false });
+                        }
                         announce(`Tip: care the lowest need first for a focus bonus.`);
                     }
                 }
@@ -1880,6 +1916,40 @@
                 showStatChangeSummary(summaryChanges, { action });
             }
 
+            if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.startCareMoment === 'function') {
+                try {
+                    const roomId = (gameState && gameState.currentRoom) || 'bedroom';
+                    const weatherId = (gameState && gameState.weather) || 'sunny';
+                    const timeOfDayId = (gameState && gameState.timeOfDay) || 'day';
+                    const roomName = (typeof ROOMS !== 'undefined' && ROOMS[roomId] && ROOMS[roomId].name) ? ROOMS[roomId].name : roomId;
+                    const petLabel = pet.name || petData.name || 'Your pet';
+                    window.MLFEmotionalFeedback.startCareMoment({
+                        action,
+                        petName: petLabel,
+                        affinity: careAffinity,
+                        firstTimeAction,
+                        statDeltas,
+                        roomId,
+                        weather: weatherId,
+                        timeOfDay: timeOfDayId,
+                        mainResultText: '',
+                        sceneMoodText: `${roomName} feels ${weatherId === 'rainy' ? 'cozy in the rain' : weatherId === 'snowy' ? 'quiet and bright' : (timeOfDayId === 'night' ? 'soft and sleepy' : timeOfDayId === 'sunset' ? 'warm and slow' : 'open and welcoming')} around ${petLabel}.`
+                    });
+                } catch (e) {}
+            }
+            if (typeof activatePetSceneFocusMode === 'function') {
+                activatePetSceneFocusMode(action === 'cuddle' ? 1400 : 1000);
+            }
+            if (message && typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushCareMeta === 'function') {
+                try {
+                    const compactCareFlavor = String(message || '')
+                        .replace(/^[\p{Emoji_Presentation}\p{Emoji}\uFE0F\s]+/gu, '')
+                        .replace(/^(?:[^.?!]{0,60}(?:loved|didn't enjoy|wasn't into|had an amazing workout|melted into your arms|squirmed away|squirmed through grooming)[^.?!]*[.?!]\s*)/i, '')
+                        .trim();
+                    if (compactCareFlavor) window.MLFEmotionalFeedback.pushCareMeta({ text: compactCareFlavor, type: 'flavor' });
+                } catch (e) {}
+            }
+
             // Haptic feedback per action type
             if (typeof hapticPattern === 'function') hapticPattern(action);
 
@@ -1890,6 +1960,7 @@
                 syncProgressiveOnboardingMilestones({ firstCareAction: true });
             }
             if (typeof trackCareAction === 'function') trackCareAction(action);
+            if (typeof noteFirstSessionCareLoopComplete === 'function') noteFirstSessionCareLoopComplete(action);
             markCoachChecklistProgress(action);
 
             // Apply incubation bonus to breeding eggs from care actions
@@ -1919,6 +1990,10 @@
 	                if (reactionEmoji && petContainer) {
 	                    showPetReaction(petContainer, reactionEmoji);
 	                }
+                    primaryReactionEmoji = reactionEmoji || primaryReactionEmoji;
+                    if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.updateCarePayload === 'function') {
+                        try { window.MLFEmotionalFeedback.updateCarePayload({ reactionEmote: primaryReactionEmoji }); } catch (e) {}
+                    }
                     if (typeof triggerPetMicroReaction === 'function' && petContainer) triggerPetMicroReaction(action, { container: petContainer });
 	            }
 
@@ -1930,7 +2005,14 @@
                 }
                 dailyCompleted.push(...incrementDailyProgress('totalCareActions'));
                 dailyCompleted.push(...incrementDailyProgress('masteryPoints', 1));
-                dailyCompleted.forEach(task => showToast(`${task.icon} Daily task done: ${task.name}!`, '#FFD700'));
+                dailyCompleted.forEach(task => {
+                    if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushCareMeta === 'function') {
+                        try {
+                            if (window.MLFEmotionalFeedback.pushCareMeta({ text: `${task.name}: Daily task progress +1.`, type: 'daily' })) return;
+                        } catch (e) {}
+                    }
+                    showToast(`${task.icon} Daily task done: ${task.name}!`, '#FFD700');
+                });
             }
 
             if (typeof consumeCareActionRewardModifiers === 'function') consumeCareActionRewardModifiers();
@@ -2017,6 +2099,9 @@
             // Check for growth stage transition (uses checkGrowthMilestone which
             // handles lastGrowthStage tracking, birthday celebrations, and adultsRaised)
             if (checkGrowthMilestone(pet)) {
+                if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.updateCarePayload === 'function') {
+                    try { window.MLFEmotionalFeedback.updateCarePayload({ growthMilestone: true }); } catch (e) {}
+                }
                 // Growth happened — checkGrowthMilestone already saves internally.
                 // Defer re-render so celebration modal is not disrupted.
                 saveGame();
@@ -2029,6 +2114,9 @@
                 const flavorRoom = (gameState && gameState.currentRoom) || 'bedroom';
                 const flavorText = getRoomFlavorText(action, flavorRoom, pet.name || 'Your pet');
                 if (flavorText && Math.random() < 0.30) {
+                    if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushSceneMoodCue === 'function') {
+                        try { window.MLFEmotionalFeedback.pushSceneMoodCue({ text: flavorText, roomId: flavorRoom, kind: 'room', ttlMs: 16000 }); } catch (e) {}
+                    }
                     setTimeout(() => showToast(flavorText, '#81C784'), 800);
                 }
             }
@@ -2040,12 +2128,12 @@
                 const currentWeather = (gameState && gameState.weather) || 'sunny';
                 const microEvent = getMicroEvent(pet, action, currentRoom, currentSeason, currentWeather);
                 if (microEvent && microEvent.text) {
+                    if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushSceneMoodCue === 'function') {
+                        try { window.MLFEmotionalFeedback.pushSceneMoodCue({ text: microEvent.text, roomId: currentRoom, kind: 'memory', ttlMs: 18000 }); } catch (e) {}
+                    }
                     setTimeout(() => showToast(microEvent.text, '#B39DDB'), 1200);
                 }
             }
-
-            // Batch rapid care toasts into a single notification
-            queueCareToast(action, petData.emoji);
 
             // C21: Undo toast for care actions
             (function showUndoToast() {
@@ -2072,7 +2160,7 @@
                     updateWellnessBar();
                     saveGame();
                     undoToast.remove();
-                    showToast('Action undone', '#90A4AE');
+                    showToast('Action undone', '#90A4AE', { bypassMomentCapture: true });
                 });
                 setTimeout(() => {
                     if (!undone && undoToast.parentNode) {

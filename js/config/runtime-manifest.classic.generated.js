@@ -62,6 +62,7 @@
 ]),
     UI_RUNTIME_FILES: Object.freeze([
   "./ui/rendering.js",
+  "./ui/emotional-feedback.js",
   "./ui/actions.js",
   "./ui/notifications.js",
   "./ui/animations.js",
@@ -153,6 +154,7 @@
   "./decay.js",
   "./caretaker.js",
   "./ui/rendering.js",
+  "./ui/emotional-feedback.js",
   "./ui/actions.js",
   "./ui/notifications.js",
   "./ui/animations.js",

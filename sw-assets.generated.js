@@ -198,6 +198,7 @@ self.SW_GENERATED_ASSETS = Object.freeze([
   "./js/ui/animations.js",
   "./js/ui/breeding.js",
   "./js/ui/economy.js",
+  "./js/ui/emotional-feedback.js",
   "./js/ui/exploration.js",
   "./js/ui/furniture.js",
   "./js/ui/modals.js",

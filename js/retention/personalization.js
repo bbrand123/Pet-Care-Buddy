@@ -27,6 +27,32 @@
         reminder: { 'care-focused': 0.4, collector: 0.4, explorer: 0.4, breeder: 0.4 },
         comeback: { 'care-focused': 0.5, collector: 0.5, explorer: 0.5, breeder: 0.5 }
     });
+    const STYLE_PRESENTATION = Object.freeze({
+        'care-focused': {
+            title: 'Steady Hearthkeeper',
+            shortLabel: 'Hearthkeeper',
+            emoji: '🕯️',
+            description: 'Known for warm routines and gentle consistency.'
+        },
+        collector: {
+            title: 'Keepsake Curator',
+            shortLabel: 'Curator',
+            emoji: '🧺',
+            description: 'Known for turning little finds into a home full of stories.'
+        },
+        explorer: {
+            title: 'Wonder Guide',
+            shortLabel: 'Guide',
+            emoji: '🧭',
+            description: 'Known for leading pets toward new places and curious moments.'
+        },
+        breeder: {
+            title: 'Household Gardener',
+            shortLabel: 'Gardener',
+            emoji: '🌿',
+            description: 'Known for patient care and long-term family growth.'
+        }
+    });
 
     function isObject(value) {
         return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -118,20 +144,52 @@
         const style = profile.style;
         base.playerStyle = style;
         if (style === 'collector') {
-            base.body = (base.body || '').replace('Journey', 'Journey and collection').trim() || 'You have strong collection momentum. A quick reward-focused action should pay off fast.';
-            if (!base.ctaLabel || base.actionType === 'journey') base.ctaLabel = 'Check rewards';
+            base.body = 'Your pet notices how you fill the home with little treasures. A quick rewards check or collection moment will feel meaningful.';
+            if (!base.ctaLabel || base.actionType === 'journey') base.ctaLabel = 'See keepsakes';
         } else if (style === 'explorer') {
             if (base.actionType === 'journey') base.actionType = 'explore';
-            base.body = 'Your play style trends toward discovery. One explore run is likely to feel rewarding right away.';
+            base.body = 'Your pet knows you for finding new corners of the world together. One short explore trip would fit today\'s mood.';
             if (!base.ctaLabel || base.ctaLabel === 'Open Journey') base.ctaLabel = 'Explore';
         } else if (style === 'breeder') {
-            base.body = 'Your style favors longer-term growth loops. A social or household check-in can set up future breeding progress.';
+            base.body = 'You tend the whole household with patience. A social check-in can help the home feel connected again.';
             if (base.actionType === 'journey') base.actionType = 'social';
         } else if (style === 'care-focused') {
-            base.body = 'Your strongest momentum comes from steady care routines. A quick care loop keeps progress reliable.';
+            base.body = 'Your pet relaxes fastest when you start with a gentle care routine. One loving loop is enough to brighten the room.';
             if (base.actionType === 'journey') base.actionType = 'streak';
         }
         return base;
+    }
+
+    function getIdentityTitle(styleKey) {
+        const key = (typeof styleKey === 'string' && styleKey) ? styleKey : ((getProfile() || {}).style || 'care-focused');
+        const row = STYLE_PRESENTATION[key] || STYLE_PRESENTATION['care-focused'];
+        return Object.assign({ key }, row);
+    }
+
+    function getIdentityLabel(options) {
+        const opts = isObject(options) ? options : {};
+        const profile = getProfile() || { style: 'care-focused', confidence: 0 };
+        const title = getIdentityTitle(opts.style || profile.style);
+        const petName = (typeof opts.petName === 'string' && opts.petName.trim()) ? opts.petName.trim() : 'Your pet';
+        const roomName = (typeof opts.roomName === 'string' && opts.roomName.trim()) ? opts.roomName.trim() : '';
+        const recentAction = (typeof opts.recentAction === 'string' && opts.recentAction.trim()) ? opts.recentAction.trim() : '';
+        const actionLine = recentAction ? ` after all that ${recentAction}` : '';
+        const homeLine = roomName ? ` in the ${roomName}` : '';
+        return {
+            key: title.key,
+            emoji: title.emoji,
+            title: title.title,
+            shortLabel: title.shortLabel,
+            confidence: Number(profile.confidence) || 0,
+            description: title.description,
+            headline: `${petName} knows you as the ${title.title}.`,
+            reflection: `${petName} knows you for ${title.shortLabel.toLowerCase()} energy${homeLine}${actionLine}.`
+        };
+    }
+
+    function getIdentityReflection(options) {
+        const identity = getIdentityLabel(options);
+        return `${identity.emoji} ${identity.headline}`;
     }
 
     const api = Object.freeze({
@@ -140,7 +198,10 @@
         recordAction,
         classify,
         getProfile,
-        tailorPrompt
+        tailorPrompt,
+        getIdentityTitle,
+        getIdentityLabel,
+        getIdentityReflection
     });
 
     if (root && typeof root === 'object') {

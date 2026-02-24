@@ -318,8 +318,8 @@
 
         if (streak.current > 0 && !streak.todayBonusClaimed) {
             const prompt = {
-                title: 'Keep your streak warm',
-                body: `Your ${streak.current}-day streak bonus is ready. One tap now keeps the routine easy.`,
+                title: 'Keep your visit ritual warm',
+                body: `Your ${streak.current}-day check-in is waiting. One quick claim keeps today feeling easy for both of you.`,
                 ctaLabel: 'Claim streak',
                 actionType: 'streak'
             };
@@ -329,8 +329,8 @@
         }
         if (awayDays >= 2) {
             const prompt = {
-                title: 'Ease back into the routine',
-                body: 'Start with one familiar activity to rebuild momentum. Your Journey can drip catch-up rewards over the next few logins.',
+                title: 'Ease back in together',
+                body: 'Start with one familiar moment so your pet settles in with you again. Journey catch-up rewards can wait until after that.',
                 ctaLabel: 'Open Journey',
                 actionType: 'journey'
             };
@@ -340,8 +340,8 @@
         }
         if (relationshipPoints >= 80 && Array.isArray(gs.pets) && gs.pets.length >= 2) {
             const prompt = {
-                title: 'Your household bond is growing',
-                body: 'A quick social interaction can turn this relationship progress into a visible memory beat.',
+                title: 'Your household is getting closer',
+                body: 'A quick social interaction could turn this bond into a small memory your home keeps.',
                 ctaLabel: 'Open Social',
                 actionType: 'social'
             };
@@ -352,7 +352,7 @@
         if (lastActivity === 'expedition' || lastActivity === 'explore') {
             const prompt = {
                 title: 'Resume your last adventure',
-                body: bondLevel >= 3 ? 'Your pet remembers the last expedition. A short explore run will feel rewarding right away.' : 'A quick expedition is a strong momentum-builder for this session.',
+                body: bondLevel >= 3 ? 'Your pet still remembers that last expedition. A short explore run would feel like picking up the story together.' : 'A quick expedition can give this session an easy sense of discovery.',
                 ctaLabel: 'Explore',
                 actionType: 'explore'
             };
@@ -362,8 +362,8 @@
         }
         if (lastActivity === 'harvest' || (gs.garden && Number(gs.garden.totalHarvests) > 0)) {
             const prompt = {
-                title: 'Your garden can pay off now',
-                body: 'A short garden check-in often converts into instant rewards and a calmer care loop.',
+                title: 'The garden is ready for a gentle check-in',
+                body: 'A quick garden visit can freshen the home and set up a calmer care loop.',
                 ctaLabel: 'Go to Garden',
                 actionType: 'garden'
             };
@@ -374,8 +374,8 @@
         const prompt = {
             title: bondLevel >= 3 ? 'Your pet notices your routine' : 'Build today’s bond',
             body: bondLevel >= 3
-                ? 'A short care session plus one activity keeps the emotional momentum strong.'
-                : 'Feed, play, and finish one small objective to strengthen your Journey chapter.',
+                ? 'A short care session and one cozy activity will make the home feel settled again.'
+                : 'Start with one caring moment, then pick a small Journey step once they feel settled.',
             ctaLabel: 'Open Journey',
             actionType: 'journey'
         };

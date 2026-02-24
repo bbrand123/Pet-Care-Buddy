@@ -18,10 +18,10 @@
             beginnerMoreSummary: 'More panels',
             beginnerMoreHint: 'Goal ladder, tips, and debug tools',
             backlogDripLabel: 'Comeback drip',
-            emotionalPromptTitle: 'Right now',
+            emotionalPromptTitle: 'With your pet',
             comebackQuestLabel: 'Comeback quest',
             seasonalJourneyLabel: 'Seasonal loop',
-            playerStyleLabel: 'Play style',
+            playerStyleLabel: 'Caretaker title',
             visibleRewardsLabel: 'Visible rewards'
         }),
         streak: Object.freeze({
@@ -46,7 +46,7 @@
             funnelTitle: 'Retention funnels'
         }),
         personalization: Object.freeze({
-            styleTitle: 'Play style'
+            styleTitle: 'Caretaker title'
         })
     });
 });

@@ -153,6 +153,35 @@
 	                ? !!getStreakProtectionStatus().autoUseFreeze
 	                : true;
 	            const highContrastEnabled = document.documentElement.getAttribute('data-high-contrast') === 'true';
+                const emotionalDevVisible = !!(
+                    (typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.isDevAdminEnabled === 'function' && MLFRetentionTelemetry.isDevAdminEnabled())
+                    || (typeof isRetentionDebugEnabled === 'function' && isRetentionDebugEnabled())
+                );
+                const emotionalDebugConfig = (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.getDebugConfig === 'function')
+                    ? window.MLFEmotionalFeedback.getDebugConfig()
+                    : { forcedTier: '', pacingCareLoops: null };
+                const emotionalDevSection = emotionalDevVisible ? `
+                        <fieldset class="settings-group"><legend class="settings-group-heading">Emotional Read (DEV)</legend>
+                            <div class="settings-row settings-row-verbosity">
+                                <span class="settings-row-label">🎚️ Force Celebration Tier</span>
+                                <button class="settings-choice ${(emotionalDebugConfig.forcedTier || '') === '' ? 'active' : ''}" id="setting-emotional-tier-auto" type="button" data-emotional-tier="" aria-pressed="${(emotionalDebugConfig.forcedTier || '') === '' ? 'true' : 'false'}">Auto</button>
+                                <button class="settings-choice ${emotionalDebugConfig.forcedTier === 'Routine' ? 'active' : ''}" id="setting-emotional-tier-routine" type="button" data-emotional-tier="Routine" aria-pressed="${emotionalDebugConfig.forcedTier === 'Routine' ? 'true' : 'false'}">Routine</button>
+                                <button class="settings-choice ${emotionalDebugConfig.forcedTier === 'Notable' ? 'active' : ''}" id="setting-emotional-tier-notable" type="button" data-emotional-tier="Notable" aria-pressed="${emotionalDebugConfig.forcedTier === 'Notable' ? 'true' : 'false'}">Notable</button>
+                                <button class="settings-choice ${emotionalDebugConfig.forcedTier === 'Milestone' ? 'active' : ''}" id="setting-emotional-tier-milestone" type="button" data-emotional-tier="Milestone" aria-pressed="${emotionalDebugConfig.forcedTier === 'Milestone' ? 'true' : 'false'}">Milestone</button>
+                            </div>
+                            <div class="settings-row settings-row-verbosity">
+                                <span class="settings-row-label">🧪 Simulate Rewards</span>
+                                <button class="settings-preset-btn" id="setting-emotional-dev-burst" type="button">Show bundled moment</button>
+                            </div>
+                            <div class="settings-row settings-row-verbosity">
+                                <span class="settings-row-label">⏱️ First-Session Pacing</span>
+                                <button class="settings-choice ${(emotionalDebugConfig.pacingCareLoops == null) ? 'active' : ''}" id="setting-emotional-pacing-live" type="button" data-emotional-pacing="live" aria-pressed="${(emotionalDebugConfig.pacingCareLoops == null) ? 'true' : 'false'}">Live</button>
+                                <button class="settings-choice ${Number(emotionalDebugConfig.pacingCareLoops) === 0 ? 'active' : ''}" id="setting-emotional-pacing-0" type="button" data-emotional-pacing="0" aria-pressed="${Number(emotionalDebugConfig.pacingCareLoops) === 0 ? 'true' : 'false'}">0 loops</button>
+                                <button class="settings-choice ${Number(emotionalDebugConfig.pacingCareLoops) === 2 ? 'active' : ''}" id="setting-emotional-pacing-2" type="button" data-emotional-pacing="2" aria-pressed="${Number(emotionalDebugConfig.pacingCareLoops) === 2 ? 'true' : 'false'}">2 loops</button>
+                                <button class="settings-choice ${Number(emotionalDebugConfig.pacingCareLoops) === 3 ? 'active' : ''}" id="setting-emotional-pacing-3" type="button" data-emotional-pacing="3" aria-pressed="${Number(emotionalDebugConfig.pacingCareLoops) === 3 ? 'true' : 'false'}">3 loops</button>
+                            </div>
+                        </fieldset>
+                ` : '';
 
 	            const overlay = document.createElement('div');
 	            overlay.className = 'settings-overlay';
@@ -320,6 +349,7 @@
 	                            <button class="settings-preset-btn settings-reset-btn" id="setting-reset-defaults" style="color:#D32F2F;border-color:#D32F2F;">Reset All Settings to Defaults</button>
 	                        </div>
                         </fieldset>
+                        ${emotionalDevSection}
 
                     </div>
                     <div class="settings-keyboard-hints">
@@ -366,7 +396,16 @@
                     'setting-haptic': 'Vibration feedback for taps and alerts.',
                     'setting-reminders': 'Local reminders for hatch, harvest, expedition, and streak risks.',
                     'setting-streak-freeze-auto': 'Automatically spends a freeze token to protect your streak.',
-                    'setting-reset-defaults': 'Restores default display, accessibility, and audio settings.'
+                    'setting-reset-defaults': 'Restores default display, accessibility, and audio settings.',
+                    'setting-emotional-tier-auto': 'Use automatic celebration routing.',
+                    'setting-emotional-tier-routine': 'Force routine-tier presentation.',
+                    'setting-emotional-tier-notable': 'Force notable-tier presentation.',
+                    'setting-emotional-tier-milestone': 'Force milestone-tier presentation.',
+                    'setting-emotional-dev-burst': 'Show a test care moment with bundled rewards.',
+                    'setting-emotional-pacing-live': 'Use actual first-session pacing state.',
+                    'setting-emotional-pacing-0': 'Simulate zero care loops completed.',
+                    'setting-emotional-pacing-2': 'Simulate pre-meta pacing state (2 loops).',
+                    'setting-emotional-pacing-3': 'Simulate meta systems unlocked (3 loops).'
                 };
                 Object.keys(settingsHelpByControlId).forEach((id) => {
                     const control = overlay.querySelector(`#${id}`);
@@ -767,8 +806,8 @@
 
             // D32: Reset all settings to defaults
 	            const resetBtn = document.getElementById('setting-reset-defaults');
-	            if (resetBtn) {
-	                resetBtn.addEventListener('click', () => {
+            if (resetBtn) {
+                resetBtn.addEventListener('click', () => {
                         const previousSettings = captureSettingsPreferenceSnapshot();
 	                    if (!window.confirm('Reset all settings to defaults? You can undo from the next toast for a few seconds.')) return;
                     // Reset theme
@@ -807,6 +846,49 @@
                     setTimeout(() => showSettingsModal(), 300);
                 });
             }
+
+            overlay.querySelectorAll('[data-emotional-tier]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const forcedTier = btn.getAttribute('data-emotional-tier') || '';
+                    if (!(typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.setDebugConfig === 'function')) return;
+                    try {
+                        window.MLFEmotionalFeedback.setDebugConfig({ forcedTier });
+                        overlay.querySelectorAll('[data-emotional-tier]').forEach((peer) => {
+                            const active = (peer.getAttribute('data-emotional-tier') || '') === forcedTier;
+                            peer.classList.toggle('active', active);
+                            peer.setAttribute('aria-pressed', active ? 'true' : 'false');
+                        });
+                        notifyPreview(`Emotional tier: ${forcedTier || 'Auto'}.`);
+                    } catch (e) {}
+                });
+            });
+
+            const emotionalBurstBtn = document.getElementById('setting-emotional-dev-burst');
+            if (emotionalBurstBtn) {
+                emotionalBurstBtn.addEventListener('click', () => {
+                    if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.triggerDebugDemo === 'function') {
+                        window.MLFEmotionalFeedback.triggerDebugDemo();
+                        showToast('Emotional moment test triggered.', '#90CAF9', { announce: true, bypassMomentCapture: true });
+                    }
+                });
+            }
+
+            overlay.querySelectorAll('[data-emotional-pacing]').forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    const raw = btn.getAttribute('data-emotional-pacing');
+                    const pacingCareLoops = raw === 'live' ? null : Math.max(0, Math.floor(Number(raw) || 0));
+                    if (!(typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.setDebugConfig === 'function')) return;
+                    window.MLFEmotionalFeedback.setDebugConfig({ pacingCareLoops });
+                    overlay.querySelectorAll('[data-emotional-pacing]').forEach((peer) => {
+                        const peerRaw = peer.getAttribute('data-emotional-pacing');
+                        const active = (raw === 'live' && peerRaw === 'live') || (peerRaw !== 'live' && pacingCareLoops != null && Number(peerRaw) === pacingCareLoops);
+                        peer.classList.toggle('active', active);
+                        peer.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    });
+                    notifyPreview(`First-session pacing: ${pacingCareLoops == null ? 'Live state' : `${pacingCareLoops} care loops`}.`);
+                    if (typeof renderPetPhase === 'function') renderPetPhase();
+                });
+            });
 
 	            function closeSettings() {
                     saveSettingsUiRestore();

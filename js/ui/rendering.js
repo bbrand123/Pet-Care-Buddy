@@ -215,9 +215,11 @@
         }
 
 	        function generateStreakStatusPanelHTML() {
+            if (!isFirstSessionMetaReady()) return '';
             if (typeof getStreakProtectionStatus !== 'function') return '';
             const status = getStreakProtectionStatus();
             if (!status || !Number.isFinite(status.current) || status.current <= 0) return '';
+            syncProgressiveOnboardingMilestones({ hasSeenRewardsPanel: true });
             const retentionStrings = (typeof MLFRetentionStrings !== 'undefined' && MLFRetentionStrings && MLFRetentionStrings.streak)
                 ? MLFRetentionStrings.streak
                 : { quickClaimCta: 'Claim', quickClaimDone: 'Claimed' };
@@ -355,8 +357,10 @@
             }
 
 	        function generateJourneyStatusPanelHTML() {
+	            if (!isFirstSessionMetaReady()) return '';
 	            const status = getJourneyHudStatus();
 	            if (!status || !status.chapter) return '';
+                syncProgressiveOnboardingMilestones({ hasSeenJourneyPrompt: true });
                 const uiStrings = getJourneyUiStrings();
 	            const objectiveCopy = status.nextObjective
 	                ? escapeHTML(status.nextObjective.label || 'Objective')
@@ -373,7 +377,18 @@
                     ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.seasonalJourneyLabel || 'Seasonal loop')}:</strong> ${escapeHTML((status.seasonalJourney.icon || '✨') + ' ' + (status.seasonalJourney.title || 'Seasonal Journey'))} (${Math.floor(status.seasonalJourney.completedObjectives || 0)}/${Math.floor(status.seasonalJourney.totalObjectives || 0)})</p>`
                     : '';
                 const playerProfile = status.playerProfile && status.playerProfile.style
-                    ? `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.playerStyleLabel || 'Play style')}:</strong> ${escapeHTML(String(status.playerProfile.style))}${Number(status.playerProfile.confidence) > 0 ? ` (${Math.round(Number(status.playerProfile.confidence) * 100)}%)` : ''}</p>`
+                    ? (() => {
+                        const petName = (gameState && gameState.pet && gameState.pet.name) || 'Your pet';
+                        const roomId = (gameState && gameState.currentRoom) || 'bedroom';
+                        const roomName = (typeof ROOMS !== 'undefined' && ROOMS[roomId] && ROOMS[roomId].name) ? ROOMS[roomId].name : roomId;
+                        const identity = (typeof MLFRetentionPersonalization !== 'undefined' && MLFRetentionPersonalization && typeof MLFRetentionPersonalization.getIdentityLabel === 'function')
+                            ? MLFRetentionPersonalization.getIdentityLabel({ style: status.playerProfile.style, petName, roomName })
+                            : null;
+                        const label = identity && identity.title ? `${identity.emoji || ''} ${identity.title}`.trim() : String(status.playerProfile.style);
+                        const detail = identity && identity.headline ? ` <span class="journey-status-inline-reflection">${escapeHTML(identity.headline)}</span>` : '';
+                        const confidence = Number(status.playerProfile.confidence) > 0 ? ` (${Math.round(Number(status.playerProfile.confidence) * 100)}%)` : '';
+                        return `<p class="journey-status-novelty"><strong>${escapeHTML(uiStrings.playerStyleLabel || 'Caretaker title')}:</strong> ${escapeHTML(label)}${confidence}${detail}</p>`;
+                    })()
                     : '';
                 const visibleRows = status.visibleRewards && Array.isArray(status.visibleRewards.rows)
                     ? status.visibleRewards.rows.filter((row) => Number(row && row.count) > 0).slice(0, 3)
@@ -404,6 +419,7 @@
 	        }
 
             function generateRetentionEmotionalPromptHTML() {
+                if (!isFirstSessionMetaReady()) return '';
                 if (typeof getRetentionEmotionalPrompt !== 'function') return '';
                 const prompt = getRetentionEmotionalPrompt();
                 if (!prompt || !prompt.title) return '';
@@ -535,10 +551,12 @@
                 }
 
 		        function generateReminderCenterBannerHTML() {
+	            if (!isFirstSessionMetaReady()) return '';
 	            if (typeof getReminderCenterItems !== 'function') return '';
 	            const items = getReminderCenterItems();
 	            const prompt = (typeof shouldShowReminderPrompt === 'function') ? shouldShowReminderPrompt() : false;
 	            if (!prompt && (!items || items.length === 0)) return '';
+                syncProgressiveOnboardingMilestones({ hasSeenReminderPrompt: !!prompt });
 	            const rows = (items || []).slice(0, 3).map((item) => `
 	                <li class="reminder-center-item" aria-label="${escapeHTML(item.title)} ${escapeHTML(item.body || '')}">
 	                    <div class="reminder-center-copy">
@@ -1007,6 +1025,17 @@
 
         const EARLY_SESSION_LIMIT = 3;
         const EARLY_SESSION_ACTION_LIMIT = 24;
+        let _keyboardNavHintDetectedThisSession = false;
+
+        if (typeof window !== 'undefined' && !window.__mlfKeyboardHintTrackerBound) {
+            window.__mlfKeyboardHintTrackerBound = true;
+            window.addEventListener('keydown', (event) => {
+                const key = event && event.key ? String(event.key) : '';
+                if (key === 'Tab' || key.startsWith('Arrow')) {
+                    _keyboardNavHintDetectedThisSession = true;
+                }
+            }, { passive: true });
+        }
 
         function markPetSessionSeen() {
             try {
@@ -1050,7 +1079,11 @@
             return {
                 firstPetCreated: false,
                 firstCareAction: false,
-                advancedSystemsUnlocked: false
+                advancedSystemsUnlocked: false,
+                careLoopsCompleted: 0,
+                hasSeenJourneyPrompt: false,
+                hasSeenRewardsPanel: false,
+                hasSeenReminderPrompt: false
             };
         }
 
@@ -1063,7 +1096,11 @@
                 return {
                     firstPetCreated: !!parsed.firstPetCreated,
                     firstCareAction: !!parsed.firstCareAction,
-                    advancedSystemsUnlocked: !!parsed.advancedSystemsUnlocked
+                    advancedSystemsUnlocked: !!parsed.advancedSystemsUnlocked,
+                    careLoopsCompleted: Math.max(0, Math.floor(Number(parsed.careLoopsCompleted) || 0)),
+                    hasSeenJourneyPrompt: !!parsed.hasSeenJourneyPrompt,
+                    hasSeenRewardsPanel: !!parsed.hasSeenRewardsPanel,
+                    hasSeenReminderPrompt: !!parsed.hasSeenReminderPrompt
                 };
             } catch (e) {
                 return defaults;
@@ -1078,7 +1115,11 @@
             return {
                 firstPetCreated: !!(pet && gameState.phase === 'pet'),
                 firstCareAction: !!(pet && (Number(pet.careActions) || 0) > 0),
-                advancedSystemsUnlocked: roomVisits >= 2 || totalMinigamePlays > 0
+                advancedSystemsUnlocked: roomVisits >= 2 || totalMinigamePlays > 0,
+                careLoopsCompleted: Math.max(0, Math.min(6, Math.floor(Number(pet && pet.careActions) || 0))),
+                hasSeenJourneyPrompt: false,
+                hasSeenRewardsPanel: false,
+                hasSeenReminderPrompt: false
             };
         }
 
@@ -1089,12 +1130,50 @@
             const next = {
                 firstPetCreated: !!(defaults.firstPetCreated || stored.firstPetCreated || derived.firstPetCreated || partial.firstPetCreated),
                 firstCareAction: !!(defaults.firstCareAction || stored.firstCareAction || derived.firstCareAction || partial.firstCareAction),
-                advancedSystemsUnlocked: !!(defaults.advancedSystemsUnlocked || stored.advancedSystemsUnlocked || derived.advancedSystemsUnlocked || partial.advancedSystemsUnlocked)
+                advancedSystemsUnlocked: !!(defaults.advancedSystemsUnlocked || stored.advancedSystemsUnlocked || derived.advancedSystemsUnlocked || partial.advancedSystemsUnlocked),
+                careLoopsCompleted: Math.max(0, Math.floor(Number(partial.careLoopsCompleted))),
+                hasSeenJourneyPrompt: !!(stored.hasSeenJourneyPrompt || partial.hasSeenJourneyPrompt),
+                hasSeenRewardsPanel: !!(stored.hasSeenRewardsPanel || partial.hasSeenRewardsPanel),
+                hasSeenReminderPrompt: !!(stored.hasSeenReminderPrompt || partial.hasSeenReminderPrompt)
             };
+            if (!Number.isFinite(next.careLoopsCompleted)) {
+                next.careLoopsCompleted = Math.max(0, Number(stored.careLoopsCompleted) || 0, Number(derived.careLoopsCompleted) || 0);
+            } else {
+                next.careLoopsCompleted = Math.max(
+                    0,
+                    next.careLoopsCompleted,
+                    Number(stored.careLoopsCompleted) || 0,
+                    Number(derived.careLoopsCompleted) || 0
+                );
+            }
             try {
                 localStorage.setItem(getProgressiveOnboardingStorageKey(), JSON.stringify(next));
             } catch (e) {}
             return next;
+        }
+
+        function getFirstSessionPacingState() {
+            return syncProgressiveOnboardingMilestones();
+        }
+
+        function getFirstSessionCareLoopsCompleted() {
+            const state = getFirstSessionPacingState();
+            const overrideLoops = (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.getDebugConfig === 'function')
+                ? Number(window.MLFEmotionalFeedback.getDebugConfig().pacingCareLoops)
+                : NaN;
+            if (Number.isFinite(overrideLoops) && overrideLoops >= 0) return Math.floor(overrideLoops);
+            return Math.max(0, Math.floor(Number(state.careLoopsCompleted) || 0));
+        }
+
+        function isFirstSessionMetaReady() {
+            return getFirstSessionCareLoopsCompleted() >= 3;
+        }
+
+        function noteFirstSessionCareLoopComplete() {
+            const state = syncProgressiveOnboardingMilestones();
+            const nextCount = Math.min(12, Math.max(0, Math.floor(Number(state.careLoopsCompleted) || 0)) + 1);
+            syncProgressiveOnboardingMilestones({ careLoopsCompleted: nextCount, firstCareAction: true });
+            return nextCount;
         }
 
         function getProgressiveOnboardingStage(state) {
@@ -1154,7 +1233,11 @@
         }
 
         function renderRovingHelper(stage) {
-            const shouldShow = stage < 3 && getPetSessionCount() < EARLY_SESSION_LIMIT && !isRovingHintDismissed();
+            const coarseTouch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+            const iosLike = /iPhone|iPad|iPod/i.test((typeof navigator !== 'undefined' && navigator && navigator.userAgent) ? navigator.userAgent : '');
+            const pacingState = getFirstSessionPacingState();
+            const allowDesktopHint = _keyboardNavHintDetectedThisSession || !!(pacingState && pacingState.firstCareAction);
+            const shouldShow = stage < 3 && getPetSessionCount() < EARLY_SESSION_LIMIT && !isRovingHintDismissed() && !coarseTouch && !iosLike && allowDesktopHint;
             const existing = document.getElementById('roving-nav-tip');
             if (!shouldShow) {
                 if (existing) existing.remove();
@@ -1188,6 +1271,7 @@
             const stage = getProgressiveOnboardingStage(state);
             const showStage2 = stage >= 2;
             const showStage3 = stage >= 3;
+            const metaReady = isFirstSessionMetaReady();
 
             // Stage 2: reveal extended care context.
             ['.care-quality-wrap', '.favorites-label', '.favorites-bar', '.more-actions-toggle'].forEach((selector) => {
@@ -1201,8 +1285,14 @@
             }
 
             // Stage 3: reveal advanced systems and secondary navigation.
-            ['.goal-ladder', '.room-coming-wrap', '#economy-btn', '#explore-btn', '#tools-btn', '#journey-btn'].forEach((selector) => {
+            ['.goal-ladder', '.room-coming-wrap', '#economy-btn', '#explore-btn', '#tools-btn'].forEach((selector) => {
                 setElementVisible(document.querySelector(selector), showStage3);
+            });
+            ['#journey-btn', '#rewards-btn'].forEach((selector) => {
+                setElementVisible(document.querySelector(selector), showStage3 && metaReady);
+            });
+            ['.journey-status-panel', '.retention-emotional-prompt', '.reminder-center-banner'].forEach((selector) => {
+                setElementVisible(document.querySelector(selector), metaReady);
             });
             ['#top-meta-economy', '#top-meta-explore'].forEach((selector) => {
                 setElementVisible(document.querySelector(selector), showStage3);
@@ -1243,6 +1333,85 @@
             return { action: 'play', icon: '⚽', hint: 'Great pace: Play a mini-game next', tone: 'normal', label: 'Play' };
         }
 
+        let _petSceneFocusTimer = null;
+        let _petSceneMoodLineCache = { key: '', text: '', kind: 'ambient', at: 0 };
+
+        function activatePetSceneFocusMode(durationMs = 1200) {
+            const body = document.body;
+            const petArea = document.querySelector('.pet-area');
+            if (body) body.classList.add('pet-scene-focus-active');
+            if (petArea) petArea.classList.add('pet-focus-mode');
+            const morePanel = document.getElementById('more-actions-panel');
+            const moreToggle = document.getElementById('more-actions-toggle');
+            if (morePanel && moreToggle && !morePanel.hidden) {
+                morePanel.hidden = true;
+                moreToggle.setAttribute('aria-expanded', 'false');
+                moreToggle.classList.remove('expanded');
+                const icon = moreToggle.querySelector('.more-actions-toggle-icon');
+                const stateLabel = moreToggle.querySelector('.more-actions-toggle-state');
+                if (icon) icon.textContent = '▸';
+                if (stateLabel) stateLabel.textContent = 'Collapsed';
+                moreToggle.setAttribute('aria-label', 'More actions collapsed');
+            }
+            if (_petSceneFocusTimer) clearTimeout(_petSceneFocusTimer);
+            _petSceneFocusTimer = setTimeout(() => {
+                if (body) body.classList.remove('pet-scene-focus-active');
+                const currentPetArea = document.querySelector('.pet-area');
+                if (currentPetArea) currentPetArea.classList.remove('pet-focus-mode');
+            }, Math.max(isReducedMotionEnabled() ? 280 : 700, Number(durationMs) || 1200));
+        }
+
+        function getSceneMoodLineData(pet, roomId, room, timeOfDay, weather) {
+            const now = Date.now();
+            if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.getSceneMoodCue === 'function') {
+                try {
+                    const cue = window.MLFEmotionalFeedback.getSceneMoodCue();
+                    if (cue && cue.text) {
+                        _petSceneMoodLineCache = { key: cue.id || `cue-${now}`, text: cue.text, kind: cue.kind || 'event', at: now };
+                        return _petSceneMoodLineCache;
+                    }
+                } catch (e) {}
+            }
+            const weatherLabel = (typeof WEATHER_TYPES !== 'undefined' && WEATHER_TYPES[weather] && WEATHER_TYPES[weather].name) ? WEATHER_TYPES[weather].name : weather;
+            const timeLabel = timeOfDay === 'night' ? 'Night' : timeOfDay === 'sunset' ? 'Sunset' : timeOfDay === 'sunrise' ? 'Sunrise' : 'Day';
+            const memories = (typeof getRoomMemories === 'function' && pet) ? getRoomMemories(pet, roomId) : [];
+            const memoryCue = memories.length > 0 ? memories[memories.length - 1] : null;
+            let weatherStory = null;
+            if (typeof getWeatherStory === 'function' && pet) {
+                try { weatherStory = getWeatherStory(pet, weather, gameState._previousMoodLineWeather || null); } catch (e) {}
+            }
+            const contextKey = [roomId, timeOfDay, weather, memoryCue ? memoryCue.label : '', !!weatherStory].join('|');
+            if (_petSceneMoodLineCache.key === contextKey && (now - _petSceneMoodLineCache.at) < 12000) {
+                return _petSceneMoodLineCache;
+            }
+            let text = '';
+            let kind = 'ambient';
+            if (memoryCue) {
+                text = `🏡 ${memoryCue.description}`;
+                kind = 'memory';
+            } else if (weatherStory) {
+                text = `🌤️ ${weatherStory}`;
+                kind = 'weather';
+            } else {
+                const roomName = (room && room.name) || roomId;
+                text = `${roomName} feels ${weather === 'rainy' ? 'cozy' : weather === 'snowy' ? 'hushed' : 'bright'} this ${timeLabel.toLowerCase()}.`;
+            }
+            gameState._previousMoodLineWeather = weather;
+            _petSceneMoodLineCache = { key: contextKey, text, kind, at: now };
+            return _petSceneMoodLineCache;
+        }
+
+        function generateSceneMoodLineHTML(pet, roomId, room, timeOfDay, weather) {
+            const moodLine = getSceneMoodLineData(pet, roomId, room, timeOfDay, weather);
+            if (!moodLine || !moodLine.text) return '';
+            return `
+                <div class="pet-scene-mood-line" id="pet-scene-mood-line" role="status" aria-live="polite" aria-atomic="true" data-mood-kind="${escapeHTML(moodLine.kind || 'ambient')}">
+                    <span class="pet-scene-mood-label" aria-hidden="true">${moodLine.kind === 'memory' ? 'Memory' : moodLine.kind === 'weather' ? 'Weather' : 'Home'}</span>
+                    <span class="pet-scene-mood-text">${escapeHTML(moodLine.text)}</span>
+                </div>
+            `;
+        }
+
         // ==================== PET TAP (Click-to-Pet) ====================
         let _petTapCooldown = false;
         function handlePetTap() {
@@ -1277,6 +1446,7 @@
                 petContainer.classList.add('pet-tap-bounce');
                 setTimeout(() => petContainer.classList.remove('pet-tap-bounce'), 500);
             }
+            activatePetSceneFocusMode(1200);
 
             // Show floating stat number near happiness bubble
             if (delta > 0 && typeof showStatDeltaNearNeedBubbles === 'function') {
@@ -1530,6 +1700,7 @@
                         if (memories.length === 0) return '';
                         return `<div class="room-memories" aria-label="Room memories" style="position:absolute;bottom:4px;left:4px;display:flex;gap:4px;z-index:1;opacity:0.85;">${memories.map(m => `<span class="room-memory-icon" title="${escapeHTML(m.description)}" style="font-size:1.1rem;cursor:help;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.2));">${m.emoji}</span>`).join('')}</div>`;
                     })()}
+                    ${generateSceneMoodLineHTML(pet, currentRoom, room, timeOfDay, weather)}
                     <div class="sparkles" id="sparkles"></div>
                     <button class="pet-container pet-interact-trigger" id="pet-container" type="button" aria-label="Pet your ${petDisplayName}${accessoryDesc}">
                         ${generateThoughtBubble(pet)}

@@ -33,6 +33,31 @@
             haptics: [{ at: 0, nativeType: 'success', strength: 'light' }],
             animations: [{ selector: '.journey-status-panel', scale: [1, 1.015, 1], duration: 140 }]
         },
+        careRoutine: {
+            haptics: [{ at: 0, nativeType: 'confirm', strength: 'light' }],
+            animations: [{ selector: '.pet-area > .pet-container', scale: [1, 1.01, 1], duration: 120 }]
+        },
+        careNotable: {
+            haptics: [
+                { at: 0, nativeType: 'success', strength: 'light' },
+                { at: 90, nativeType: 'confirm', strength: 'light' }
+            ],
+            animations: [
+                { selector: '.pet-area > .pet-container', scale: [1, 1.03, 1], duration: 180 },
+                { selector: '.moment-summary-card', scale: [1, 1.02, 1], duration: 180 }
+            ]
+        },
+        careMilestone: {
+            haptics: [
+                { at: 0, nativeType: 'reward', strength: 'medium' },
+                { at: 120, nativeType: 'success', strength: 'light' }
+            ],
+            animations: [
+                { selector: '.pet-area', scale: [1, 1.01, 1], duration: 220 },
+                { selector: '.pet-area > .pet-container', scale: [1, 1.04, 1], duration: 240 },
+                { selector: '.moment-summary-card', scale: [1, 1.03, 1], duration: 220 }
+            ]
+        },
         chapterComplete: {
             haptics: [
                 { at: 0, nativeType: 'success', strength: 'medium' },

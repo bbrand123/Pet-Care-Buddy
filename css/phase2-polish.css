@@ -510,6 +510,97 @@ body {
     letter-spacing: 0.005em;
 }
 
+.moment-summary-card {
+    pointer-events: auto;
+    border-radius: 16px;
+    border: 1px solid rgba(118, 140, 176, 0.22);
+    background: linear-gradient(180deg, rgba(255,255,255,0.97), rgba(247, 243, 236, 0.95));
+    box-shadow: 0 12px 28px rgba(21, 28, 40, 0.14);
+    padding: 10px 12px;
+    backdrop-filter: blur(10px) saturate(1.03);
+}
+
+.moment-summary-card[data-ui-mode="ceremony"] {
+    border-color: rgba(219, 177, 88, 0.4);
+    background: linear-gradient(180deg, rgba(255, 252, 240, 0.98), rgba(248, 238, 212, 0.96));
+}
+
+.moment-summary-card[data-ui-mode="banner"] {
+    border-color: rgba(141, 180, 138, 0.34);
+    background: linear-gradient(180deg, rgba(246, 253, 247, 0.98), rgba(236, 248, 239, 0.95));
+}
+
+.moment-summary-inner {
+    display: grid;
+    gap: 6px;
+}
+
+.moment-summary-row {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px;
+    align-items: start;
+}
+
+.moment-summary-pet .moment-summary-text {
+    font-weight: 800;
+    color: #2c2a28;
+}
+
+.moment-summary-main {
+    align-items: center;
+}
+
+.moment-summary-main .moment-summary-text {
+    color: #3e4a58;
+    font-weight: 700;
+}
+
+.moment-summary-emote {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.74);
+}
+
+.moment-summary-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #6b7b89;
+    font-weight: 800;
+    align-self: center;
+}
+
+.moment-summary-meta {
+    margin: 2px 0 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 4px;
+}
+
+.moment-summary-meta-item {
+    font-size: 0.86rem;
+    line-height: 1.25;
+    color: #556574;
+    padding-left: 10px;
+    position: relative;
+}
+
+.moment-summary-meta-item::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.45em;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(124, 144, 166, 0.65);
+}
+
 .reward-card-pop,
 .offline-update-banner.phase2-world-banner {
     border-radius: var(--ui-radius-lg);
@@ -1477,6 +1568,37 @@ body {
     background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(248,245,238,0.84));
     box-shadow: 0 6px 16px rgba(18, 24, 36, 0.08);
     backdrop-filter: blur(4px);
+}
+
+.pet-scene-mood-line {
+    position: absolute;
+    z-index: 6;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: grid;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.56);
+    background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(246, 241, 232, 0.76));
+    box-shadow: 0 6px 14px rgba(18, 24, 36, 0.08);
+    backdrop-filter: blur(4px);
+}
+
+.pet-scene-mood-label {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #7b6f60;
+    font-weight: 800;
+}
+
+.pet-scene-mood-text {
+    font-size: 0.82rem;
+    line-height: 1.25;
+    color: #3a3f48;
+    font-weight: 600;
 }
 
 .pet-name {
@@ -2535,6 +2657,33 @@ body {
         radial-gradient(4px 4px at 68% 29%, rgba(160, 231, 184, 0.85), transparent 70%),
         radial-gradient(4px 4px at 80% 38%, rgba(220, 175, 255, 0.85), transparent 70%);
     animation: fxConfettiLite calc(var(--motion-slow, 420ms) * 1.1) var(--ease-enter, ease) both;
+}
+
+body.pet-scene-focus-active .journey-status-panel,
+body.pet-scene-focus-active .retention-emotional-prompt,
+body.pet-scene-focus-active .reminder-center-banner,
+body.pet-scene-focus-active .goal-ladder,
+body.pet-scene-focus-active .next-steps-panel {
+    opacity: 0.4;
+    transform: scale(0.985);
+    filter: saturate(0.85);
+    transition: opacity 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+body.pet-scene-focus-active .pet-scene-mood-line {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .moment-summary-card,
+    .pet-scene-mood-line,
+    body.pet-scene-focus-active .journey-status-panel,
+    body.pet-scene-focus-active .retention-emotional-prompt,
+    body.pet-scene-focus-active .reminder-center-banner,
+    body.pet-scene-focus-active .goal-ladder,
+    body.pet-scene-focus-active .next-steps-panel {
+        transition: none !important;
+    }
 }
 
 @keyframes fxStageInput {

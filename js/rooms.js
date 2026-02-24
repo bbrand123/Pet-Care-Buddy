@@ -280,6 +280,17 @@
             }
             if (!unlockResult.already) {
                 showToast(`🔓 Unlocked ${ROOMS[roomId].name}!`, '#66BB6A');
+                if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushSceneMoodCue === 'function') {
+                    const unlockCue = (ROOMS[roomId] && ROOMS[roomId].unlockCue) ? (ROOMS[roomId].unlockCue.roomCue || ROOMS[roomId].unlockCue.behaviorHint) : '';
+                    try {
+                        window.MLFEmotionalFeedback.pushSceneMoodCue({
+                            text: unlockCue || `${ROOMS[roomId].name} feels newly lived-in.`,
+                            roomId,
+                            kind: 'room-unlock',
+                            ttlMs: 22000
+                        });
+                    } catch (e) {}
+                }
             }
 
             const previousRoom = gameState.currentRoom;
@@ -322,6 +333,20 @@
             }
 
             const room = ROOMS[roomId];
+            if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushSceneMoodCue === 'function') {
+                const weather = (gameState && gameState.weather) || 'sunny';
+                const weatherLabel = (typeof WEATHER_TYPES !== 'undefined' && WEATHER_TYPES[weather] && WEATHER_TYPES[weather].name) ? WEATHER_TYPES[weather].name.toLowerCase() : weather;
+                const timeOfDay = (gameState && gameState.timeOfDay) || 'day';
+                const timeMood = timeOfDay === 'night' ? 'quiet' : timeOfDay === 'sunset' ? 'golden' : timeOfDay === 'sunrise' ? 'fresh' : 'bright';
+                try {
+                    window.MLFEmotionalFeedback.pushSceneMoodCue({
+                        text: `${room.name} greets ${gameState.pet && gameState.pet.name ? gameState.pet.name : 'your pet'} with a ${timeMood} ${weatherLabel} mood.`,
+                        roomId,
+                        kind: 'room',
+                        ttlMs: 12000
+                    });
+                } catch (e) {}
+            }
 
             // Re-render when switching to/from garden (garden section needs DOM update)
             if (roomId === 'garden' || previousRoom === 'garden') {
