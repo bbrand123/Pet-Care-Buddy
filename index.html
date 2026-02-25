@@ -66,6 +66,9 @@
         @media (prefers-reduced-motion: reduce) {
             .splash-egg { animation: none !important; }
         }
+        html[data-reduced-motion="true"] .splash-egg {
+            animation: none !important;
+        }
         @media (prefers-color-scheme: dark) {
             #splash-screen { background: linear-gradient(135deg, #1a1a2e, #16213e) !important; }
             #splash-screen p { color: #e0e0e0 !important; }

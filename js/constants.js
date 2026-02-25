@@ -2922,6 +2922,7 @@ window.normalizeSpeechLabelText = normalizeSpeechLabelText;
 const _modalEscapeStack = [];
 let _modalLastReturnAnnounceAt = 0;
 const _modalFocusRestoreByCloseFn = new WeakMap();
+const _modalBackgroundIsolationState = new WeakMap();
 
 function isBriefScreenReaderMode() {
     try {
@@ -2931,24 +2932,67 @@ function isBriefScreenReaderMode() {
     }
 }
 
+function isAnyModalOpen() {
+    return _modalEscapeStack.length > 0;
+}
+
+function getModalBackgroundIsolationTargets() {
+    if (typeof document === 'undefined') return [];
+    const targets = [];
+    const mainRoot = document.querySelector('main.game-container');
+    if (mainRoot) {
+        Array.from(mainRoot.children).forEach((child) => {
+            if (!(child instanceof HTMLElement)) return;
+            if (child.id === 'live-announcer' || child.id === 'live-announcer-assertive') return;
+            targets.push(child);
+        });
+    }
+    document.querySelectorAll('body > .skip-link, body > .coach-checklist').forEach((node) => {
+        if (node instanceof HTMLElement) targets.push(node);
+    });
+    return targets;
+}
+
+function setModalBackgroundIsolation(el, shouldIsolate) {
+    if (!(el instanceof HTMLElement)) return;
+    if (shouldIsolate) {
+        if (!_modalBackgroundIsolationState.has(el)) {
+            _modalBackgroundIsolationState.set(el, {
+                ariaHidden: el.getAttribute('aria-hidden'),
+                inert: el.hasAttribute('inert')
+            });
+        }
+        el.setAttribute('aria-hidden', 'true');
+        el.setAttribute('inert', '');
+        return;
+    }
+    const prev = _modalBackgroundIsolationState.get(el);
+    if (!prev) return;
+    if (prev.ariaHidden == null) el.removeAttribute('aria-hidden');
+    else el.setAttribute('aria-hidden', prev.ariaHidden);
+    if (!prev.inert) el.removeAttribute('inert');
+    _modalBackgroundIsolationState.delete(el);
+}
+
 function updateBackgroundInertState() {
     if (typeof document === 'undefined') return;
-    const appRoot = document.querySelector('main.game-container');
-    if (!appRoot) return;
-    const hasModal = _modalEscapeStack.length > 0;
+    const hasModal = isAnyModalOpen();
+    const targets = getModalBackgroundIsolationTargets();
     if (hasModal) {
         const active = document.activeElement;
-        if (active && appRoot.contains(active) && typeof active.blur === 'function') {
+        const activeInBackground = active instanceof HTMLElement && targets.some((target) => target.contains(active));
+        if (activeInBackground && typeof active.blur === 'function') {
             active.blur();
         }
-        appRoot.setAttribute('aria-hidden', 'true');
-        appRoot.setAttribute('inert', '');
+        targets.forEach((target) => setModalBackgroundIsolation(target, true));
         document.body.classList.add('modal-open');
     } else {
-        appRoot.removeAttribute('aria-hidden');
-        appRoot.removeAttribute('inert');
+        targets.forEach((target) => setModalBackgroundIsolation(target, false));
         document.body.classList.remove('modal-open');
         document.body.classList.remove('minigame-menu-open');
+    }
+    if (typeof window !== 'undefined') {
+        window.isAnyModalOpen = isAnyModalOpen;
     }
     if (typeof window !== 'undefined' && typeof window.setUiBusyState === 'function') {
         window.setUiBusyState();
@@ -2973,16 +3017,8 @@ function popModalEscape(closeFn) {
     setTimeout(() => {
         const snapshot = (typeof closeFn === 'function' && _modalFocusRestoreByCloseFn.get(closeFn)) || null;
         if (snapshot) restoreFocusFromSnapshot(snapshot);
-        if (_modalEscapeStack.length !== 0) return;
-        const active = document.activeElement;
-        if (!active || typeof announce !== 'function' || isBriefScreenReaderMode()) return;
-        const label = normalizeSpeechLabelText(active.getAttribute('aria-label') || active.textContent || '');
-        const compact = String(label).slice(0, 48);
-        if (!compact) return;
-        const now = Date.now();
-        if (now - _modalLastReturnAnnounceAt < 1200) return;
-        _modalLastReturnAnnounceAt = now;
-        announce(`Returned to ${compact}.`, { source: 'focus-return', dedupeMs: 1000 });
+        // Suppress post-close focus-return announcements. Several modal close paths
+        // restore focus after animations, which can make the spoken target inaccurate.
     }, 60);
 }
 
@@ -3007,6 +3043,12 @@ function trapFocus(overlay) {
         .filter((el) => (el instanceof HTMLElement) && (!el.hasAttribute('tabindex') || el.getAttribute('tabindex') !== '-1'))
         .filter((el) => isFocusableRestoreCandidate(el));
     const getDialogTitle = () => overlay.querySelector('[data-dialog-title], h1, h2, h3, legend');
+    const getFocusStops = () => {
+        const focusable = getFocusable();
+        const title = getDialogTitle();
+        if (!(title instanceof HTMLElement) || isElementActuallyHidden(title)) return focusable;
+        return [title].concat(focusable.filter((el) => el !== title));
+    };
     const focusModalEntry = () => {
         const title = getDialogTitle();
         if (title instanceof HTMLElement && !isElementActuallyHidden(title)) {
@@ -3019,13 +3061,6 @@ function trapFocus(overlay) {
             }
             if (!title.hasAttribute('tabindex')) title.setAttribute('tabindex', '-1');
             title.focus({ preventScroll: true });
-            if (typeof announce === 'function' && overlay.dataset.modalTitleAnnounced !== 'true') {
-                const label = normalizeSpeechLabelText(title.textContent || overlay.getAttribute('aria-label') || 'Dialog');
-                if (label) {
-                    overlay.dataset.modalTitleAnnounced = 'true';
-                    announce(label, { source: 'modal-title', dedupeMs: 900 });
-                }
-            }
             return true;
         }
         const focusable = getFocusable();
@@ -3043,16 +3078,24 @@ function trapFocus(overlay) {
     }
     overlay.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {
-            const focusable = getFocusable();
-            if (focusable.length === 0) return;
-            const first = focusable[0];
-            const last = focusable[focusable.length - 1];
-            if (e.shiftKey && document.activeElement === first) {
+            const stops = getFocusStops().filter((el) => el instanceof HTMLElement && isFocusableRestoreCandidate(el));
+            const active = document.activeElement;
+            if (stops.length === 0) {
+                const title = getDialogTitle();
+                const fallback = (title instanceof HTMLElement && !isElementActuallyHidden(title)) ? title : overlay;
                 e.preventDefault();
-                last.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
+                fallback.focus({ preventScroll: true });
+                return;
+            }
+            const first = stops[0];
+            const last = stops[stops.length - 1];
+            const activeIndex = active instanceof HTMLElement ? stops.indexOf(active) : -1;
+            if (e.shiftKey && (active === first || activeIndex === 0)) {
                 e.preventDefault();
-                first.focus();
+                last.focus({ preventScroll: true });
+            } else if (!e.shiftKey && (active === last || activeIndex === stops.length - 1)) {
+                e.preventDefault();
+                first.focus({ preventScroll: true });
             }
         }
     });

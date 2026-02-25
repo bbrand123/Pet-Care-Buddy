@@ -1022,6 +1022,16 @@
             }
         }
 
+        function isDialogOpenForAnnouncementGating() {
+            if (typeof document === 'undefined') return false;
+            try {
+                if (typeof window !== 'undefined' && typeof window.isAnyModalOpen === 'function' && window.isAnyModalOpen()) {
+                    return true;
+                }
+            } catch (e) {}
+            return !!document.querySelector('[role="dialog"][aria-modal="true"], [role="alertdialog"][aria-modal="true"]');
+        }
+
         function isRoutineAnnouncement(message) {
             const txt = String(message || '').toLowerCase();
             return /score:|growth progress|now feeling|cooling down|throw again|running to get it|got it|bringing it back/.test(txt);
@@ -1057,6 +1067,7 @@
         }
 
         function enqueuePoliteAnnouncement(message, options) {
+            if (isDialogOpenForAnnouncementGating()) return;
             const canBatch = !!options.batch
                 && _announceBatchableSources.has(options.source)
                 && message.length <= 180;
@@ -1073,6 +1084,10 @@
             if (_announceBatchTimer) return;
             _announceBatchTimer = setTimeout(() => {
                 _announceBatchTimer = null;
+                if (isDialogOpenForAnnouncementGating()) {
+                    _announceBatchBucket = [];
+                    return;
+                }
                 const batch = _announceBatchBucket.splice(0);
                 if (batch.length === 0) return;
                 const unique = [];
@@ -1097,6 +1112,14 @@
         }
 
         function flushAnnouncementQueue() {
+            if (isDialogOpenForAnnouncementGating()) {
+                _announceQueue = [];
+                _announceBatchBucket = [];
+                _announceTimer = null;
+                const announcer = document.getElementById('live-announcer');
+                if (announcer) announcer.textContent = '';
+                return;
+            }
             if (_announceQueue.length > 4) {
                 const kept = _announceQueue.splice(0, 3);
                 const remainder = _announceQueue.length;
@@ -1177,6 +1200,7 @@
                 _assertiveTimer = setTimeout(flushAssertiveQueue, 40);
                 return;
             }
+            if (isDialogOpenForAnnouncementGating()) return;
 
             // Queue polite messages and batch rapid updates to avoid a speech backlog.
             enqueuePoliteAnnouncement(plainMessage, options);

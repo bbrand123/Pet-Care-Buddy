@@ -1226,6 +1226,7 @@
             if (!panel) {
                 panel = document.createElement('aside');
                 panel.className = 'coach-checklist';
+                panel.setAttribute('aria-label', 'Quick Start');
                 document.body.appendChild(panel);
             }
             panel.removeAttribute('aria-live');

@@ -441,7 +441,7 @@ body {
 
 .phase2-settings-quality .phase2-quality-row .settings-choice {
     min-width: 58px;
-    min-height: 40px;
+    min-height: 44px;
 }
 
 .phase2-settings-quality .phase2-quality-auto {
@@ -3658,7 +3658,7 @@ html[data-reduced-motion="true"] .pet-container.pet-react-blink-fast::after {
 }
 
 .advanced-empty-cta {
-    min-height: 42px;
+    min-height: 44px;
     border: 0;
     border-radius: 12px;
     padding: 8px 10px;
@@ -4612,9 +4612,67 @@ body.pet-scene-focus-active .pet-area {
 
 .coach-checklist-toggle,
 .coach-checklist-skip {
-    min-height: 34px;
+    min-height: 44px;
+    min-width: 44px;
     border-radius: 10px;
     font-size: var(--type-micro);
+}
+
+.next-steps-head button,
+.next-steps-list button {
+    min-height: 44px;
+}
+
+@media (max-width: 430px) {
+    html[data-text-size="large"] .settings-overlay,
+    html[data-text-size="large"] .settings-modal,
+    html[data-text-size="large"] .settings-list,
+    html[data-text-size="large"] .settings-group {
+        min-width: 0;
+        overflow-x: hidden;
+    }
+
+    html[data-text-size="large"] .settings-row {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    html[data-text-size="large"] .settings-row > * {
+        min-width: 0;
+    }
+
+    html[data-text-size="large"] .settings-row > .settings-row-label {
+        flex: 1 1 100%;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+
+    html[data-text-size="large"] .settings-row > .settings-choice,
+    html[data-text-size="large"] .settings-row > .settings-preset-btn {
+        flex: 1 1 calc(50% - 4px);
+        max-width: 100%;
+    }
+
+    html[data-text-size="large"] .settings-row > .settings-toggle,
+    html[data-text-size="large"] .settings-row > .settings-toggle-state {
+        flex: 0 0 auto;
+    }
+
+    html[data-text-size="large"] .settings-row .settings-row-help,
+    html[data-text-size="large"] .settings-row .settings-verbosity-desc,
+    html[data-text-size="large"] .settings-row small {
+        flex: 1 1 100%;
+        width: auto !important;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        white-space: normal;
+    }
+
+    html[data-text-size="large"] .settings-volume-head {
+        flex-wrap: wrap;
+    }
 }
 
 /* Motion consistency + reduced visual noise */
