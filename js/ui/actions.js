@@ -1365,13 +1365,17 @@
             announce(parts.join(', '));
         }
 
-        function showStatDeltaNearNeedBubbles(deltas) {
+        function showStatDeltaNearNeedBubbles(deltas, options) {
             if (!deltas || typeof deltas !== 'object') return;
+            const shouldAnnounce = !(options && options.announce === false);
             Object.entries(deltas).forEach(([key, amount]) => {
                 showNeedBubbleStatDelta(key, amount);
-                // Batch for debounced screen reader announcement
-                _statChangeBatch[key] = (_statChangeBatch[key] || 0) + amount;
+                if (shouldAnnounce) {
+                    // Batch for debounced screen reader announcement
+                    _statChangeBatch[key] = (_statChangeBatch[key] || 0) + amount;
+                }
             });
+            if (!shouldAnnounce) return;
             if (_statChangeAnnounceTimer) clearTimeout(_statChangeAnnounceTimer);
             _statChangeAnnounceTimer = setTimeout(_flushStatChangeAnnouncement, 2000);
         }
@@ -1942,7 +1946,7 @@
                 happiness: pet.happiness - beforeStats.happiness,
                 energy: pet.energy - beforeStats.energy
             };
-            showStatDeltaNearNeedBubbles(statDeltas);
+            showStatDeltaNearNeedBubbles(statDeltas, { announce: false });
             if (typeof showStatChangeSummary === 'function') {
                 const summaryChanges = Object.entries(statDeltas)
                     .filter(([, amount]) => amount !== 0)

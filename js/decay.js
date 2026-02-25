@@ -257,11 +257,14 @@
                             const dtMs = Math.max(0, nowMs - lastSimulatedAt);
                             if (dtMs >= 5000) {
                                 MLFHouseholdState.tickHouseholdOnState(gameState, dtMs, nowMs, {
+                                    syncOptions: {
+                                        preferHousehold: false
+                                    },
                                     skipActivePetNeeds: true
                                 });
                                 householdBackgroundTickApplied = true;
                             } else {
-                                MLFHouseholdState.ensureHouseholdState(gameState, nowMs);
+                                MLFHouseholdState.ensureHouseholdState(gameState, nowMs, { preferHousehold: false });
                             }
                         } catch (_) {}
                     }

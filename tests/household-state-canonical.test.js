@@ -103,3 +103,51 @@ test('ensureHouseholdState preserves canonical household needs while merging leg
     assert.equal(state.household.petsById['1'].location.roomId, 'garden');
     assert.equal(state.pet.hunger, 91);
 });
+
+test('runtime household tick/sim can preserve fresh legacy stat edits with syncOptions.preferHousehold=false', () => {
+    const now = Date.now();
+    const state = {
+        currentRoom: 'bedroom',
+        pet: { id: 1, hunger: 84, cleanliness: 72, happiness: 68, energy: 61, type: 'cat' },
+        pets: [{ id: 1, hunger: 84, cleanliness: 72, happiness: 68, energy: 61, type: 'cat' }],
+        activePetIndex: 0,
+        relationships: {},
+        household: {
+            activePetId: '1',
+            petsById: {
+                '1': {
+                    id: '1',
+                    type: 'cat',
+                    needs: { hunger: 40, energy: 40, fun: 40, hygiene: 40 },
+                    mood: 'sad',
+                    location: { roomId: 'bedroom' },
+                    schedule: {}
+                }
+            },
+            relationships: {},
+            lastSimulatedAt: now,
+            simVersion: 1
+        }
+    };
+
+    HouseholdState.tickHouseholdOnState(state, 0, now, {
+        syncOptions: { preferHousehold: false },
+        skipActivePetNeeds: true
+    });
+
+    assert.equal(state.household.petsById['1'].needs.hunger, 84);
+    assert.equal(state.pet.hunger, 84);
+    assert.equal(state.pet.cleanliness, 72);
+    assert.equal(state.pet.happiness, 68);
+    assert.equal(state.pet.energy, 61);
+
+    state.pet.hunger = 91;
+    state.pets[0].hunger = 91;
+    HouseholdState.simulateHouseholdToNowOnState(state, now, {
+        syncOptions: { preferHousehold: false },
+        tickOptions: { skipActivePetNeeds: true }
+    });
+
+    assert.equal(state.household.petsById['1'].needs.hunger, 91);
+    assert.equal(state.pet.hunger, 91);
+});

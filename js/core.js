@@ -875,11 +875,11 @@
             state.nextPetId = Math.max(candidateNext, maxId + 1);
         }
 
-        function ensureHouseholdStateForRuntime(targetState, nowMs) {
+        function ensureHouseholdStateForRuntime(targetState, nowMs, options) {
             if (!targetState || typeof targetState !== 'object') return;
             if (typeof MLFHouseholdState === 'undefined' || !MLFHouseholdState || typeof MLFHouseholdState.ensureHouseholdState !== 'function') return;
             try {
-                MLFHouseholdState.ensureHouseholdState(targetState, nowMs);
+                MLFHouseholdState.ensureHouseholdState(targetState, nowMs, options);
             } catch (err) {
                 if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
                     MLFDiagnostics.warn('HOUSEHOLD', 'Failed to ensure household state.', {
@@ -892,7 +892,7 @@
         function simulateHouseholdToNowForRuntime(targetState, nowMs, options) {
             if (!targetState || typeof targetState !== 'object') return null;
             if (typeof MLFHouseholdState === 'undefined' || !MLFHouseholdState || typeof MLFHouseholdState.simulateHouseholdToNowOnState !== 'function') {
-                ensureHouseholdStateForRuntime(targetState, nowMs);
+                ensureHouseholdStateForRuntime(targetState, nowMs, options && options.syncOptions ? options.syncOptions : null);
                 return null;
             }
             try {
@@ -1346,11 +1346,14 @@
                 syncActivePetToArray();
                 if (gameState.phase === 'pet') {
                     simulateHouseholdToNowForRuntime(gameState, nowMs, {
+                        syncOptions: {
+                            preferHousehold: false
+                        },
                         tickOptions: {
                             skipActivePetNeeds: true
                         }
                     });
-                    ensureHouseholdStateForRuntime(gameState, nowMs);
+                    ensureHouseholdStateForRuntime(gameState, nowMs, { preferHousehold: false });
                     if (gameState.household && typeof gameState.household === 'object') {
                         gameState.household.lastSimulatedAt = nowMs;
                     }

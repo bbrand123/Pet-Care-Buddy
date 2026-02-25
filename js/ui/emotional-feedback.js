@@ -315,16 +315,20 @@
             ]));
         }
         const plan = buildPresentationPlan(payload);
+        const shouldAnnounceMoment = !session.initialShown;
         try {
             if (typeof root.showMomentSummary === 'function') {
                 root.showMomentSummary(plan, {
                     key: session.id,
                     replace: session.initialShown,
-                    announce: true,
+                    announce: shouldAnnounceMoment,
                     announceText: announceLineForPlan(plan)
                 });
             } else if (typeof root.showToast === 'function') {
-                root.showToast(announceLineForPlan(plan) || 'Care moment', '#90A4AE', { announce: true, bypassMomentCapture: true });
+                root.showToast(announceLineForPlan(plan) || 'Care moment', '#90A4AE', {
+                    announce: shouldAnnounceMoment,
+                    bypassMomentCapture: true
+                });
             }
         } catch (_) {}
         if (!session.effectsApplied) {

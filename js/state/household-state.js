@@ -271,6 +271,13 @@
         return state;
     }
 
+    function extractEnsureSyncOptions(options) {
+        if (isObject(options) && isObject(options.syncOptions)) {
+            return options.syncOptions;
+        }
+        return null;
+    }
+
     function isHouseholdRetentionBeatsEnabled() {
         if (root && typeof root.isRetentionFeatureFlagEnabled === 'function') {
             try { return !!root.isRetentionFeatureFlagEnabled('householdRetentionBeatsEnabled'); } catch (_) {}
@@ -363,7 +370,7 @@
 
     function simulateHouseholdToNowOnState(state, nowMs, options) {
         if (!isObject(state)) return { state, meta: { skipped: true } };
-        ensureHouseholdState(state, nowMs);
+        ensureHouseholdState(state, nowMs, extractEnsureSyncOptions(options));
         if (!HouseholdSimulator || typeof HouseholdSimulator.simulateHouseholdToNow !== 'function') {
             setLastSimulatedAt(state, nowMs);
             return { state, meta: { skipped: true } };
@@ -379,7 +386,7 @@
 
     function tickHouseholdOnState(state, dtMs, nowMs, options) {
         if (!isObject(state)) return { state, meta: { skipped: true } };
-        ensureHouseholdState(state, nowMs);
+        ensureHouseholdState(state, nowMs, extractEnsureSyncOptions(options));
         if (!HouseholdSimulator || typeof HouseholdSimulator.tickHousehold !== 'function') {
             setLastSimulatedAt(state, nowMs);
             return { state, meta: { skipped: true } };
