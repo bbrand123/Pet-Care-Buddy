@@ -417,11 +417,14 @@
                 card = document.createElement('aside');
                 card.className = 'moment-summary-card phase3-feedback-card';
                 card.setAttribute('data-moment-key', key);
-                card.setAttribute('role', 'status');
-                card.setAttribute('aria-live', 'polite');
-                card.setAttribute('aria-atomic', 'true');
                 container.appendChild(card);
             }
+            // Screen-reader announcements are sent through the shared announce()
+            // pipeline; keeping this card as a live region causes repeated
+            // VoiceOver reads whenever the moment rerenders.
+            card.setAttribute('role', 'group');
+            card.removeAttribute('aria-live');
+            card.removeAttribute('aria-atomic');
             const tier = plan.tier || 'Routine';
             const mode = plan.uiMode || 'inline';
             const reaction = plan.petReaction || {};

@@ -673,7 +673,9 @@
         };
         unlockListenerHandler = onFirstInteraction;
         const opts = { passive: true, capture: UNLOCK_LISTENER_CAPTURE };
-        ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((evt) => {
+        // Include click for VoiceOver/Switch Control activations that may not
+        // emit pointer/touch events in WKWebView.
+        ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'].forEach((evt) => {
             window.addEventListener(evt, onFirstInteraction, opts);
         });
     }
@@ -684,7 +686,7 @@
             unlockListenerHandler = null;
             return;
         }
-        ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((evt) => {
+        ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'].forEach((evt) => {
             try { window.removeEventListener(evt, unlockListenerHandler, UNLOCK_LISTENER_CAPTURE); } catch (err) {}
         });
         listenersBound = false;
@@ -739,11 +741,18 @@
         }
         if (unlockInFlightPromise) return unlockInFlightPromise;
         unlockInFlightPromise = (async () => {
-            await ensureManifest();
+            // Critical for iOS/WKWebView: create/resume the AudioContext inside
+            // the user-gesture call stack before any awaited fetch/work.
             ensureAudioContext();
             if (audioCtx && audioCtx.state === 'suspended') {
                 try { await audioCtx.resume(); } catch (err) { warnDebug('AudioContext resume failed', err); }
             }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                // Keep listeners active so a subsequent direct interaction can retry.
+                warnDebug('AudioContext still suspended after unlock attempt; deferring unlock completion');
+                return false;
+            }
+            await ensureManifest();
             if (unlocked) return true;
             unlocked = true;
             preloadConfiguredSounds();
@@ -1140,6 +1149,7 @@
             return null;
         }
 
+        if (!unlocked) await unlock();
         await ensureManifest();
         const entry = resolveSound(soundName);
         if (!entry || !entry.path) {
@@ -1153,8 +1163,6 @@
             }
             return null;
         }
-        if (!unlocked) await unlock();
-
         if (current && current.name === soundName && !options.restart) {
             current.baseGain = clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (options.gain != null ? options.gain : 1));
             current._manualGainMultiplier = 1;
@@ -1188,6 +1196,7 @@
     }
 
     async function playOneShot(soundName, opts) {
+        if (!unlocked) await unlock();
         await ensureManifest();
         const entry = resolveSound(soundName);
         if (!entry || !entry.path) {
@@ -1197,7 +1206,6 @@
         if (shouldSkipDueToThrottle(soundName, entry, opts)) return null;
         const channel = entry.channel || 'sfx';
         if (!canPlayChannel(channel, opts)) return null;
-        if (!unlocked) await unlock();
         const mixDuckProfile = inferMixDuckProfile(soundName, entry, opts);
         if (mixDuckProfile) applyMixDuckProfile(mixDuckProfile, opts && opts.mixDuckOptions);
         const voicePriority = computeVoicePriority(channel, entry, opts, false);
