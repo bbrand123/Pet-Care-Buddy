@@ -1,36 +1,42 @@
-        // ==================== RHYTHM MINI-GAME ====================
+	        // ==================== RHYTHM MINI-GAME ====================
 
-        let rhythmState = null;
-        let _rhythmAudioCtx = null;
+	        let rhythmState = null;
 
-        function getRhythmAudioContext() {
-            try {
-                const Ctx = window.AudioContext || window.webkitAudioContext;
-                if (!Ctx) return null;
-                if (!_rhythmAudioCtx) _rhythmAudioCtx = new Ctx();
-                return _rhythmAudioCtx;
-            } catch (e) {
-                return null;
-            }
-        }
-
-        function playProceduralBeat(accent) {
-            const ctx = getRhythmAudioContext();
-            if (!ctx) return;
-            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
-            const now = ctx.currentTime;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = accent ? 'square' : 'triangle';
-            osc.frequency.value = accent ? 220 : 160;
-            gain.gain.setValueAtTime(0.0001, now);
-            gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(now);
-            osc.stop(now + 0.13);
-        }
+	        function playProceduralBeat(accent) {
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+	                if (accent) {
+	                    GameAudio.playMiniGameTone({
+	                        bus: 'gameplay',
+	                        type: 'square',
+	                        frequency: 220,
+	                        frequencyEnd: 205,
+	                        durationMs: 130,
+	                        gain: 0.16,
+	                        sustain: 0.18,
+	                        harmonic: { frequency: 440, type: 'triangle', gainMultiplier: 0.24 }
+	                    });
+	                    setTimeout(() => {
+	                        if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+	                            GameAudio.playMiniGameTone({ bus: 'gameplay', type: 'triangle', frequency: 110, durationMs: 70, gain: 0.08 });
+	                        }
+	                    }, 36);
+	                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+	                        GameAudio.emitAccessibilityCue('rhythmBeatAccent', { playSound: false, caption: 'Strong beat' });
+	                    }
+	                    return;
+	                }
+	                GameAudio.playMiniGameTone({
+	                    bus: 'gameplay',
+	                    type: 'triangle',
+	                    frequency: 160,
+	                    frequencyEnd: 155,
+	                    durationMs: 105,
+	                    gain: 0.1,
+	                    sustain: 0.12
+	                });
+	                return;
+	            }
+	        }
 
         function startRhythmGame() {
             if (!gameState.pet) {
@@ -49,13 +55,19 @@
                 intervalMs: Math.max(440, Math.round(720 / Math.max(0.75, difficulty))),
                 timerId: null
             };
-            initMiniGameRuntimeTracking(rhythmState, { overlaySelector: '.rhythm-game-overlay' });
-            registerMiniGameAudioStop(rhythmState, () => {
-                try {
-                    if (_rhythmAudioCtx && _rhythmAudioCtx.state === 'running') _rhythmAudioCtx.suspend().catch(() => {});
-                } catch (e) {}
-            });
-            renderRhythmGame();
+	            initMiniGameRuntimeTracking(rhythmState, { overlaySelector: '.rhythm-game-overlay' });
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.setGameplayAudioState === 'function') {
+	                GameAudio.setGameplayAudioState({ active: true, minigame: 'rhythm', intensity: 0.2, timeOfDay: gameState.timeOfDay || null });
+	            }
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+	                GameAudio.playAccessibilityCue('objectiveStart', { gain: 0.72, caption: 'Rhythm game started' });
+	            }
+	            registerMiniGameAudioStop(rhythmState, () => {
+	                try {
+	                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.clearGameplayAudioState === 'function') GameAudio.clearGameplayAudioState();
+	                } catch (e) {}
+	            });
+	            renderRhythmGame();
             announce('Rhythm game started. Press Space on the beat.');
         }
 
@@ -123,9 +135,13 @@
             }
             rhythmState.expectedAt = performance.now();
             rhythmState.lastRegisteredBeat = -1;
-            const accent = rhythmState.beat % 4 === 1;
-            playProceduralBeat(accent);
-            const lights = document.querySelectorAll('.rhythm-light');
+	            const accent = rhythmState.beat % 4 === 1;
+	            playProceduralBeat(accent);
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.setGameplayAudioIntensity === 'function') {
+	                const progressIntensity = Math.min(0.88, 0.18 + ((rhythmState.beat / rhythmState.totalBeats) * 0.28) + (Math.min(10, rhythmState.combo || 0) * 0.02));
+	                GameAudio.setGameplayAudioIntensity(progressIntensity);
+	            }
+	            const lights = document.querySelectorAll('.rhythm-light');
             const lightIndex = (rhythmState.beat - 1) % lights.length;
             lights.forEach((light, idx) => light.classList.toggle('active', idx === lightIndex));
             const note = document.getElementById('rhythm-note');
@@ -140,21 +156,39 @@
             rhythmState.lastRegisteredBeat = rhythmState.beat;
             const delta = Math.abs(performance.now() - rhythmState.expectedAt);
             const note = document.getElementById('rhythm-note');
-            if (delta <= 110) {
+	            if (delta <= 110) {
                 rhythmState.combo += 1;
                 rhythmState.bestCombo = Math.max(rhythmState.bestCombo, rhythmState.combo);
                 rhythmState.score += 3 + Math.floor(rhythmState.combo / 4);
-                if (note) note.textContent = 'Perfect beat!';
-                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.match);
-            } else if (delta <= 190) {
+	                if (note) note.textContent = 'Perfect beat!';
+	                if (typeof GameAudio !== 'undefined') {
+	                    if (typeof GameAudio.playRewardCue === 'function') {
+	                        GameAudio.playRewardCue(rhythmState.combo >= 8 ? 'medium' : 'small', { gain: rhythmState.combo >= 8 ? 0.72 : 0.52 });
+	                    }
+	                    if (GameAudio.playSFX) GameAudio.playSFX(GameAudio.sfx.match);
+	                    if (typeof GameAudio.setGameplayAudioIntensity === 'function') {
+	                        GameAudio.setGameplayAudioIntensity(Math.min(0.95, 0.22 + (Math.min(12, rhythmState.combo) * 0.05)));
+	                    }
+	                }
+	            } else if (delta <= 190) {
                 rhythmState.combo = Math.max(0, rhythmState.combo - 1);
                 rhythmState.score += 1;
-                if (note) note.textContent = 'Good timing.';
-            } else {
-                rhythmState.combo = 0;
-                if (note) note.textContent = 'Missed beat. Get back in sync.';
-                if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
-            }
+	                if (note) note.textContent = 'Good timing.';
+	                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+	                    GameAudio.playMiniGameTone({ bus: 'gameplay', type: 'triangle', frequency: 180, durationMs: 70, gain: 0.06 });
+	                }
+	            } else {
+	                rhythmState.combo = 0;
+	                if (note) note.textContent = 'Missed beat. Get back in sync.';
+	                if (typeof GameAudio !== 'undefined') {
+	                    if (typeof GameAudio.playUiCue === 'function') GameAudio.playUiCue('error', { gain: 0.62 });
+	                    if (GameAudio.playSFX) GameAudio.playSFX(GameAudio.sfx.miss);
+	                    if (typeof GameAudio.setGameplayAudioIntensity === 'function') GameAudio.setGameplayAudioIntensity(0.14);
+	                    if (typeof GameAudio.playAccessibilityCue === 'function') {
+	                        GameAudio.playAccessibilityCue('countdownDanger', { gain: 0.58, caption: 'Missed beat' });
+	                    }
+	                }
+	            }
             const scoreEl = document.getElementById('rhythm-score');
             const comboEl = document.getElementById('rhythm-combo');
             if (scoreEl) scoreEl.textContent = `Score: ${rhythmState.score}`;
@@ -187,21 +221,30 @@
                     ],
                     medalThresholds: { bronze: 20, silver: 42, gold: 72 }
                 });
-            } else {
-                restorePostMiniGameState();
-            }
-            rhythmState = null;
-        }
+	            } else {
+	                restorePostMiniGameState();
+	            }
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+	                GameAudio.playAccessibilityCue('objectiveEnd', { gain: 0.72, caption: 'Rhythm game ended' });
+	            }
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.clearGameplayAudioState === 'function') {
+	                GameAudio.clearGameplayAudioState();
+	            }
+	            rhythmState = null;
+	        }
 
         function teardownRhythmGame() {
             if (!rhythmState) {
                 dismissMiniGameExitDialog();
                 return false;
             }
-            teardownMiniGameRuntime(rhythmState, { overlaySelector: '.rhythm-game-overlay' });
-            rhythmState = null;
-            return true;
-        }
+	            teardownMiniGameRuntime(rhythmState, { overlaySelector: '.rhythm-game-overlay' });
+	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.clearGameplayAudioState === 'function') {
+	                GameAudio.clearGameplayAudioState();
+	            }
+	            rhythmState = null;
+	            return true;
+	        }
 
         if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
             MiniGameRegistry.registerLifecycle('rhythm', {

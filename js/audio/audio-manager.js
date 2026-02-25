@@ -3,11 +3,27 @@
 
     const AUDIO_DEBUG_FLAG_KEY = 'mlfAudioDebug';
     const SETTINGS_KEY = 'mlf.audio.v2.settings';
-    const MAX_ACTIVE_GLOBAL = 14;
-    const MAX_ACTIVE_BY_CHANNEL = Object.freeze({ ui: 5, sfx: 8, music: 2, ambient: 2 });
-    const DEFAULT_VOLUMES = Object.freeze({ master: 1, music: 0.6, ambient: 0.65, sfx: 0.85, ui: 0.8 });
+    const MAX_ACTIVE_GLOBAL = 20;
+    const MAX_ACTIVE_BY_CHANNEL = Object.freeze({ ui: 6, sfx: 10, music: 6, ambient: 6 });
+    const DEFAULT_VOLUMES = Object.freeze({ master: 0.94, music: 0.52, ambient: 0.56, sfx: 0.9, ui: 0.88 });
     const DEFAULT_MUTED = Object.freeze({ master: false, music: false, ambient: false, sfx: false, ui: false });
     const CHANNELS = Object.freeze(['master', 'music', 'ambient', 'sfx', 'ui']);
+    const LOOP_TRANSITION_DEFAULT_MS = 320;
+    const LOOP_TRANSITION_ROOM_MS = 520;
+    const LOOP_TRANSITION_STOP_MS = 180;
+    const LOOP_TRANSITION_FAST_MS = 120;
+    const SCENE_LOOP_SLOT_KEYS = Object.freeze([
+        'ambient:base',
+        'ambient:detail',
+        'music:base',
+        'music:detail'
+    ]);
+    const MIX_DUCK_PRESETS = Object.freeze({
+        ui: { music: 0.82, ambient: 0.76, holdMs: 120, releaseMs: 180 },
+        error: { music: 0.72, ambient: 0.62, holdMs: 180, releaseMs: 240 },
+        reward: { music: 0.78, ambient: 0.7, holdMs: 160, releaseMs: 260 },
+        critical: { music: 0.64, ambient: 0.56, holdMs: 240, releaseMs: 320 }
+    });
 
     const FALLBACK_MANIFEST = {
         version: 1,
@@ -44,7 +60,11 @@
         comboRise: { id: 'comboRise', label: 'Combo rise', description: 'Combo is increasing.', sound: 'combo-rise' },
         countdownDanger: { id: 'countdownDanger', label: 'Countdown danger', description: 'Time is running out.', sound: 'ui-error' },
         cooldownComplete: { id: 'cooldownComplete', label: 'Cooldown complete', description: 'Actions are ready again.', sound: 'ui-confirm' },
-        lowStatUrgency: { id: 'lowStatUrgency', label: 'Low stat urgency', description: 'Pet needs care now.', sound: 'ui-error' }
+        lowStatUrgency: { id: 'lowStatUrgency', label: 'Low stat urgency', description: 'Pet needs care now.', sound: 'ui-error' },
+        actionAvailable: { id: 'actionAvailable', label: 'Action available', description: 'Important action is now available.', sound: 'ui-confirm' },
+        statusImportant: { id: 'statusImportant', label: 'Important status', description: 'Important pet or gameplay status changed.', sound: 'achievement' },
+        simonPad: { id: 'simonPad', label: 'Simon pad cue', description: 'Simon pad playback cue.', sound: 'ui-focus' },
+        rhythmBeatAccent: { id: 'rhythmBeatAccent', label: 'Rhythm accent beat', description: 'Strong rhythm beat cue.', sound: 'match-success' }
     });
 
     let manifest = null;
@@ -70,9 +90,27 @@
     const activeVoices = new Set();
     const lastPlayedAt = new Map();
     const channelLoopPlayers = new Map();
+    const sceneLoopPlayers = new Map();
     const captionChannelState = { lastCue: null, category: null, text: '', timestamp: 0 };
     const sfxVariantBags = new Map();
     const sfxVariantLastPick = new Map();
+    const loopTransitions = new Map();
+    const mixDuckTimers = new Map();
+    const duckState = {
+        music: { multiplier: 1, restoreAt: 0, restoreMs: 0 },
+        ambient: { multiplier: 1, restoreAt: 0, restoreMs: 0 }
+    };
+    const sceneAudioState = {
+        roomId: null,
+        timeOfDay: null,
+        activity: 'pet',
+        minigame: null,
+        intensity: 0,
+        rewardPulseUntil: 0,
+        roomChangeAt: 0,
+        enabled: true
+    };
+    let sceneRefreshTimer = null;
 
     const SFX_VARIANT_GROUPS = Object.freeze({
         uiTap: Object.freeze([
@@ -85,20 +123,72 @@
             { name: 'match-success', gain: 0.72 },
             { name: 'ui-focus', gain: 0.82 }
         ]),
+        uiBack: Object.freeze([
+            { name: 'ui-back', gain: 1 },
+            { name: 'ui-close-modal', gain: 0.88 },
+            { name: 'ui-toggle', gain: 0.72 }
+        ]),
+        uiError: Object.freeze([
+            { name: 'ui-error', gain: 1 },
+            { name: 'fail-gentle', gain: 0.82 },
+            { name: 'pet-sad-whimper', gain: 0.58 }
+        ]),
         feed: Object.freeze([
             { name: 'feed', gain: 1 },
             { name: 'pet-eating', gain: 0.9 },
             { name: 'happy-chirp', gain: 0.48 }
+        ]),
+        wash: Object.freeze([
+            { name: 'wash', gain: 1 },
+            { name: 'pet-bath-splash', gain: 0.95 },
+            { name: 'bubble-pop', gain: 0.6 }
+        ]),
+        play: Object.freeze([
+            { name: 'play', gain: 1 },
+            { name: 'pet-excited', gain: 0.92 },
+            { name: 'match-success', gain: 0.65 }
+        ]),
+        sleep: Object.freeze([
+            { name: 'sleep', gain: 1 },
+            { name: 'pet-sleeping-zzz', gain: 0.78 },
+            { name: 'ui-toggle', gain: 0.62 }
+        ]),
+        medicine: Object.freeze([
+            { name: 'medicine', gain: 1 },
+            { name: 'medicine-soft', gain: 0.92 },
+            { name: 'ui-focus', gain: 0.66 }
         ]),
         groom: Object.freeze([
             { name: 'groom', gain: 1 },
             { name: 'groom-soft', gain: 0.92 },
             { name: 'ui-focus', gain: 0.7 }
         ]),
+        exercise: Object.freeze([
+            { name: 'exercise', gain: 1 },
+            { name: 'hit-soft', gain: 0.95 },
+            { name: 'pet-excited', gain: 0.6 }
+        ]),
+        treat: Object.freeze([
+            { name: 'treat', gain: 1 },
+            { name: 'pet-eating', gain: 0.88 },
+            { name: 'coin-collect', gain: 0.56 }
+        ]),
         cuddle: Object.freeze([
             { name: 'cuddle', gain: 1 },
             { name: 'affection-heart', gain: 0.86 },
             { name: 'pet-affection-heart', gain: 0.84 }
+        ]),
+        rewardSmall: Object.freeze([
+            { name: 'coin-collect', gain: 1 },
+            { name: 'match-success', gain: 0.72 }
+        ]),
+        rewardMedium: Object.freeze([
+            { name: 'reward-treasure', gain: 1 },
+            { name: 'coin-collect', gain: 0.66 }
+        ]),
+        rewardBig: Object.freeze([
+            { name: 'achievement', gain: 1 },
+            { name: 'reward-treasure', gain: 0.7 }
         ])
     });
     const SFX_VARIANT_NAME_TO_GROUP = Object.freeze({
@@ -111,9 +201,22 @@
         'ui-confirm': 'confirm',
         confirm: 'confirm',
         success: 'confirm',
+        'ui-back': 'uiBack',
+        back: 'uiBack',
+        'ui-error': 'uiError',
+        error: 'uiError',
         feed: 'feed',
+        wash: 'wash',
+        play: 'play',
+        sleep: 'sleep',
+        medicine: 'medicine',
         groom: 'groom',
-        cuddle: 'cuddle'
+        exercise: 'exercise',
+        treat: 'treat',
+        cuddle: 'cuddle',
+        'coin-collect': 'rewardSmall',
+        'reward-treasure': 'rewardMedium',
+        achievement: 'rewardBig'
     });
 
     const state = {
@@ -165,6 +268,72 @@
         if (n < 0) return 0;
         if (n > 1) return 1;
         return n;
+    }
+
+    function clamp(value, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return min;
+        if (n < min) return min;
+        if (n > max) return max;
+        return n;
+    }
+
+    function nowMs() {
+        return Date.now();
+    }
+
+    function getSceneLoopSlotKey(channel, layer) {
+        return `${channel}:${layer}`;
+    }
+
+    function clearTimer(timerId) {
+        if (!timerId) return null;
+        try { clearTimeout(timerId); } catch (err) {}
+        return null;
+    }
+
+    function readGlobalGameStateAudioContext() {
+        try {
+            if (typeof gameState === 'undefined' || !gameState) return null;
+            return {
+                roomId: gameState.currentRoom || currentRoom || null,
+                timeOfDay: gameState.timeOfDay || null,
+                weather: gameState.weather || null
+            };
+        } catch (err) {
+            return null;
+        }
+    }
+
+    function getChannelBaseVolume(channel) {
+        const channelVolume = state.volumes[channel] == null ? 1 : state.volumes[channel];
+        const masterVolume = state.volumes.master == null ? 1 : state.volumes.master;
+        const masterMuted = !!state.muted.master;
+        const channelMuted = !!state.muted[channel];
+        if (masterMuted || channelMuted) return 0;
+        return clamp01(masterVolume) * clamp01(channelVolume);
+    }
+
+    function getRuntimeChannelMixMultiplier(channel) {
+        if (channel === 'music' || channel === 'ambient') {
+            const ds = duckState[channel];
+            return clamp01(ds && Number.isFinite(ds.multiplier) ? ds.multiplier : 1);
+        }
+        return 1;
+    }
+
+    function scheduleSceneRefresh(delayMs) {
+        if (destroyed) return;
+        if (sceneRefreshTimer) sceneRefreshTimer = clearTimer(sceneRefreshTimer);
+        const delay = Math.max(0, Number(delayMs) || 0);
+        sceneRefreshTimer = setTimeout(() => {
+            sceneRefreshTimer = null;
+            refreshSceneAudio({ reason: 'scheduled' });
+        }, delay);
+    }
+
+    function clearSceneRefreshTimer() {
+        sceneRefreshTimer = clearTimer(sceneRefreshTimer);
     }
 
     function getLegacyKey(name, fallback) {
@@ -375,12 +544,7 @@
     }
 
     function effectiveChannelVolume(channel) {
-        const channelVolume = state.volumes[channel] == null ? 1 : state.volumes[channel];
-        const masterVolume = state.volumes.master == null ? 1 : state.volumes.master;
-        const masterMuted = !!state.muted.master;
-        const channelMuted = !!state.muted[channel];
-        if (masterMuted || channelMuted) return 0;
-        return clamp01(masterVolume) * clamp01(channelVolume);
+        return clamp01(getChannelBaseVolume(channel) * getRuntimeChannelMixMultiplier(channel));
     }
 
     function applyRuntimeGains() {
@@ -392,17 +556,19 @@
     function applyVoiceOutputGain(voice) {
         if (!voice) return;
         const channel = voice.channel || 'sfx';
-        const gain = (voice.baseGain == null ? 1 : voice.baseGain) * effectiveChannelVolume(channel);
+        const baseGain = (voice.baseGain == null ? 1 : voice.baseGain);
+        const runtimeMultiplier = voice.gainNode ? 1 : getRuntimeChannelMixMultiplier(channel);
+        const gain = baseGain * getChannelBaseVolume(channel) * runtimeMultiplier;
         if (voice.gainNode && audioCtx) {
             try {
                 const now = audioCtx.currentTime;
                 voice.gainNode.gain.cancelScheduledValues(now);
-                voice.gainNode.gain.setTargetAtTime(Math.max(0.00001, clamp01(gain)), now, 0.01);
+                voice.gainNode.gain.setTargetAtTime(Math.max(0.00001, clamp(voice._manualGainMultiplier == null ? clamp01(gain) : (gain * clamp01(voice._manualGainMultiplier)), 0, 1)), now, 0.01);
             } catch (err) {}
             return;
         }
         if (voice.player) {
-            voice.player.volume = clamp01(gain);
+            voice.player.volume = clamp01((voice._manualGainMultiplier == null ? 1 : clamp01(voice._manualGainMultiplier)) * gain);
             voice.player.muted = gain <= 0;
         }
     }
@@ -419,19 +585,41 @@
             audioCtx = new Ctx();
             const master = audioCtx.createGain();
             const music = audioCtx.createGain();
+            const musicDuck = audioCtx.createGain();
             const ambient = audioCtx.createGain();
+            const ambientDuck = audioCtx.createGain();
             const sfx = audioCtx.createGain();
             const ui = audioCtx.createGain();
             const gameplay = audioCtx.createGain();
+            const headroom = audioCtx.createGain();
+            let compressor = null;
+            if (typeof audioCtx.createDynamicsCompressor === 'function') {
+                compressor = audioCtx.createDynamicsCompressor();
+                try {
+                    compressor.threshold.value = -20;
+                    compressor.knee.value = 24;
+                    compressor.ratio.value = 6;
+                    compressor.attack.value = 0.003;
+                    compressor.release.value = 0.18;
+                } catch (err) {}
+            }
 
-            music.connect(master);
-            ambient.connect(master);
+            music.connect(musicDuck);
+            ambient.connect(ambientDuck);
+            musicDuck.connect(master);
+            ambientDuck.connect(master);
             sfx.connect(master);
             ui.connect(master);
             gameplay.connect(sfx);
-            master.connect(audioCtx.destination);
+            if (compressor) {
+                master.connect(compressor);
+                compressor.connect(headroom);
+            } else {
+                master.connect(headroom);
+            }
+            headroom.connect(audioCtx.destination);
 
-            webAudioGains = { master, music, ambient, sfx, ui, gameplay };
+            webAudioGains = { master, music, musicDuck, ambient, ambientDuck, sfx, ui, gameplay, headroom, compressor };
             applyWebAudioChannelGains();
             return audioCtx;
         } catch (err) {
@@ -444,12 +632,13 @@
     function applyWebAudioChannelGains() {
         if (!audioCtx || !webAudioGains) return;
         const now = audioCtx.currentTime;
+        const masterBase = Math.max(getChannelBaseVolume('master') || 1, 1e-6);
         const map = {
-            master: effectiveChannelVolume('master'),
-            music: effectiveChannelVolume('music') / Math.max(effectiveChannelVolume('master') || 1, 1e-6),
-            ambient: effectiveChannelVolume('ambient') / Math.max(effectiveChannelVolume('master') || 1, 1e-6),
-            sfx: effectiveChannelVolume('sfx') / Math.max(effectiveChannelVolume('master') || 1, 1e-6),
-            ui: effectiveChannelVolume('ui') / Math.max(effectiveChannelVolume('master') || 1, 1e-6)
+            master: getChannelBaseVolume('master'),
+            music: getChannelBaseVolume('music') / masterBase,
+            ambient: getChannelBaseVolume('ambient') / masterBase,
+            sfx: getChannelBaseVolume('sfx') / masterBase,
+            ui: getChannelBaseVolume('ui') / masterBase
         };
         Object.keys(map).forEach((key) => {
             const node = webAudioGains[key];
@@ -458,6 +647,18 @@
             node.gain.cancelScheduledValues(now);
             node.gain.setTargetAtTime(v, now, 0.015);
         });
+        if (webAudioGains.musicDuck && webAudioGains.musicDuck.gain) {
+            webAudioGains.musicDuck.gain.cancelScheduledValues(now);
+            webAudioGains.musicDuck.gain.setTargetAtTime(getRuntimeChannelMixMultiplier('music'), now, 0.03);
+        }
+        if (webAudioGains.ambientDuck && webAudioGains.ambientDuck.gain) {
+            webAudioGains.ambientDuck.gain.cancelScheduledValues(now);
+            webAudioGains.ambientDuck.gain.setTargetAtTime(getRuntimeChannelMixMultiplier('ambient'), now, 0.03);
+        }
+        if (webAudioGains.headroom && webAudioGains.headroom.gain) {
+            webAudioGains.headroom.gain.cancelScheduledValues(now);
+            webAudioGains.headroom.gain.setTargetAtTime(0.92, now, 0.04);
+        }
     }
 
     function bindUnlockListeners() {
@@ -479,8 +680,18 @@
             if (destroyed) return;
             if (document.hidden) {
                 pausedForBackground = true;
-                stop('music');
-                stop('ambient');
+                SCENE_LOOP_SLOT_KEYS.forEach((slotKey) => {
+                    const channel = slotKey.split(':')[0];
+                    const voice = sceneLoopPlayers.get(slotKey);
+                    if (voice) {
+                        sceneLoopPlayers.delete(slotKey);
+                        stopVoiceSmooth(voice, { fadeMs: LOOP_TRANSITION_FAST_MS });
+                    }
+                });
+                const manualMusic = channelLoopPlayers.get('music');
+                const manualAmbient = channelLoopPlayers.get('ambient');
+                if (manualMusic) { channelLoopPlayers.delete('music'); stopVoiceSmooth(manualMusic, { fadeMs: LOOP_TRANSITION_FAST_MS }); }
+                if (manualAmbient) { channelLoopPlayers.delete('ambient'); stopVoiceSmooth(manualAmbient, { fadeMs: LOOP_TRANSITION_FAST_MS }); }
                 if (audioCtx && audioCtx.state === 'running') {
                     audioCtx.suspend().catch(() => {});
                 }
@@ -492,7 +703,7 @@
                 audioCtx.resume().catch(() => {});
             }
             if (unlocked && getEnabled() && currentRoom) {
-                startAmbientForRoom(currentRoom);
+                refreshSceneAudio({ reason: 'foreground', restartLoops: true });
             }
         };
         document.addEventListener('visibilitychange', onVisibilityChange, true);
@@ -512,7 +723,7 @@
         baseAudioCache.forEach((audio) => {
             try { audio.load(); } catch (err) {}
         });
-        if (currentRoom) startAmbientForRoom(currentRoom);
+        if (currentRoom) enterRoom(currentRoom);
         logDebug('Audio unlocked');
         return true;
     }
@@ -630,6 +841,11 @@
         if (!voice) return;
         if (voice._cleaned) return;
         voice._cleaned = true;
+        if (voice._fadeTimer) {
+            try { clearTimeout(voice._fadeTimer); } catch (err) {}
+            voice._fadeTimer = null;
+        }
+        cleanupLoopSlotMapsForVoice(voice);
         activeVoices.delete(voice);
         if (voice.sourceNode) {
             try { voice.sourceNode.onended = null; } catch (err) {}
@@ -653,11 +869,20 @@
         if (activeVoices.size <= MAX_ACTIVE_GLOBAL && countActiveForChannel(channel) <= (MAX_ACTIVE_BY_CHANNEL[channel] || 6)) return;
         const candidates = Array.from(activeVoices)
             .filter((voice) => voice.channel === channel || activeVoices.size > MAX_ACTIVE_GLOBAL)
-            .sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+            .sort((a, b) => {
+                const pa = Number(a && a.priority) || 0;
+                const pb = Number(b && b.priority) || 0;
+                if (pa !== pb) return pa - pb;
+                const aloop = a && a.loop ? 1 : 0;
+                const bloop = b && b.loop ? 1 : 0;
+                if (aloop !== bloop) return aloop - bloop;
+                return (a.startedAt || 0) - (b.startedAt || 0);
+            });
         while (activeVoices.size > MAX_ACTIVE_GLOBAL || countActiveForChannel(channel) > (MAX_ACTIVE_BY_CHANNEL[channel] || 6)) {
             const victim = candidates.shift();
             if (!victim) break;
-            cleanupVoice(victim);
+            if (victim.loop || victim.priority >= 60) stopVoiceSmooth(victim, { fadeMs: 70 });
+            else stopVoiceSmooth(victim, { fadeMs: 35 });
         }
     }
 
@@ -667,6 +892,264 @@
             if (voice.channel === channel) count += 1;
         });
         return count;
+    }
+
+    function applyMixDuckProfile(profileName, overrideOptions) {
+        const preset = MIX_DUCK_PRESETS[profileName];
+        if (!preset) return;
+        const opts = overrideOptions || {};
+        const holdMs = Math.max(0, Number(opts.holdMs != null ? opts.holdMs : preset.holdMs) || 0);
+        const releaseMs = Math.max(40, Number(opts.releaseMs != null ? opts.releaseMs : preset.releaseMs) || 180);
+        const targets = {
+            music: clamp01(opts.music != null ? opts.music : preset.music),
+            ambient: clamp01(opts.ambient != null ? opts.ambient : preset.ambient)
+        };
+        Object.keys(targets).forEach((channel) => {
+            const stateForChannel = duckState[channel];
+            if (!stateForChannel) return;
+            stateForChannel.multiplier = Math.min(stateForChannel.multiplier || 1, targets[channel]);
+            stateForChannel.restoreAt = nowMs() + holdMs;
+            stateForChannel.restoreMs = releaseMs;
+            const timerKey = `duck:${channel}`;
+            const prior = mixDuckTimers.get(timerKey);
+            if (prior) clearTimeout(prior);
+            const timerId = setTimeout(() => {
+                mixDuckTimers.delete(timerKey);
+                stateForChannel.multiplier = 1;
+                stateForChannel.restoreAt = 0;
+                stateForChannel.restoreMs = 0;
+                applyRuntimeGains();
+            }, holdMs + releaseMs);
+            mixDuckTimers.set(timerKey, timerId);
+        });
+        applyRuntimeGains();
+    }
+
+    function inferMixDuckProfile(soundName, entry, opts) {
+        if (opts && typeof opts.mixDuck === 'string') return opts.mixDuck;
+        const name = String(soundName || '').toLowerCase();
+        if (opts && opts.critical) return 'critical';
+        if (name.includes('reward') || name.includes('achievement') || name.includes('coin') || name.includes('combo')) return 'reward';
+        if (name.includes('error') || name.includes('fail') || name.includes('miss') || (opts && opts.error)) return 'error';
+        if ((entry && entry.channel === 'ui') || (opts && opts.ui)) return 'ui';
+        return null;
+    }
+
+    function computeVoicePriority(channel, entry, opts, isLoop) {
+        const baseByChannel = { music: 60, ambient: 50, ui: 35, sfx: 30, gameplay: 34 };
+        let priority = baseByChannel[channel] || 20;
+        if (isLoop) priority += 20;
+        if (opts && opts.persistent) priority += 20;
+        if (opts && opts.critical) priority += 25;
+        if (opts && opts.ui) priority += 8;
+        if (opts && opts.error) priority += 10;
+        if (entry && entry.category === 'music') priority += 8;
+        if (entry && entry.category === 'ambient') priority += 6;
+        return priority;
+    }
+
+    function fadeVoiceGain(voice, targetMultiplier, durationMs, stopAfterFade) {
+        if (!voice || voice._cleaned) return;
+        const duration = Math.max(0, Number(durationMs) || 0);
+        const clampedTarget = clamp01(targetMultiplier);
+        voice._manualGainMultiplier = clampedTarget;
+        if (voice._fadeTimer) {
+            try { clearTimeout(voice._fadeTimer); } catch (err) {}
+            voice._fadeTimer = null;
+        }
+        if (voice.gainNode && audioCtx) {
+            try {
+                const now = audioCtx.currentTime;
+                const current = clamp(Math.max(0.00001, Number(voice.gainNode.gain.value) || 0.00001), 0.00001, 1);
+                voice.gainNode.gain.cancelScheduledValues(now);
+                voice.gainNode.gain.setValueAtTime(current, now);
+                if (duration <= 0) {
+                    voice.gainNode.gain.setValueAtTime(Math.max(0.00001, clampedTarget), now);
+                } else {
+                    voice.gainNode.gain.linearRampToValueAtTime(Math.max(0.00001, clampedTarget), now + (duration / 1000));
+                }
+            } catch (err) {}
+        } else if (voice.player) {
+            applyVoiceOutputGain(voice);
+        }
+        if (stopAfterFade) {
+            voice._fadeTimer = setTimeout(() => {
+                voice._fadeTimer = null;
+                cleanupVoice(voice);
+            }, duration + 20);
+        }
+    }
+
+    function stopVoiceSmooth(voice, opts) {
+        if (!voice || voice._cleaned) return;
+        const options = opts || {};
+        const fadeMs = Math.max(0, Number(options.fadeMs) || LOOP_TRANSITION_STOP_MS);
+        fadeVoiceGain(voice, 0, fadeMs, true);
+    }
+
+    function cleanupLoopSlotMapsForVoice(voice) {
+        if (!voice) return;
+        if (voice._loopStore === 'scene' && voice._loopSlotKey && sceneLoopPlayers.get(voice._loopSlotKey) === voice) {
+            sceneLoopPlayers.delete(voice._loopSlotKey);
+        }
+        if (voice._loopStore === 'channel' && voice._loopSlotKey && channelLoopPlayers.get(voice._loopSlotKey) === voice) {
+            channelLoopPlayers.delete(voice._loopSlotKey);
+        }
+    }
+
+    async function createLoopVoice(channel, soundName, entry, options) {
+        const opts = options || {};
+        const baseGain = clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (opts.gain != null ? opts.gain : 1));
+        const shouldLoop = opts && typeof opts.loop === 'boolean' ? opts.loop : true;
+        const initialGainMultiplier = clamp01(opts.initialGainMultiplier == null ? 1 : opts.initialGainMultiplier);
+        const loopPriority = computeVoicePriority(channel, entry, opts, true);
+        const ctx = ensureAudioContext();
+        if (ctx && webAudioGains) {
+            try {
+                if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
+                const buffer = await getDecodedBuffer(entry.path);
+                if (buffer) {
+                    const sourceNode = ctx.createBufferSource();
+                    const gainNode = ctx.createGain();
+                    sourceNode.buffer = buffer;
+                    sourceNode.loop = shouldLoop;
+                    sourceNode.connect(gainNode);
+                    const outNode = getChannelOutputNode(channel);
+                    if (outNode) gainNode.connect(outNode);
+                    const voice = {
+                        name: soundName,
+                        channel,
+                        sourceNode,
+                        gainNode,
+                        baseGain,
+                        startedAt: Date.now(),
+                        loop: true,
+                        priority: loopPriority,
+                        _manualGainMultiplier: initialGainMultiplier
+                    };
+                    sourceNode.onended = () => {
+                        cleanupLoopSlotMapsForVoice(voice);
+                        cleanupVoice(voice);
+                    };
+                    activeVoices.add(voice);
+                    applyVoiceOutputGain(voice);
+                    const startOffsetSec = clamp(Number(opts.startOffsetSec || 0), 0, Math.max(0, (buffer.duration || 0) - 0.02));
+                    sourceNode.start(ctx.currentTime, startOffsetSec || 0);
+                    enforceVoiceLimits(channel);
+                    return voice;
+                }
+            } catch (err) {
+                warnDebug('WebAudio loop failed; falling back to HTMLAudio', soundName, err && err.message ? err.message : err);
+            }
+        }
+
+        const player = createPlayerFromSource(entry.path);
+        if (!player) return null;
+        let mediaSourceNode = null;
+        let gainNode = null;
+        if (ctx && webAudioGains) {
+            try {
+                mediaSourceNode = ctx.createMediaElementSource(player);
+                gainNode = ctx.createGain();
+                mediaSourceNode.connect(gainNode);
+                const outNode = getChannelOutputNode(channel);
+                if (outNode) gainNode.connect(outNode);
+                player.volume = 1;
+            } catch (err) {
+                mediaSourceNode = null;
+                gainNode = null;
+            }
+        }
+        player.loop = shouldLoop;
+        player.currentTime = 0;
+        const voice = {
+            name: soundName,
+            channel,
+            player,
+            mediaSourceNode,
+            gainNode,
+            baseGain,
+            startedAt: Date.now(),
+            loop: true,
+            priority: loopPriority,
+            _manualGainMultiplier: initialGainMultiplier
+        };
+        activeVoices.add(voice);
+        applyVoiceOutputGain(voice);
+        enforceVoiceLimits(channel);
+        player.addEventListener('error', () => {
+            cleanupLoopSlotMapsForVoice(voice);
+            cleanupVoice(voice);
+        }, { once: true });
+        const p = player.play();
+        if (p && typeof p.catch === 'function') {
+            p.catch((err) => {
+                cleanupLoopSlotMapsForVoice(voice);
+                cleanupVoice(voice);
+                warnDebug('Loop playback failed', soundName, err && err.message ? err.message : err);
+            });
+        }
+        return voice;
+    }
+
+    async function transitionLoopSlot(storeKind, slotKey, channel, soundName, opts) {
+        const options = Object.assign({}, opts || {});
+        const store = storeKind === 'scene' ? sceneLoopPlayers : channelLoopPlayers;
+        const current = store.get(slotKey);
+        const fadeMs = Math.max(0, Number(options.fadeMs != null ? options.fadeMs : LOOP_TRANSITION_DEFAULT_MS) || LOOP_TRANSITION_DEFAULT_MS);
+        if (!soundName) {
+            if (current) {
+                store.delete(slotKey);
+                stopVoiceSmooth(current, { fadeMs: options.stopFadeMs || LOOP_TRANSITION_STOP_MS });
+            }
+            return null;
+        }
+
+        await ensureManifest();
+        const entry = resolveSound(soundName);
+        if (!entry || !entry.path) {
+            warnDebug('Missing loop sound', soundName);
+            return null;
+        }
+        if (!canPlayChannel(channel, options)) {
+            if (current) {
+                store.delete(slotKey);
+                stopVoiceSmooth(current, { fadeMs: LOOP_TRANSITION_FAST_MS });
+            }
+            return null;
+        }
+        if (!unlocked) await unlock();
+
+        if (current && current.name === soundName && !options.restart) {
+            current.baseGain = clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (options.gain != null ? options.gain : 1));
+            current._manualGainMultiplier = 1;
+            applyVoiceOutputGain(current);
+            return current;
+        }
+
+        const nextVoice = await createLoopVoice(channel, soundName, entry, Object.assign({}, options, {
+            initialGainMultiplier: current ? 0 : 1,
+            startOffsetSec: options.startOffsetSec != null
+                ? Number(options.startOffsetSec)
+                : (options.randomStartOffset ? Math.random() * 6 : 0)
+        }));
+        if (!nextVoice) return null;
+        nextVoice._loopStore = storeKind;
+        nextVoice._loopSlotKey = slotKey;
+        store.set(slotKey, nextVoice);
+        if (current) {
+            cleanupLoopSlotMapsForVoice(current);
+            stopVoiceSmooth(current, { fadeMs });
+            fadeVoiceGain(nextVoice, 1, fadeMs, false);
+        } else if (fadeMs > 0 && options.fadeIn !== false) {
+            nextVoice._manualGainMultiplier = 0;
+            applyVoiceOutputGain(nextVoice);
+            fadeVoiceGain(nextVoice, 1, Math.min(fadeMs, 220), false);
+        } else {
+            nextVoice._manualGainMultiplier = 1;
+            applyVoiceOutputGain(nextVoice);
+        }
+        return nextVoice;
     }
 
     async function playOneShot(soundName, opts) {
@@ -680,6 +1163,9 @@
         const channel = entry.channel || 'sfx';
         if (!canPlayChannel(channel, opts)) return null;
         if (!unlocked) await unlock();
+        const mixDuckProfile = inferMixDuckProfile(soundName, entry, opts);
+        if (mixDuckProfile) applyMixDuckProfile(mixDuckProfile, opts && opts.mixDuckOptions);
+        const voicePriority = computeVoicePriority(channel, entry, opts, false);
 
         // Prefer Web Audio sample playback so per-channel volume works on iOS/WKWebView.
         const ctx = ensureAudioContext();
@@ -697,7 +1183,16 @@
                     if (outNode) gainNode.connect(outNode);
                     const baseGain = clamp01(entry.defaultVolume == null ? 1 : entry.defaultVolume);
                     const optsGain = clamp01(opts && opts.gain != null ? opts.gain : 1);
-                    const voice = { name: soundName, channel, sourceNode, gainNode, baseGain: baseGain * optsGain, startedAt: Date.now() };
+                    const voice = {
+                        name: soundName,
+                        channel,
+                        sourceNode,
+                        gainNode,
+                        baseGain: baseGain * optsGain,
+                        startedAt: Date.now(),
+                        priority: voicePriority,
+                        _manualGainMultiplier: 1
+                    };
                     activeVoices.add(voice);
                     applyVoiceOutputGain(voice);
                     enforceVoiceLimits(channel);
@@ -739,7 +1234,17 @@
         }
         player.loop = false;
         player.currentTime = 0;
-        const voice = { name: soundName, channel, player, mediaSourceNode, gainNode, baseGain: baseGain * optsGain, startedAt: Date.now() };
+        const voice = {
+            name: soundName,
+            channel,
+            player,
+            mediaSourceNode,
+            gainNode,
+            baseGain: baseGain * optsGain,
+            startedAt: Date.now(),
+            priority: voicePriority,
+            _manualGainMultiplier: 1
+        };
         activeVoices.add(voice);
         if (gainNode) applyVoiceOutputGain(voice);
         enforceVoiceLimits(channel);
@@ -766,113 +1271,10 @@
     }
 
     async function playLoop(channel, soundName, opts) {
-        await ensureManifest();
-        const entry = resolveSound(soundName);
-        if (!entry || !entry.path) {
-            warnDebug('Missing loop sound', soundName);
-            return null;
-        }
-        if (!canPlayChannel(channel, opts)) {
-            stop(channel);
-            return null;
-        }
-        if (!unlocked) await unlock();
-
-        const current = channelLoopPlayers.get(channel);
-        if (current && current.name === soundName && !opts?.restart) {
-            current.baseGain = clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (opts?.gain == null ? 1 : opts.gain));
-            applyRuntimeGains();
-            return current;
-        }
-        if (current) stop(channel);
-        const baseGain = clamp01((entry.defaultVolume == null ? 1 : entry.defaultVolume) * (opts && opts.gain != null ? opts.gain : 1));
-        const shouldLoop = opts && typeof opts.loop === 'boolean' ? opts.loop : true;
-
-        const ctx = ensureAudioContext();
-        if (ctx && webAudioGains) {
-            try {
-                if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
-                const buffer = await getDecodedBuffer(entry.path);
-                if (buffer) {
-                    const sourceNode = ctx.createBufferSource();
-                    const gainNode = ctx.createGain();
-                    sourceNode.buffer = buffer;
-                    sourceNode.loop = shouldLoop;
-                    sourceNode.connect(gainNode);
-                    const outNode = getChannelOutputNode(channel);
-                    if (outNode) gainNode.connect(outNode);
-                    const voice = { name: soundName, channel, sourceNode, gainNode, baseGain, startedAt: Date.now(), loop: true };
-                    const cleanup = () => {
-                        if (channelLoopPlayers.get(channel) === voice) channelLoopPlayers.delete(channel);
-                        cleanupVoice(voice);
-                    };
-                    sourceNode.onended = cleanup;
-                    channelLoopPlayers.set(channel, voice);
-                    activeVoices.add(voice);
-                    applyVoiceOutputGain(voice);
-                    sourceNode.start(ctx.currentTime);
-                    logDebug('playLoop(webAudio)', channel, soundName, entry.path);
-                    return voice;
-                }
-            } catch (err) {
-                warnDebug('WebAudio loop failed; falling back to HTMLAudio', soundName, err && err.message ? err.message : err);
-            }
-        }
-
-        const player = createPlayerFromSource(entry.path);
-        if (!player) return null;
-        let mediaSourceNode = null;
-        let gainNode = null;
-        if (ctx && webAudioGains) {
-            try {
-                mediaSourceNode = ctx.createMediaElementSource(player);
-                gainNode = ctx.createGain();
-                mediaSourceNode.connect(gainNode);
-                const outNode = getChannelOutputNode(channel);
-                if (outNode) gainNode.connect(outNode);
-                player.volume = 1;
-            } catch (err) {
-                mediaSourceNode = null;
-                gainNode = null;
-            }
-        }
-        player.loop = shouldLoop;
-        player.currentTime = 0;
-        const voice = {
-            name: soundName,
-            channel,
-            player,
-            mediaSourceNode,
-            gainNode,
-            baseGain,
-            startedAt: Date.now(),
-            loop: true
-        };
-        channelLoopPlayers.set(channel, voice);
-        activeVoices.add(voice);
-        applyRuntimeGains();
-
-        const cleanup = () => {
-            if (channelLoopPlayers.get(channel) === voice) channelLoopPlayers.delete(channel);
-            cleanupVoice(voice);
-        };
-        player.addEventListener('error', cleanup, { once: true });
-
-        try {
-            const p = player.play();
-            if (p && typeof p.catch === 'function') {
-                p.catch((err) => {
-                    cleanup();
-                    warnDebug('Loop playback failed', soundName, err && err.message ? err.message : err);
-                });
-            }
-            logDebug('playLoop', channel, soundName, entry.path);
-            return voice;
-        } catch (err) {
-            cleanup();
-            warnDebug('Loop playback exception', soundName, err);
-            return null;
-        }
+        const options = Object.assign({}, opts || {});
+        return transitionLoopSlot('channel', channel, channel, soundName, Object.assign({
+            fadeMs: options.fadeMs == null ? LOOP_TRANSITION_DEFAULT_MS : options.fadeMs
+        }, options));
     }
 
     function stop(target) {
@@ -882,7 +1284,18 @@
             const loopVoice = channelLoopPlayers.get(channel);
             if (loopVoice) {
                 channelLoopPlayers.delete(channel);
-                cleanupVoice(loopVoice);
+                stopVoiceSmooth(loopVoice, { fadeMs: LOOP_TRANSITION_STOP_MS });
+            }
+            SCENE_LOOP_SLOT_KEYS
+                .filter((slotKey) => slotKey.indexOf(`${channel}:`) === 0)
+                .forEach((slotKey) => {
+                    const sceneVoice = sceneLoopPlayers.get(slotKey);
+                    if (!sceneVoice) return;
+                    sceneLoopPlayers.delete(slotKey);
+                    stopVoiceSmooth(sceneVoice, { fadeMs: LOOP_TRANSITION_STOP_MS });
+                });
+            if (channel === 'music' || channel === 'ambient') {
+                clearLoopTransitionsForChannel(channel);
             }
             Array.from(activeVoices).forEach((voice) => {
                 if (voice.channel === channel && !voice.loop) cleanupVoice(voice);
@@ -897,7 +1310,13 @@
             const voice = channelLoopPlayers.get(ch);
             if (voice && voice.name === target) {
                 channelLoopPlayers.delete(ch);
-                cleanupVoice(voice);
+                stopVoiceSmooth(voice, { fadeMs: LOOP_TRANSITION_STOP_MS });
+            }
+        });
+        Array.from(sceneLoopPlayers.entries()).forEach(([slotKey, voice]) => {
+            if (voice && voice.name === target) {
+                sceneLoopPlayers.delete(slotKey);
+                stopVoiceSmooth(voice, { fadeMs: LOOP_TRANSITION_STOP_MS });
             }
         });
     }
@@ -921,7 +1340,11 @@
         if (!CHANNELS.includes(channel)) return;
         state.muted[channel] = !!muted;
         if (channel === 'ambient' && state.muted.ambient) stop('ambient');
+        if (channel === 'music' && state.muted.music) stop('music');
         persistSettings();
+        if (!state.muted.master && (channel === 'ambient' || channel === 'music' || channel === 'master')) {
+            refreshSceneAudio({ reason: 'mute-change' });
+        }
     }
 
     function getMuted(channel) {
@@ -964,7 +1387,7 @@
 
     function toggle() {
         setMuted('master', !state.muted.master);
-        if (!state.muted.master && currentRoom) startAmbientForRoom(currentRoom);
+        if (!state.muted.master && currentRoom) enterRoom(currentRoom);
         return !state.muted.master;
     }
 
@@ -975,6 +1398,7 @@
     function toggleMusic() {
         setMuted('music', !state.muted.music);
         if (state.muted.music) stop('music');
+        else refreshSceneAudio({ reason: 'music-toggle-on' });
         return !state.muted.music;
     }
 
@@ -984,9 +1408,9 @@
 
     function setSfxVolumeSetting(value) { setVolume('sfx', value); }
     function getSfxVolumeSetting() { return getVolume('sfx'); }
-    function setAmbientVolumeSetting(value) { setVolume('ambient', value); if (!state.muted.ambient && currentRoom) startAmbientForRoom(currentRoom); }
+    function setAmbientVolumeSetting(value) { setVolume('ambient', value); if (!state.muted.ambient && currentRoom) refreshSceneAudio({ reason: 'ambient-volume' }); }
     function getAmbientVolumeSetting() { return getVolume('ambient'); }
-    function setMusicVolumeSetting(value) { setVolume('music', value); }
+    function setMusicVolumeSetting(value) { setVolume('music', value); if (!state.muted.music && currentRoom) refreshSceneAudio({ reason: 'music-volume' }); }
     function getMusicVolumeSetting() { return getVolume('music'); }
     function setMasterVolumeSetting(value) { setVolume('master', value); }
     function getMasterVolumeSetting() { return getVolume('master'); }
@@ -1046,7 +1470,12 @@
         }
         if (!getEnabled()) return { ok: false, reason: 'sound-disabled', label: cue.label };
         const soundName = cue.sound || 'ui-confirm';
-        playOneShot(soundName, { gain: opts.gain == null ? 0.8 : opts.gain });
+        const isCritical = cueId === 'error' || cueId === 'countdownDanger' || cueId === 'lowStatUrgency' || cueId === 'statusImportant';
+        playOneShot(soundName, {
+            gain: opts.gain == null ? (isCritical ? 0.9 : 0.8) : opts.gain,
+            mixDuck: isCritical ? 'critical' : 'ui',
+            error: isCritical
+        });
         if (state.soundCueCaptionsEnabled || opts.forceCaption) dispatchCaption(cueId, 'accessibility', opts.caption || cue.label);
         return { ok: true, label: cue.label };
     }
@@ -1069,15 +1498,96 @@
             focus: 'ui-focus',
             toggle: 'ui-toggle'
         };
-        const request = resolveVariantPlayback(map[kind] || 'ui-tap-1', options || {});
+        const normalizedKind = String(kind || '').toLowerCase();
+        const merged = Object.assign({
+            ui: true,
+            mixDuck: (normalizedKind === 'error' || normalizedKind === 'disabled') ? 'error' : 'ui',
+            error: normalizedKind === 'error' || normalizedKind === 'disabled'
+        }, options || {});
+        const request = resolveVariantPlayback(map[kind] || 'ui-tap-1', merged);
         return playOneShot(request.soundName, request.options);
     }
 
     function playRewardCue(tier, options) {
         const normalized = String(tier || 'small').toLowerCase();
-        if (normalized === 'big' || normalized === 'large') return playOneShot('achievement', options || {});
-        if (normalized === 'medium') return playOneShot('reward-treasure', options || {});
-        return playOneShot('coin-collect', options || {});
+        const opts = Object.assign({}, options || {});
+        const tierKey = (normalized === 'large') ? 'big' : normalized;
+        pulseRewardSceneMix(tierKey, opts);
+        if (tierKey === 'milestone' || tierKey === 'rare') {
+            playOneShot('achievement', Object.assign({ gain: 0.96, mixDuck: 'critical', critical: true }, opts));
+            setTimeout(() => playOneShot('reward-treasure', Object.assign({ gain: 0.7, mixDuck: 'reward' }, opts)), 90);
+            return { ok: true, tier: tierKey };
+        }
+        if (tierKey === 'streak') {
+            playOneShot('combo-rise', Object.assign({ gain: 0.9, mixDuck: 'reward' }, opts));
+            setTimeout(() => playOneShot('coin-collect', Object.assign({ gain: 0.62, mixDuck: 'reward' }, opts)), 60);
+            return { ok: true, tier: tierKey };
+        }
+        if (tierKey === 'big') {
+            playOneShot('achievement', Object.assign({ gain: 0.88, mixDuck: 'reward' }, opts));
+            setTimeout(() => playOneShot('reward-treasure', Object.assign({ gain: 0.64, mixDuck: 'reward' }, opts)), 70);
+            return { ok: true, tier: tierKey };
+        }
+        if (tierKey === 'medium') {
+            playOneShot('reward-treasure', Object.assign({ gain: 0.82, mixDuck: 'reward' }, opts));
+            if (!opts.skipAccent) setTimeout(() => playOneShot('coin-collect', Object.assign({ gain: 0.5, mixDuck: 'reward' }, opts)), 55);
+            return { ok: true, tier: tierKey };
+        }
+        playOneShot('coin-collect', Object.assign({ gain: 0.78, mixDuck: 'reward' }, opts));
+        return { ok: true, tier: tierKey };
+    }
+
+    function playStatusCue(kind, options) {
+        const normalized = String(kind || '').toLowerCase();
+        const opts = Object.assign({}, options || {});
+        if (normalized === 'cooldownready' || normalized === 'cooldown-ready' || normalized === 'actionavailable' || normalized === 'action-available') {
+            if (normalized !== 'cooldownready' && normalized !== 'cooldown-ready') {
+                pulseRewardSceneMix('small', { skipDuck: true });
+            }
+            return playAccessibilityCue(normalized.includes('cooldown') ? 'cooldownComplete' : 'actionAvailable', Object.assign({ gain: 0.78 }, opts));
+        }
+        if (normalized === 'important' || normalized === 'important-state') {
+            return playAccessibilityCue('statusImportant', Object.assign({ gain: 0.88 }, opts));
+        }
+        if (normalized === 'error' || normalized === 'warning') {
+            return playUiCue('error', Object.assign({ error: true }, opts));
+        }
+        return playUiCue('confirm', Object.assign({ ui: true }, opts));
+    }
+
+    function playCareActionCue(action, options) {
+        const act = String(action || '').toLowerCase();
+        const opts = Object.assign({}, options || {});
+        const gain = clamp(opts.gain == null ? 0.88 : opts.gain, 0, 1);
+        const affinity = String(opts.affinity || '').toLowerCase();
+        const isDislike = affinity === 'dislike' || affinity === 'bad';
+        const isLove = affinity === 'love' || affinity === 'great' || affinity === 'favorite';
+        const mapping = {
+            feed: 'feed',
+            wash: 'wash',
+            play: 'play',
+            sleep: 'sleep',
+            medicine: 'medicine',
+            groom: 'groom',
+            exercise: 'exercise',
+            treat: 'treat',
+            cuddle: 'cuddle'
+        };
+        const soundName = mapping[act] || 'ui-confirm';
+        const mixDuck = (act === 'sleep') ? 'ui' : 'reward';
+        if (isDislike) {
+            playOneShot(act === 'medicine' ? 'medicine-soft' : 'fail-gentle', { gain: Math.max(0.45, gain * 0.76), mixDuck: 'error', error: true });
+            setTimeout(() => playOneShot(soundName, { gain: Math.max(0.35, gain * 0.55), mixDuck: 'ui' }), 36);
+            return { ok: true, action: act, mood: 'dislike' };
+        }
+        playOneShot(soundName, { gain, mixDuck });
+        if (isLove || opts.firstTime || opts.favoriteTreat) {
+            setTimeout(() => playOneShot((act === 'cuddle' || act === 'treat') ? 'affection-heart' : 'happy-chirp', {
+                gain: clamp(gain * 0.55, 0.18, 0.6),
+                mixDuck: 'reward'
+            }), 42);
+        }
+        return { ok: true, action: act };
     }
 
     function playMiniGameTone(options) {
@@ -1097,11 +1607,19 @@
         const attack = Math.max(0.001, Math.min(0.03, duration * 0.2));
         const release = Math.max(0.01, Math.min(0.2, duration * 0.7));
         const now = ctx.currentTime;
+        const freqStart = Math.max(40, Number(opts.frequency || 440));
+        const freqEnd = Math.max(40, Number(opts.frequencyEnd || freqStart));
         osc.type = opts.type || 'sine';
-        osc.frequency.value = Number(opts.frequency || 440);
+        osc.frequency.setValueAtTime(freqStart, now);
+        if (freqEnd !== freqStart) {
+            osc.frequency.exponentialRampToValueAtTime(freqEnd, now + Math.max(0.01, duration));
+        }
         gain.gain.setValueAtTime(0.0001, now);
-        gain.gain.linearRampToValueAtTime(Math.max(0.02, Math.min(0.5, Number(opts.gain || 0.18))), now + attack);
-        gain.gain.exponentialRampToValueAtTime(0.0001, now + attack + release);
+        const peakGain = Math.max(0.02, Math.min(0.5, Number(opts.gain || 0.18)));
+        const sustain = clamp01(opts.sustain == null ? 0 : opts.sustain);
+        gain.gain.linearRampToValueAtTime(peakGain, now + attack);
+        if (sustain > 0) gain.gain.setValueAtTime(Math.max(0.0001, peakGain * sustain), now + Math.max(attack + 0.001, duration - release));
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(attack + release, duration));
         osc.connect(gain);
         const requestedBus = opts.bus || opts.channel;
         const dest = (requestedBus && getBusInputNode(requestedBus)) ||
@@ -1109,11 +1627,76 @@
         gain.connect(dest);
         osc.start(now);
         osc.stop(now + duration);
+        if (opts.harmonic && Number(opts.harmonic.frequency || 0) > 0) {
+            try {
+                playMiniGameTone(Object.assign({}, opts.harmonic, {
+                    bus: requestedBus || 'gameplay',
+                    duration,
+                    gain: peakGain * clamp(Number(opts.harmonic.gainMultiplier) || 0.45, 0.05, 1),
+                    caption: null
+                }));
+            } catch (err) {}
+        }
         osc.onended = function () {
             try { osc.disconnect(); } catch (err) {}
             try { gain.disconnect(); } catch (err) {}
         };
         return { ok: true };
+    }
+
+    function setGameplayAudioState(options) {
+        const opts = (options && typeof options === 'object') ? options : {};
+        const active = opts.active !== false;
+        if (!active) {
+            sceneAudioState.activity = 'pet';
+            sceneAudioState.minigame = null;
+            sceneAudioState.intensity = 0;
+            refreshSceneAudio({ reason: 'gameplay-clear' });
+            return Object.assign({}, sceneAudioState);
+        }
+        sceneAudioState.activity = 'minigame';
+        sceneAudioState.minigame = opts.minigame ? String(opts.minigame) : (sceneAudioState.minigame || 'minigame');
+        sceneAudioState.intensity = clamp01(opts.intensity == null ? sceneAudioState.intensity : opts.intensity);
+        if (opts.timeOfDay != null) sceneAudioState.timeOfDay = String(opts.timeOfDay);
+        refreshSceneAudio({ reason: 'gameplay-state' });
+        return Object.assign({}, sceneAudioState);
+    }
+
+    function clearGameplayAudioState() {
+        return setGameplayAudioState({ active: false });
+    }
+
+    function setGameplayAudioIntensity(intensity) {
+        if (sceneAudioState.activity !== 'minigame') return Object.assign({}, sceneAudioState);
+        sceneAudioState.intensity = clamp01(intensity);
+        refreshSceneAudio({ reason: 'gameplay-intensity' });
+        return Object.assign({}, sceneAudioState);
+    }
+
+    function getSceneAudioState() {
+        return Object.assign({}, sceneAudioState);
+    }
+
+    function clearLoopTransitionsForChannel(channel) {
+        const key = `scene-refresh:${channel}`;
+        const timerId = loopTransitions.get(key);
+        if (timerId) {
+            try { clearTimeout(timerId); } catch (err) {}
+            loopTransitions.delete(key);
+        }
+    }
+
+    function isNightLocal() {
+        const hour = new Date().getHours();
+        return hour < 6 || hour >= 20;
+    }
+
+    function getSceneTimeOfDay() {
+        const fromState = sceneAudioState.timeOfDay;
+        if (fromState) return String(fromState).toLowerCase();
+        const gs = readGlobalGameStateAudioContext();
+        if (gs && gs.timeOfDay) return String(gs.timeOfDay).toLowerCase();
+        return isNightLocal() ? 'night' : 'day';
     }
 
     function chooseAmbientForRoom(roomId) {
@@ -1122,34 +1705,198 @@
         if (id.includes('bath') || id.includes('spa')) return 'bathroom-tub-loop';
         if (id.includes('kitchen')) return 'kitchen-fridge-hum';
         if (id.includes('bedroom')) return 'bedroom-aircon-hum';
-        if (id.includes('bed') || id.includes('observatory') || id.includes('night') || isNightLocal()) return 'nighttime-ambience';
+        if (id.includes('observatory')) return 'nighttime-ambience';
         return 'cozy-room-ambience';
+    }
+
+    function chooseAmbientDetailForScene(context) {
+        const ctx = context || sceneAudioState;
+        const roomId = String((ctx && ctx.roomId) || currentRoom || '').toLowerCase();
+        const timeOfDay = String((ctx && ctx.timeOfDay) || getSceneTimeOfDay()).toLowerCase();
+        const intensity = clamp01((ctx && ctx.intensity) || 0);
+        const isOutdoor = /garden|park|yard|outdoor/.test(roomId);
+        if (ctx && ctx.activity === 'minigame') {
+            if (ctx.minigame === 'rhythm') return intensity > 0.35 ? 'outdoor-garden-ambience' : 'cozy-room-ambience';
+            if (ctx.minigame === 'simonsays') return 'cozy-room-ambience';
+        }
+        if (timeOfDay === 'night' || timeOfDay === 'sunset' || timeOfDay === 'sunrise') {
+            if (isOutdoor) return 'nighttime-ambience';
+            if (!roomId.includes('bedroom') && !roomId.includes('bath') && intensity < 0.5) return 'nighttime-ambience';
+            return null;
+        }
+        if (roomId.includes('bedroom') || roomId.includes('kitchen')) return 'cozy-room-ambience';
+        if (roomId.includes('bath') || roomId.includes('spa')) return 'cozy-room-ambience';
+        return isOutdoor ? null : 'cozy-room-ambience';
     }
 
     function chooseMusicForRoom(roomId) {
         const id = String(roomId || '').toLowerCase();
-        if (id.includes('bed') || id.includes('night') || isNightLocal()) return 'pet-theme-night';
+        const timeOfDay = getSceneTimeOfDay();
+        if (id.includes('bed') || id.includes('observatory') || id.includes('night') || timeOfDay === 'night') return 'pet-theme-night';
         return 'pet-theme-day';
     }
 
-    function isNightLocal() {
-        const hour = new Date().getHours();
-        return hour < 6 || hour >= 20;
+    function chooseMusicBaseForScene(context) {
+        const ctx = context || sceneAudioState;
+        const roomId = (ctx && ctx.roomId) || currentRoom || '';
+        const timeOfDay = String((ctx && ctx.timeOfDay) || getSceneTimeOfDay()).toLowerCase();
+        const activity = (ctx && ctx.activity) || 'pet';
+        const minigame = (ctx && ctx.minigame) || '';
+        if (activity === 'minigame') {
+            if (minigame === 'rhythm') return timeOfDay === 'night' ? 'pet-theme-night-pulse' : 'pet-theme-day-playful';
+            if (minigame === 'simonsays') return timeOfDay === 'night' ? 'pet-theme-night-focus' : 'pet-theme-day-focus';
+        }
+        if (timeOfDay === 'night' || timeOfDay === 'sunset' || /bed|observatory/.test(String(roomId).toLowerCase())) {
+            return /reward/i.test(activity) ? 'pet-theme-night-warm' : 'pet-theme-night';
+        }
+        if (/garden|park|yard|outdoor/.test(String(roomId).toLowerCase())) return 'pet-theme-day-outdoor';
+        if (/kitchen/.test(String(roomId).toLowerCase())) return 'pet-theme-day-home';
+        return 'pet-theme-day';
+    }
+
+    function chooseMusicDetailForScene(context, baseTrack) {
+        const ctx = context || sceneAudioState;
+        const timeOfDay = String((ctx && ctx.timeOfDay) || getSceneTimeOfDay()).toLowerCase();
+        const activity = (ctx && ctx.activity) || 'pet';
+        const minigame = (ctx && ctx.minigame) || '';
+        const intensity = clamp01((ctx && ctx.intensity) || 0);
+        if (activity === 'minigame') {
+            if (minigame === 'rhythm' && intensity >= 0.35) return timeOfDay === 'night' ? 'pet-theme-night-accent' : 'pet-theme-day-accent';
+            if (minigame === 'simonsays' && intensity >= 0.25) return timeOfDay === 'night' ? 'pet-theme-night-focus-accent' : 'pet-theme-day-focus-accent';
+        }
+        if ((ctx && ctx.rewardPulseUntil && ctx.rewardPulseUntil > nowMs()) || activity === 'reward') {
+            return timeOfDay === 'night' ? 'pet-theme-night-accent' : 'pet-theme-day-accent';
+        }
+        return null;
+    }
+
+    function getSceneLayerPlan() {
+        const merged = Object.assign({}, readGlobalGameStateAudioContext() || {}, sceneAudioState || {});
+        if (!merged.roomId) merged.roomId = currentRoom || null;
+        if (!merged.timeOfDay) merged.timeOfDay = getSceneTimeOfDay();
+        const intensity = clamp01(merged.intensity || 0);
+        const ambientBase = chooseAmbientForRoom(merged.roomId || '');
+        const ambientDetail = chooseAmbientDetailForScene(merged);
+        const musicBase = chooseMusicBaseForScene(merged);
+        const musicDetail = chooseMusicDetailForScene(merged, musicBase);
+        const roomChangedRecently = (nowMs() - (merged.roomChangeAt || 0)) < 1400;
+        const ambientDetailGain = merged.activity === 'minigame'
+            ? clamp(0.14 + (intensity * 0.18), 0.12, 0.34)
+            : clamp(((merged.timeOfDay === 'night' || merged.timeOfDay === 'sunset') ? 0.2 : 0.12) + (roomChangedRecently ? 0.05 : 0), 0.1, 0.34);
+        const musicBaseGain = merged.activity === 'minigame'
+            ? clamp(0.62 + (intensity * 0.16), 0.58, 0.82)
+            : clamp((merged.timeOfDay === 'night' ? 0.68 : 0.74) + ((merged.rewardPulseUntil || 0) > nowMs() ? 0.08 : 0), 0.5, 0.9);
+        const musicDetailGain = merged.activity === 'minigame'
+            ? clamp(0.18 + (intensity * 0.2), 0.14, 0.42)
+            : clamp(((merged.rewardPulseUntil || 0) > nowMs()) ? 0.24 : 0.16, 0.12, 0.34);
+
+        return {
+            ambient: [
+                { slotKey: getSceneLoopSlotKey('ambient', 'base'), channel: 'ambient', sound: ambientBase, gain: 1, fadeMs: roomChangedRecently ? LOOP_TRANSITION_ROOM_MS : LOOP_TRANSITION_DEFAULT_MS, randomStartOffset: !!roomChangedRecently },
+                { slotKey: getSceneLoopSlotKey('ambient', 'detail'), channel: 'ambient', sound: (ambientDetail && ambientDetail !== ambientBase) ? ambientDetail : null, gain: ambientDetailGain, fadeMs: roomChangedRecently ? LOOP_TRANSITION_ROOM_MS : LOOP_TRANSITION_DEFAULT_MS, randomStartOffset: true }
+            ],
+            music: [
+                { slotKey: getSceneLoopSlotKey('music', 'base'), channel: 'music', sound: musicBase, gain: musicBaseGain, fadeMs: roomChangedRecently ? LOOP_TRANSITION_ROOM_MS : LOOP_TRANSITION_DEFAULT_MS, randomStartOffset: false },
+                { slotKey: getSceneLoopSlotKey('music', 'detail'), channel: 'music', sound: (musicDetail && musicDetail !== musicBase) ? musicDetail : null, gain: musicDetailGain, fadeMs: roomChangedRecently ? LOOP_TRANSITION_ROOM_MS : LOOP_TRANSITION_DEFAULT_MS, randomStartOffset: true }
+            ]
+        };
+    }
+
+    function refreshSceneAudio(options) {
+        const opts = options || {};
+        if (destroyed) return;
+        if (!sceneAudioState.enabled) return;
+        if (!unlocked) return;
+        if (sceneAudioState.activity === 'reward' && (!sceneAudioState.rewardPulseUntil || sceneAudioState.rewardPulseUntil <= nowMs())) {
+            sceneAudioState.activity = 'pet';
+            sceneAudioState.intensity = Math.min(sceneAudioState.intensity || 0, 0.25);
+        }
+        clearSceneRefreshTimer();
+        if (!getEnabled()) {
+            SCENE_LOOP_SLOT_KEYS.forEach((slotKey) => transitionLoopSlot('scene', slotKey, slotKey.split(':')[0], null, { fadeMs: LOOP_TRANSITION_FAST_MS }));
+            return;
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+            audioCtx.resume().catch(() => {});
+        }
+        const plan = getSceneLayerPlan();
+        if (!state.muted.ambient) {
+            plan.ambient.forEach((layer) => {
+                transitionLoopSlot('scene', layer.slotKey, layer.channel, layer.sound, Object.assign({}, layer, { restart: !!opts.restartLoops }));
+            });
+        } else {
+            ['ambient:base', 'ambient:detail'].forEach((slotKey) => transitionLoopSlot('scene', slotKey, 'ambient', null, { fadeMs: LOOP_TRANSITION_FAST_MS }));
+        }
+        if (!state.muted.music) {
+            plan.music.forEach((layer) => {
+                transitionLoopSlot('scene', layer.slotKey, layer.channel, layer.sound, Object.assign({}, layer, { restart: !!opts.restartLoops }));
+            });
+        } else {
+            ['music:base', 'music:detail'].forEach((slotKey) => transitionLoopSlot('scene', slotKey, 'music', null, { fadeMs: LOOP_TRANSITION_FAST_MS }));
+        }
+        if (sceneAudioState.rewardPulseUntil && sceneAudioState.rewardPulseUntil > nowMs()) {
+            scheduleSceneRefresh(Math.max(100, sceneAudioState.rewardPulseUntil - nowMs() + 60));
+        }
+    }
+
+    function updateSceneAudioContext(partial, options) {
+        const patch = (partial && typeof partial === 'object') ? partial : {};
+        const before = JSON.stringify({
+            roomId: sceneAudioState.roomId,
+            timeOfDay: sceneAudioState.timeOfDay,
+            activity: sceneAudioState.activity,
+            minigame: sceneAudioState.minigame,
+            intensity: Number(sceneAudioState.intensity || 0).toFixed(2)
+        });
+        Object.keys(patch).forEach((key) => {
+            if (patch[key] === undefined) return;
+            sceneAudioState[key] = patch[key];
+        });
+        sceneAudioState.intensity = clamp01(sceneAudioState.intensity || 0);
+        const after = JSON.stringify({
+            roomId: sceneAudioState.roomId,
+            timeOfDay: sceneAudioState.timeOfDay,
+            activity: sceneAudioState.activity,
+            minigame: sceneAudioState.minigame,
+            intensity: Number(sceneAudioState.intensity || 0).toFixed(2)
+        });
+        if (before !== after || (options && options.forceRefresh)) {
+            refreshSceneAudio(Object.assign({ reason: 'scene-context' }, options || {}));
+        }
+        return Object.assign({}, sceneAudioState);
+    }
+
+    function pulseRewardSceneMix(tier, options) {
+        const normalized = String(tier || 'small').toLowerCase();
+        const durationByTier = { small: 700, medium: 1000, big: 1300, large: 1300, milestone: 1600, streak: 1300, rare: 1800 };
+        const intensityByTier = { small: 0.2, medium: 0.35, big: 0.52, large: 0.52, milestone: 0.65, streak: 0.6, rare: 0.72 };
+        sceneAudioState.rewardPulseUntil = nowMs() + (durationByTier[normalized] || 900);
+        sceneAudioState.activity = sceneAudioState.activity === 'minigame' ? 'minigame' : 'reward';
+        sceneAudioState.intensity = Math.max(clamp01(sceneAudioState.intensity || 0), intensityByTier[normalized] || 0.2);
+        refreshSceneAudio({ reason: 'reward-pulse' });
+        scheduleSceneRefresh((durationByTier[normalized] || 900) + 40);
+        if (!options || !options.skipDuck) applyMixDuckProfile('reward');
     }
 
     function startAmbientForRoom(roomId) {
         if (!roomId) return;
-        if (state.muted.ambient || state.muted.master) return;
-        const ambientName = chooseAmbientForRoom(roomId);
-        playAmbient(ambientName, { restart: false, gain: 1 });
+        currentRoom = roomId || currentRoom;
+        sceneAudioState.roomId = currentRoom;
+        sceneAudioState.timeOfDay = (readGlobalGameStateAudioContext() || {}).timeOfDay || sceneAudioState.timeOfDay || null;
+        sceneAudioState.roomChangeAt = nowMs();
+        if (!unlocked) return;
+        refreshSceneAudio({ reason: 'room-ambient' });
     }
 
     function enterRoom(roomId) {
         currentRoom = roomId || currentRoom;
         if (!currentRoom) return;
+        sceneAudioState.roomId = currentRoom;
+        sceneAudioState.timeOfDay = (readGlobalGameStateAudioContext() || {}).timeOfDay || sceneAudioState.timeOfDay || null;
+        sceneAudioState.activity = (sceneAudioState.activity === 'minigame') ? 'minigame' : 'pet';
+        sceneAudioState.roomChangeAt = nowMs();
         if (!unlocked) return;
-        startAmbientForRoom(currentRoom);
-        // Do not auto-play music by default to avoid stacking short loops; keep API available.
+        refreshSceneAudio({ reason: 'enter-room' });
     }
 
     function hasUserInteracted() {
@@ -1207,7 +1954,7 @@
             state.volumes.ui = DEFAULT_VOLUMES.ui;
         }
         persistSettings();
-        if (!state.muted.master && currentRoom) startAmbientForRoom(currentRoom);
+        if (!state.muted.master && currentRoom) refreshSceneAudio({ reason: 'preset-change' });
         return key;
     }
 
@@ -1215,7 +1962,8 @@
         const key = String(presetKey || '').toLowerCase();
         if (key === 'silent') return { ok: true, muted: true };
         if (key === 'calm') {
-            playAmbient(currentRoom ? chooseAmbientForRoom(currentRoom) : 'cozy-room-ambience', { restart: true, gain: 0.7 });
+            sceneAudioState.intensity = 0.1;
+            refreshSceneAudio({ reason: 'preset-preview', restartLoops: true });
             return { ok: true };
         }
         playUiCue('confirm', { gain: 0.9 });
@@ -1228,15 +1976,27 @@
     }
 
     function startMusic(trackName, opts) {
-        return playMusic(trackName || chooseMusicForRoom(currentRoom || ''), opts || {});
+        if (!trackName) {
+            sceneAudioState.activity = sceneAudioState.activity === 'minigame' ? 'minigame' : 'pet';
+            refreshSceneAudio({ reason: 'start-music' });
+            return { ok: true, sceneDriven: true };
+        }
+        return playMusic(trackName || chooseMusicForRoom(currentRoom || ''), Object.assign({ fadeMs: LOOP_TRANSITION_DEFAULT_MS }, opts || {}));
     }
 
     function stopMusic() {
+        ['music:base', 'music:detail'].forEach((slotKey) => transitionLoopSlot('scene', slotKey, 'music', null, { fadeMs: LOOP_TRANSITION_STOP_MS }));
         stop('music');
     }
 
     function destroy() {
         destroyed = true;
+        clearSceneRefreshTimer();
+        Array.from(mixDuckTimers.values()).forEach((timerId) => { try { clearTimeout(timerId); } catch (err) {} });
+        mixDuckTimers.clear();
+        Array.from(loopTransitions.values()).forEach((timerId) => { try { clearTimeout(timerId); } catch (err) {} });
+        loopTransitions.clear();
+        sceneLoopPlayers.clear();
         stopAll();
         baseAudioCache.forEach((audio) => {
             try { audio.pause(); } catch (err) {}
@@ -1319,6 +2079,8 @@
         playAmbient,
         playSFXByName,
         playRewardCue,
+        playCareActionCue,
+        playStatusCue,
         playMiniGameTone,
         playAccessibilityCue,
         emitAccessibilityCue,
@@ -1352,6 +2114,11 @@
         getContext,
         getMasterGain,
         getBusInputNode,
+        updateSceneAudioContext,
+        getSceneAudioState,
+        setGameplayAudioState,
+        clearGameplayAudioState,
+        setGameplayAudioIntensity,
         applyAudioPreset,
         previewAudioPreset,
         getAudioPreset,
@@ -1362,6 +2129,17 @@
         getAudioCreditsSync,
         getManifest,
         sfx
+    };
+
+    api.__debug = {
+        chooseAmbientForRoom,
+        chooseMusicForRoom,
+        chooseMusicBaseForScene,
+        chooseMusicDetailForScene,
+        chooseAmbientDetailForScene,
+        getSceneLayerPlan,
+        getRuntimeChannelMixMultiplier,
+        applyMixDuckProfile
     };
 
     // Prime async loads early.

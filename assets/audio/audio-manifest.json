@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "generatedAt": "2026-02-23T14:51:10.838Z",
+  "version": 2,
+  "generatedAt": "2026-02-25T14:16:28.359Z",
   "channels": [
     "master",
     "music",
@@ -13,7 +13,9 @@
     "ui-confirm",
     "ui-open-modal",
     "ui-close-modal",
-    "ui-error"
+    "ui-error",
+    "pet-theme-day",
+    "pet-theme-night"
   ],
   "sounds": {
     "ui-tap-1": {
@@ -549,6 +551,136 @@
     },
     "bedroom": {
       "alias": "bedroom-aircon-hum"
+    },
+    "pet-theme-day-home": {
+      "alias": "pet-theme-day"
+    },
+    "pet-theme-day-outdoor": {
+      "alias": "pet-theme-day"
+    },
+    "pet-theme-day-focus": {
+      "alias": "pet-theme-day"
+    },
+    "pet-theme-day-focus-accent": {
+      "alias": "pet-theme-night"
+    },
+    "pet-theme-day-playful": {
+      "alias": "pet-theme-day"
+    },
+    "pet-theme-day-accent": {
+      "alias": "pet-theme-night"
+    },
+    "pet-theme-night-warm": {
+      "alias": "pet-theme-night"
+    },
+    "pet-theme-night-focus": {
+      "alias": "pet-theme-night"
+    },
+    "pet-theme-night-focus-accent": {
+      "alias": "pet-theme-day"
+    },
+    "pet-theme-night-pulse": {
+      "alias": "pet-theme-night"
+    },
+    "pet-theme-night-accent": {
+      "alias": "pet-theme-day"
+    },
+    "ambient-cozy-detail": {
+      "alias": "cozy-room-ambience"
+    },
+    "ambient-night-detail": {
+      "alias": "nighttime-ambience"
+    },
+    "ambient-garden-detail": {
+      "alias": "outdoor-garden-ambience"
+    },
+    "ui-disabled": {
+      "alias": "ui-error"
+    },
+    "ui-open": {
+      "alias": "ui-open-modal"
+    },
+    "ui-close": {
+      "alias": "ui-close-modal"
+    },
+    "ui-confirm-soft": {
+      "alias": "ui-confirm"
+    },
+    "cooldown-ready": {
+      "alias": "ui-confirm"
+    },
+    "action-available": {
+      "alias": "ui-confirm"
+    },
+    "status-important": {
+      "alias": "achievement"
+    },
+    "care-feed": {
+      "alias": "feed"
+    },
+    "care-wash": {
+      "alias": "wash"
+    },
+    "care-play": {
+      "alias": "play"
+    },
+    "care-sleep": {
+      "alias": "sleep"
+    },
+    "care-medicine": {
+      "alias": "medicine"
+    },
+    "care-groom": {
+      "alias": "groom"
+    },
+    "care-exercise": {
+      "alias": "exercise"
+    },
+    "care-treat": {
+      "alias": "treat"
+    },
+    "care-cuddle": {
+      "alias": "cuddle"
+    },
+    "care-positive-accent": {
+      "alias": "happy-chirp"
+    },
+    "care-negative-accent": {
+      "alias": "fail-gentle"
+    },
+    "reward-small": {
+      "alias": "coin-collect"
+    },
+    "reward-medium": {
+      "alias": "reward-treasure"
+    },
+    "reward-big": {
+      "alias": "achievement"
+    },
+    "reward-milestone": {
+      "alias": "achievement"
+    },
+    "reward-streak": {
+      "alias": "combo-rise"
+    },
+    "reward-rare": {
+      "alias": "achievement"
+    },
+    "simon-pad-cue": {
+      "alias": "ui-focus"
+    },
+    "rhythm-accent-cue": {
+      "alias": "match-success"
     }
+  },
+  "sceneAliases": {
+    "placeholderMappings": true,
+    "notes": "Contextual music/ambient aliases map to existing assets in this pass; replace with dedicated stems/longer loops for final polish.",
+    "layeredSlots": [
+      "music:base",
+      "music:detail",
+      "ambient:base",
+      "ambient:detail"
+    ]
   }
 }

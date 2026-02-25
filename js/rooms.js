@@ -274,12 +274,16 @@
             if (!unlockResult.ok) {
                 showToast(`🔒 ${unlockResult.reason}`, '#FFA726');
                 if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
-                    GameAudio.playSFXByName('error-soft', GameAudio.sfx.miss);
+                    if (typeof GameAudio.playUiCue === 'function') GameAudio.playUiCue('disabled', { gain: 0.8 });
+                    else GameAudio.playSFXByName('error-soft', GameAudio.sfx.miss);
                 }
                 return;
             }
             if (!unlockResult.already) {
                 showToast(`🔓 Unlocked ${ROOMS[roomId].name}!`, '#66BB6A');
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playRewardCue === 'function') {
+                    GameAudio.playRewardCue('milestone', { gain: 0.86 });
+                }
                 if (typeof window !== 'undefined' && window.MLFEmotionalFeedback && typeof window.MLFEmotionalFeedback.pushSceneMoodCue === 'function') {
                     const unlockCue = (ROOMS[roomId] && ROOMS[roomId].unlockCue) ? (ROOMS[roomId].unlockCue.roomCue || ROOMS[roomId].unlockCue.behaviorHint) : '';
                     try {
@@ -328,7 +332,16 @@
 
             // Play room transition whoosh/chime then start room-specific earcon
             if (typeof GameAudio !== 'undefined') {
+                if (typeof GameAudio.updateSceneAudioContext === 'function') {
+                    GameAudio.updateSceneAudioContext({
+                        timeOfDay: (gameState && gameState.timeOfDay) || null,
+                        activity: 'pet'
+                    });
+                }
                 GameAudio.playSFX(GameAudio.sfx.roomTransition);
+                if (typeof GameAudio.playAccessibilityCue === 'function') {
+                    GameAudio.playAccessibilityCue('room', { gain: 0.74 });
+                }
                 GameAudio.enterRoom(roomId);
             }
 

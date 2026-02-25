@@ -3,6 +3,12 @@
         const SIMON_COLORS = ['green', 'red', 'yellow', 'blue'];
         const SIMON_ICONS = { green: '🟢', red: '🔴', yellow: '🟡', blue: '🔵' };
         const SIMON_FREQUENCIES = { green: 392, red: 523.25, yellow: 659.25, blue: 783.99 };
+        const SIMON_TONE_SHAPES = {
+            green: { type: 'triangle', harmonic: { frequency: 784, type: 'sine', gainMultiplier: 0.28 } },
+            red: { type: 'square', harmonic: { frequency: 1046.5, type: 'triangle', gainMultiplier: 0.22 } },
+            yellow: { type: 'sawtooth', harmonic: { frequency: 988.88, type: 'square', gainMultiplier: 0.18 } },
+            blue: { type: 'sine', harmonic: { frequency: 391.99, type: 'triangle', gainMultiplier: 0.25 } }
+        };
 
         let simonState = null;
 
@@ -15,6 +21,29 @@
 
         function simonPlayTone(color, duration) {
             if (typeof GameAudio !== 'undefined' && !GameAudio.getEnabled()) return;
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                const shape = SIMON_TONE_SHAPES[color] || { type: 'sine' };
+                const freq = Number(SIMON_FREQUENCIES[color] || 440);
+                const durMs = Math.max(70, Number(duration) || 180);
+                GameAudio.playMiniGameTone({
+                    bus: 'gameplay',
+                    type: shape.type,
+                    frequency: freq,
+                    frequencyEnd: freq * (color === 'red' ? 0.97 : 1.01),
+                    durationMs: durMs,
+                    gain: 0.16,
+                    sustain: 0.25,
+                    harmonic: shape.harmonic
+                });
+                if (color === 'yellow') {
+                    setTimeout(() => {
+                        if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                            GameAudio.playMiniGameTone({ bus: 'gameplay', type: 'square', frequency: freq * 0.5, durationMs: Math.max(50, durMs * 0.45), gain: 0.07 });
+                        }
+                    }, 28);
+                }
+                return;
+            }
             try {
                 const ctx = simonGetAudioCtx();
                 if (!ctx) return;
@@ -37,6 +66,26 @@
 
         function simonPlayErrorTone() {
             if (typeof GameAudio !== 'undefined' && !GameAudio.getEnabled()) return;
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                GameAudio.playMiniGameTone({
+                    bus: 'gameplay',
+                    type: 'sawtooth',
+                    frequency: 180,
+                    frequencyEnd: 120,
+                    durationMs: 320,
+                    gain: 0.16,
+                    sustain: 0.2
+                });
+                setTimeout(() => {
+                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.playMiniGameTone === 'function') {
+                        GameAudio.playMiniGameTone({ bus: 'gameplay', type: 'square', frequency: 110, durationMs: 190, gain: 0.1 });
+                    }
+                }, 120);
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+                    GameAudio.playAccessibilityCue('error', { gain: 0.78, caption: 'Wrong Simon input' });
+                }
+                return;
+            }
             try {
                 const ctx = simonGetAudioCtx();
                 if (!ctx) return;
@@ -81,6 +130,12 @@
                 difficulty: simonDiff,
                 active: true
             };
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.setGameplayAudioState === 'function') {
+                GameAudio.setGameplayAudioState({ active: true, minigame: 'simonsays', intensity: 0.16, timeOfDay: gameState.timeOfDay || null });
+            }
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+                GameAudio.playAccessibilityCue('objectiveStart', { gain: 0.72, caption: 'Simon Says started' });
+            }
 
             renderSimonSaysGame();
             if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
@@ -190,6 +245,9 @@
             simonState.playbackIndex = 0;
             const baseSpeed = Math.max(350, 600 - simonState.round * 25);
             const speed = Math.max(200, Math.round(baseSpeed / (simonState.difficulty || 1)));
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.setGameplayAudioIntensity === 'function') {
+                GameAudio.setGameplayAudioIntensity(Math.min(0.8, 0.12 + (simonState.round * 0.07)));
+            }
 
             if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
             simonState._roundTransitionTimer = setTimeout(() => simonPlayPattern(speed), 400);
@@ -217,6 +275,9 @@
             const color = simonState.pattern[idx];
             simonLightPad(color, speed * 0.7);
             simonPlayTone(color, speed * 0.7);
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.emitAccessibilityCue === 'function') {
+                GameAudio.emitAccessibilityCue('simonPad', { playSound: false, caption: `${color} pad` });
+            }
 
             simonState.playbackIndex++;
             simonState.playbackTimer = setTimeout(() => simonPlayPattern(speed), speed);
@@ -257,6 +318,9 @@
                 // Correct!
                 simonState.playerIndex++;
                 simonState.score++;
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playRewardCue === 'function' && (simonState.playerIndex % 2 === 0)) {
+                    GameAudio.playRewardCue(simonState.playerIndex >= 6 ? 'medium' : 'small', { gain: 0.52, skipAccent: true });
+                }
                 if (typeof hapticBuzz === 'function') hapticBuzz(30);
                 announce(`You pressed ${color}. Correct!`);
 
@@ -285,6 +349,9 @@
                     }
 
                     announce(`Round ${simonState.round} complete!`);
+                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+                        GameAudio.playAccessibilityCue('comboRise', { gain: 0.64, caption: `Round ${simonState.round} complete` });
+                    }
 
                     // Next round after a brief pause
                     if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
@@ -319,6 +386,9 @@
 
                 const completedRound = simonState.highestRound || (simonState.round - 1);
                 announce(`Game over! You completed ${completedRound} round${completedRound !== 1 ? 's' : ''}.`);
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.setGameplayAudioIntensity === 'function') {
+                    GameAudio.setGameplayAudioIntensity(0.08);
+                }
 
                 // Auto-end after showing result
                 if (simonState._autoEndTimeout) clearTimeout(simonState._autoEndTimeout);
@@ -391,6 +461,12 @@
             }
 
             // Audio context is shared via GameAudio — no cleanup needed here
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+                GameAudio.playAccessibilityCue('objectiveEnd', { gain: 0.74, caption: 'Simon Says ended' });
+            }
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.clearGameplayAudioState === 'function') {
+                GameAudio.clearGameplayAudioState();
+            }
 
             simonState = null;
         }

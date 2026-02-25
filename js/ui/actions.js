@@ -1531,7 +1531,6 @@
             const sparkles = document.getElementById('sparkles');
             if (petContainer) petContainer.classList.add('bounce', 'pet-munch-loop');
             if (sparkles) createFoodParticles(sparkles);
-            if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.feed);
             return msg;
         }
 
@@ -1565,6 +1564,11 @@
                 btn.classList.add('cooldown-ready');
                 setTimeout(() => btn.classList.remove('cooldown-ready'), 600);
             });
+            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playStatusCue === 'function') {
+                GameAudio.playStatusCue('cooldown-ready', { gain: 0.72 });
+            } else if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
+                GameAudio.playAccessibilityCue('cooldownComplete', { gain: 0.72 });
+            }
         }
 
         function cancelActionCooldownAndRestoreButtons() {
@@ -1580,6 +1584,9 @@
             // Prevent rapid clicking
             if (actionCooldown) {
                 announceCooldownOnce();
+                if (typeof GameAudio !== 'undefined' && typeof GameAudio.playUiCue === 'function') {
+                    GameAudio.playUiCue('disabled', { gain: 0.58, throttleMs: 150 });
+                }
                 return;
             }
 
@@ -1684,7 +1691,6 @@
                     else if (washPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('sparkle', 'pet-scrub-shake');
                     if (sparkles) createBubbles(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.wash);
                     break;
                 }
                 case 'play': {
@@ -1703,7 +1709,6 @@
                     else if (playPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('wiggle', 'pet-happy-bounce');
                     if (sparkles) createHearts(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.play);
                     break;
                 }
                 case 'sleep': {
@@ -1732,7 +1737,6 @@
                     message = sleepAnnounce;
                     if (petContainer) petContainer.classList.add('sleep-anim', 'pet-sleepy-nod');
                     if (sparkles) createZzz(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.sleep);
                     break;
                 }
                 case 'medicine': {
@@ -1752,7 +1756,6 @@
                     if (medPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('heal-anim');
                     if (sparkles) createMedicineParticles(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.medicine);
                     break;
                 }
                 case 'groom': {
@@ -1776,7 +1779,6 @@
                     else if (groomPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('groom-anim');
                     if (sparkles) createGroomParticles(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.groom);
                     break;
                 }
                 case 'exercise': {
@@ -1799,7 +1801,6 @@
                     else if (exPref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('exercise-anim');
                     if (sparkles) createExerciseParticles(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.exercise);
                     break;
                 }
                 case 'treat': {
@@ -1826,7 +1827,6 @@
                     }
                     if (petContainer) petContainer.classList.add('treat-anim');
                     if (sparkles) createTreatParticles(sparkles, treat.emoji);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.treat);
                     break;
                 }
                 case 'cuddle': {
@@ -1847,8 +1847,19 @@
                     else if (cuddlePref < 1) careAffinity = 'dislike';
                     if (petContainer) petContainer.classList.add('cuddle-anim');
                     if (sparkles) createCuddleParticles(sparkles);
-                    if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.cuddle);
                     break;
+                }
+            }
+
+            if (typeof GameAudio !== 'undefined') {
+                if (typeof GameAudio.playCareActionCue === 'function') {
+                    GameAudio.playCareActionCue(action, {
+                        affinity: careAffinity,
+                        firstTime: firstTimeAction,
+                        favoriteTreat: action === 'treat' && careAffinity === 'love'
+                    });
+                } else if (GameAudio.playSFX && GameAudio.sfx && GameAudio.sfx[action]) {
+                    GameAudio.playSFX(GameAudio.sfx[action]);
                 }
             }
 

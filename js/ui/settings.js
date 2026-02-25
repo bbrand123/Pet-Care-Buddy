@@ -520,6 +520,7 @@
             document.getElementById('setting-sound').addEventListener('click', function() {
                 if (typeof GameAudio !== 'undefined') {
                     const enabled = GameAudio.toggle();
+                    if (typeof GameAudio.playUiCue === 'function') GameAudio.playUiCue(enabled ? 'confirm' : 'close', { gain: 0.72 });
                     this.classList.toggle('on', enabled);
                     this.setAttribute('aria-checked', String(enabled));
                     setSwitchStateText('setting-sound', enabled);
@@ -532,6 +533,7 @@
             document.getElementById('setting-music').addEventListener('click', function() {
                 if (typeof GameAudio !== 'undefined') {
                     const enabled = GameAudio.toggleMusic();
+                    if (typeof GameAudio.playUiCue === 'function') GameAudio.playUiCue(enabled ? 'toggle' : 'back', { gain: 0.68 });
                     this.classList.toggle('on', enabled);
                     this.setAttribute('aria-checked', String(enabled));
                     setSwitchStateText('setting-music', enabled);
@@ -554,6 +556,9 @@
             if (soundCueCaptionBtn) {
                 soundCueCaptionBtn.addEventListener('click', function() {
                     const isOn = this.classList.toggle('on');
+                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.playUiCue === 'function') {
+                        GameAudio.playUiCue(isOn ? 'confirm' : 'toggle', { gain: 0.64 });
+                    }
                     this.setAttribute('aria-checked', String(isOn));
                     setSwitchStateText('setting-sound-captions', isOn);
                     if (typeof GameAudio !== 'undefined' && typeof GameAudio.setSoundCueCaptionsEnabled === 'function') {
@@ -609,6 +614,7 @@
                     if (_sfxPreviewTimer) clearTimeout(_sfxPreviewTimer);
                     _sfxPreviewTimer = setTimeout(() => {
                         if (typeof GameAudio !== 'undefined' && GameAudio.getEnabled() && GameAudio.playSFX) {
+                            if (typeof GameAudio.playStatusCue === 'function') GameAudio.playStatusCue('action-available', { gain: 0.55 });
                             GameAudio.playSFX(GameAudio.sfx.bubblePop || GameAudio.sfx.feed);
                         }
                     }, 300);

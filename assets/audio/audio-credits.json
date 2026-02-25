@@ -418,7 +418,7 @@
       "source_url": "https://kenney.nl/assets/music-jingles",
       "license_name": "CC0 1.0",
       "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-      "modified": "No local audio edits; filename normalized on import",
+      "modified": "No local audio edits; filename normalized on import; also used as temporary contextual/layered music aliases (base/detail) in WKWebView runtime upgrade pass",
       "original_file": "jingles_SAX07.ogg"
     },
     {
@@ -430,7 +430,7 @@
       "source_url": "https://kenney.nl/assets/music-jingles",
       "license_name": "CC0 1.0",
       "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
-      "modified": "No local audio edits; filename normalized on import",
+      "modified": "No local audio edits; filename normalized on import; also used as temporary contextual/layered music aliases (base/detail) in WKWebView runtime upgrade pass",
       "original_file": "jingles_PIZZI13.ogg"
     },
     {
@@ -468,6 +468,18 @@
       "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
       "modified": "No local audio edits; filename normalized on import (Freesound HQ preview MP3 downloaded from source page)",
       "original_file": "234918_3463736-hq.mp3"
+    },
+    {
+      "file": "contextual-alias-placeholders",
+      "path": "assets/audio/audio-manifest.json",
+      "category": "metadata",
+      "author": "Project runtime mapping",
+      "title": "Contextual audio alias placeholders",
+      "source_url": "",
+      "license_name": "N/A",
+      "license_url": "",
+      "modified": "Manifest-only placeholders added for room/time/minigame base/detail scene aliases; no new audio recordings included in this implementation pass.",
+      "original_file": ""
     }
   ]
 }

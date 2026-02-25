@@ -525,6 +525,13 @@
                     announce(plainText, { assertive: !!options.assertive, source: 'toast', dedupeMs: 1800 });
                 }
             }
+            if (typeof GameAudio !== 'undefined' && priority === 'critical') {
+                if (typeof GameAudio.playStatusCue === 'function') {
+                    GameAudio.playStatusCue('important', { gain: 0.82 });
+                } else if (typeof GameAudio.playUiCue === 'function') {
+                    GameAudio.playUiCue('error', { gain: 0.75 });
+                }
+            }
         }
 
         function soundCueCaptionsEnabled() {
@@ -693,8 +700,15 @@
             card.title = 'Click to dismiss';
             card.setAttribute('aria-label', `${escapeHTML(cardData.title)}: ${escapeHTML(cardData.name)}. Click to dismiss.`);
 	            document.body.appendChild(card);
-	            if (typeof GameAudio !== 'undefined' && GameAudio.playSFXByName) {
-	                GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
+	            if (typeof GameAudio !== 'undefined') {
+	                if (typeof GameAudio.playRewardCue === 'function') {
+                        const rewardTier = (cardData.type === 'trophy' || cardData.type === 'achievement')
+                            ? 'milestone'
+                            : (cardData.type === 'badge' ? 'big' : 'medium');
+                        GameAudio.playRewardCue(rewardTier, { gain: 0.84 });
+                    } else if (GameAudio.playSFXByName) {
+	                    GameAudio.playSFXByName('reward-pop', GameAudio.sfx.achievement);
+                    }
 	            }
                 if (typeof showRewardBurstFX === 'function') {
                     showRewardBurstFX(card, {
