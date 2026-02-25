@@ -32,7 +32,7 @@
     </script>
     <title>My Little Friend</title>
     <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/phase2-polish.css">
+    <link rel="stylesheet" href="css/phase2-polish.css?v=20260225-ui-polish">
 </head>
 <body>
     <!-- Splash/Loading Screen (shown immediately, dismissed by JS after init) -->
@@ -149,6 +149,30 @@
                 domReady = true;
                 queueSplashDismiss();
             }, { once: true });
+            if (typeof MutationObserver === 'function') {
+                const maybeDismissForRecovery = () => {
+                    if (dismissed) return true;
+                    if (document.getElementById('save-recovery-overlay')) {
+                        queueSplashDismiss({ skipMinDelay: true, force: true });
+                        return true;
+                    }
+                    return false;
+                };
+                const watchRecoveryDialog = () => {
+                    if (maybeDismissForRecovery()) return;
+                    const root = document.body || document.documentElement;
+                    if (!root) return;
+                    const observer = new MutationObserver(() => {
+                        if (maybeDismissForRecovery()) observer.disconnect();
+                    });
+                    observer.observe(root, { childList: true, subtree: true });
+                };
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', watchRecoveryDialog, { once: true });
+                } else {
+                    watchRecoveryDialog();
+                }
+            }
             setTimeout(() => queueSplashDismiss({ skipMinDelay: true, force: true }), HARD_TIMEOUT_MS);
         })();
     </script>

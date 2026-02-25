@@ -24,28 +24,55 @@
             setTimeout(() => element.remove(), duration);
         }
 
+        function primeFxParticle(element, variant, shape, options = {}) {
+            if (!element) return element;
+            element.classList.add('ui-glyph-particle');
+            if (variant) element.dataset.fxVariant = variant;
+            if (shape) element.dataset.fxShape = shape;
+            if (options.text) {
+                element.textContent = options.text;
+                element.dataset.fxText = 'true';
+            } else {
+                element.textContent = '';
+                delete element.dataset.fxText;
+            }
+            if (options.color) element.style.setProperty('--fx-color', options.color);
+            if (options.size) element.style.setProperty('--fx-size', options.size);
+            return element;
+        }
+
         function createSparkles(container, count) {
             const n = Math.min(count, 2);
             for (let i = 0; i < n; i++) {
                 const sparkle = document.createElement('div');
                 sparkle.className = 'sparkle-particle';
+                primeFxParticle(
+                    sparkle,
+                    'sparkle',
+                    (i % 2 === 0 ? 'spark' : 'diamond'),
+                    {
+                        color: ['#ffd54f', '#8fd3ff', '#9de7b5'][Math.floor(Math.random() * 3)],
+                        size: `${10 + Math.round(Math.random() * 6)}px`
+                    }
+                );
                 sparkle.style.left = `${30 + Math.random() * 40}%`;
                 sparkle.style.top = `${30 + Math.random() * 40}%`;
-                sparkle.style.background = ['#FFD700', '#FF69B4', '#87CEEB', '#98FB98'][Math.floor(Math.random() * 4)];
                 addParticle(container, sparkle, 1000);
             }
         }
 
         function createFoodParticles(container) {
-            const foods = ['🍎', '🥕', '🍪', '🥬', '🌾'];
             for (let i = 0; i < 2; i++) {
                 const particle = document.createElement('div');
                 particle.className = 'sparkle-particle';
-                particle.textContent = foods[Math.floor(Math.random() * foods.length)];
+                primeFxParticle(
+                    particle,
+                    'feed',
+                    (i % 2 === 0 ? 'seed' : 'leaf'),
+                    { color: i % 2 === 0 ? '#ffb74d' : '#81c784', size: `${11 + i * 3}px` }
+                );
                 particle.style.left = `${30 + Math.random() * 40}%`;
                 particle.style.top = `${40 + Math.random() * 30}%`;
-                particle.style.background = 'transparent';
-                particle.style.fontSize = '1.5rem';
                 addParticle(container, particle, 1000);
             }
         }
@@ -65,7 +92,7 @@
             for (let i = 0; i < 2; i++) {
                 const heart = document.createElement('div');
                 heart.className = 'heart-particle';
-                heart.textContent = '❤️';
+                primeFxParticle(heart, 'cuddle', 'heart', { color: i % 2 === 0 ? '#ff8fa7' : '#f48fb1', size: `${12 + i * 2}px` });
                 heart.style.left = `${25 + Math.random() * 50}%`;
                 heart.style.top = `${35 + Math.random() * 30}%`;
                 heart.style.animationDelay = `${Math.random() * 0.3}s`;
@@ -77,16 +104,14 @@
             // Single Z particle
             const zzz = document.createElement('div');
             zzz.className = 'zzz-particle';
-            zzz.textContent = 'Z';
+            primeFxParticle(zzz, 'sleep', 'none', { text: 'Z', color: '#a9b7d8', size: '15px' });
             zzz.style.left = '45%';
             zzz.style.top = '30%';
-            zzz.style.fontSize = '1.5rem';
             addParticle(container, zzz, 1800);
             // Single star particle
-            const stars = ['⭐', '✨', '🌟'];
             const star = document.createElement('div');
             star.className = 'star-particle';
-            star.textContent = stars[Math.floor(Math.random() * stars.length)];
+            primeFxParticle(star, 'sleep', 'spark', { color: '#ffe082', size: '12px' });
             star.style.left = `${20 + Math.random() * 60}%`;
             star.style.top = `${25 + Math.random() * 40}%`;
             star.style.animationDelay = `${Math.random() * 0.5}s`;
@@ -94,11 +119,15 @@
         }
 
         function createMedicineParticles(container) {
-            const healingSymbols = ['🩹', '💕'];
             for (let i = 0; i < 2; i++) {
                 const particle = document.createElement('div');
                 particle.className = 'medicine-particle';
-                particle.textContent = healingSymbols[i];
+                primeFxParticle(
+                    particle,
+                    'medicine',
+                    (i === 0 ? 'cross' : 'ring'),
+                    { color: i === 0 ? '#7ec8ff' : '#b39ddb', size: `${11 + i * 2}px` }
+                );
                 particle.style.left = `${20 + Math.random() * 60}%`;
                 particle.style.top = `${25 + Math.random() * 40}%`;
                 particle.style.animationDelay = `${i * 0.15}s`;
@@ -107,11 +136,15 @@
         }
 
         function createGroomParticles(container) {
-            const groomSymbols = ['✂️', '✨'];
             for (let i = 0; i < 2; i++) {
                 const particle = document.createElement('div');
                 particle.className = 'groom-particle';
-                particle.textContent = groomSymbols[i];
+                primeFxParticle(
+                    particle,
+                    'groom',
+                    (i === 0 ? 'slash' : 'spark'),
+                    { color: i === 0 ? '#90caf9' : '#ffd54f', size: `${10 + i * 2}px` }
+                );
                 particle.style.left = `${20 + Math.random() * 60}%`;
                 particle.style.top = `${25 + Math.random() * 40}%`;
                 particle.style.animationDelay = `${i * 0.15}s`;
@@ -120,11 +153,15 @@
         }
 
         function createExerciseParticles(container) {
-            const exerciseSymbols = ['🎾', '🦴'];
             for (let i = 0; i < 2; i++) {
                 const particle = document.createElement('div');
                 particle.className = 'exercise-particle';
-                particle.textContent = exerciseSymbols[i];
+                primeFxParticle(
+                    particle,
+                    'exercise',
+                    (i === 0 ? 'orbit' : 'chip'),
+                    { color: i === 0 ? '#ffcc80' : '#81d4fa', size: `${12 + i}px` }
+                );
                 particle.style.left = `${15 + Math.random() * 70}%`;
                 particle.style.top = `${25 + Math.random() * 40}%`;
                 particle.style.animationDelay = `${i * 0.12}s`;
@@ -133,11 +170,19 @@
         }
 
         function createTreatParticles(container, treatEmoji) {
-            const symbols = [treatEmoji, '✨'];
             for (let i = 0; i < 2; i++) {
                 const particle = document.createElement('div');
                 particle.className = 'treat-particle';
-                particle.textContent = symbols[i];
+                primeFxParticle(
+                    particle,
+                    'treat',
+                    (i === 0 ? 'drop' : 'spark'),
+                    {
+                        color: i === 0 ? '#ffab91' : '#ffe082',
+                        size: `${11 + i * 2}px`
+                    }
+                );
+                if (treatEmoji && i === 0) particle.title = `${treatEmoji} treat`;
                 particle.style.left = `${15 + Math.random() * 70}%`;
                 particle.style.top = `${20 + Math.random() * 45}%`;
                 particle.style.animationDelay = `${i * 0.12}s`;
@@ -146,11 +191,15 @@
         }
 
         function createCuddleParticles(container) {
-            const cuddleSymbols = ['💕', '💗'];
             for (let i = 0; i < 2; i++) {
                 const particle = document.createElement('div');
                 particle.className = 'cuddle-particle';
-                particle.textContent = cuddleSymbols[i];
+                primeFxParticle(
+                    particle,
+                    'cuddle',
+                    (i === 0 ? 'heart' : 'dot'),
+                    { color: i === 0 ? '#f48fb1' : '#f8bbd0', size: `${12 + i * 2}px` }
+                );
                 particle.style.left = `${15 + Math.random() * 70}%`;
                 particle.style.top = `${20 + Math.random() * 45}%`;
                 particle.style.animationDelay = `${i * 0.1}s`;
@@ -392,4 +441,3 @@
             }, delay);
             idleAnimTimers.push(timerId);
         }
-

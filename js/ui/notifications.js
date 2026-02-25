@@ -335,7 +335,7 @@
 
         function momentMetaListHTML(meta) {
             if (!Array.isArray(meta) || meta.length === 0) return '';
-            const items = meta.slice(0, 4).map((row) => {
+            const items = meta.slice(0, 2).map((row) => {
                 const type = escapeHTML(String((row && row.type) || 'meta'));
                 const text = escapeHTML(String((row && row.text) || ''));
                 return `<li class="moment-summary-meta-item" data-meta-type="${type}">${text}</li>`;
@@ -351,7 +351,7 @@
             let card = Array.from(container.querySelectorAll('.moment-summary-card')).find((el) => el.getAttribute('data-moment-key') === key) || null;
             if (!card) {
                 card = document.createElement('aside');
-                card.className = 'moment-summary-card';
+                card.className = 'moment-summary-card phase3-feedback-card';
                 card.setAttribute('data-moment-key', key);
                 card.setAttribute('role', 'status');
                 card.setAttribute('aria-live', 'polite');
@@ -365,6 +365,7 @@
             card.classList.toggle('is-update', replace);
             card.setAttribute('data-tier', String(tier).toLowerCase());
             card.setAttribute('data-ui-mode', String(mode));
+            card.setAttribute('data-stage-safe', 'true');
             card.innerHTML = `
                 <div class="moment-summary-inner">
                     <div class="moment-summary-row moment-summary-pet">
@@ -398,7 +399,7 @@
             }
 
             if (card._momentRemoveTimer) clearTimeout(card._momentRemoveTimer);
-            const dwellMs = (mode === 'ceremony') ? 5200 : (mode === 'banner' ? 4200 : 3200);
+            const dwellMs = (mode === 'ceremony') ? 4200 : (mode === 'banner' ? 3400 : 2400);
             card._momentRemoveTimer = setTimeout(() => {
                 if (!card.parentNode) return;
                 card.classList.add('toast-exiting');
@@ -606,7 +607,8 @@
                 for (let i = 0; i < coinCount; i++) {
                     const coin = document.createElement('span');
                     coin.className = 'reward-coin-particle';
-                    coin.textContent = '🪙';
+                    coin.setAttribute('aria-hidden', 'true');
+                    coin.dataset.coinStyle = (i % 3 === 0) ? 'ring' : (i % 2 === 0 ? 'chip' : 'dot');
                     coin.style.setProperty('--rx', `${(Math.random() * 2 - 1) * (34 + Math.random() * 22)}px`);
                     coin.style.setProperty('--ry', `${-18 - Math.random() * 26}px`);
                     coin.style.setProperty('--delay', `${(i % 4) * 0.02}s`);

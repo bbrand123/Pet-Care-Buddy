@@ -382,6 +382,8 @@
             if (!el) return;
             el.className = 'phase2-particle';
             el.textContent = '';
+            el.removeAttribute('data-shape');
+            el.removeAttribute('data-tone');
             el.removeAttribute('style');
             if (el.parentNode) {
                 GameTransitions.markNoAnimate(el);
@@ -424,12 +426,12 @@
             }
 
             const spec = {
-                success: { glyphs: ['✦', '•', '✧'], count: 10, life: 620, hue: ['#ffe082', '#80deea', '#a5d6a7'] },
-                reward: { glyphs: ['✦', '★', '•'], count: 14, life: 760, hue: ['#ffd54f', '#ffcc80', '#fff59d'] },
-                failure: { glyphs: ['•', '✕'], count: 7, life: 420, hue: ['#ef9a9a', '#b0bec5'] },
-                poof: { glyphs: ['•', '·'], count: 8, life: 360, hue: ['#cfd8dc', '#b0bec5'] },
-                glow: { glyphs: ['✧'], count: 6, life: 520, hue: ['#b39ddb', '#80cbc4'] }
-            }[type || 'success'] || { glyphs: ['•'], count: 8, life: 500, hue: ['#ffffff'] };
+                success: { shapes: ['spark', 'diamond', 'dot'], count: 10, life: 620, hue: ['#ffd766', '#66d9ef', '#7dd3b7'] },
+                reward: { shapes: ['spark', 'diamond', 'chip'], count: 14, life: 760, hue: ['#ffd54f', '#ffb74d', '#fff59d'] },
+                failure: { shapes: ['dot', 'slash'], count: 7, life: 420, hue: ['#ef9a9a', '#b0bec5'] },
+                poof: { shapes: ['dot', 'chip'], count: 8, life: 360, hue: ['#cfd8dc', '#b0bec5'] },
+                glow: { shapes: ['spark', 'dot'], count: 6, life: 520, hue: ['#b39ddb', '#80cbc4'] }
+            }[type || 'success'] || { shapes: ['dot'], count: 8, life: 500, hue: ['#ffffff'] };
 
             const count = QualityManager.getParticleBudget(spec.count);
             const budgetCap = QualityManager.getEffectiveTier() === 'low' ? 10 : (QualityManager.getEffectiveTier() === 'medium' ? 18 : 28);
@@ -445,15 +447,17 @@
                 const driftX = (Math.random() - 0.5) * 14;
                 const driftY = -14 - Math.random() * 28;
                 const life = Math.round(spec.life * (0.75 + Math.random() * 0.35));
+                const shape = spec.shapes[Math.floor(Math.random() * spec.shapes.length)] || 'dot';
                 el.className = `phase2-particle ${type}`;
-                el.textContent = spec.glyphs[Math.floor(Math.random() * spec.glyphs.length)];
+                el.dataset.shape = shape;
+                el.dataset.tone = type || 'success';
                 el.style.left = `${point.x}px`;
                 el.style.top = `${point.y}px`;
                 el.style.setProperty('--dx', `${dx + driftX}px`);
                 el.style.setProperty('--dy', `${dy + driftY}px`);
                 el.style.setProperty('--particle-life', `${life}ms`);
                 el.style.setProperty('--particle-color', spec.hue[Math.floor(Math.random() * spec.hue.length)]);
-                el.style.fontSize = `${10 + Math.random() * 8}px`;
+                el.style.setProperty('--particle-size', `${Math.round(8 + Math.random() * 7)}px`);
                 fxLayer.appendChild(el);
                 setTimeout(() => release(el), life + 50);
             }
@@ -604,6 +608,26 @@
         let showToastOriginal = null;
         const pendingMeta = [];
         let observer = null;
+        const MODAL_SURFACE_SELECTOR = [
+            '.modal-content',
+            '.settings-modal',
+            '.codex-modal',
+            '.stats-modal',
+            '.achievements-modal',
+            '.daily-modal',
+            '.journal-modal',
+            '.diary-modal',
+            '.naming-modal',
+            '.welcome-back-modal',
+            '.mobile-confirm-panel',
+            '.tools-menu-modal',
+            '.notif-history-modal',
+            '.minigame-menu',
+            '.feed-menu',
+            '.feed-menu-panel',
+            '.household-summary-modal',
+            '[class$="-modal"]'
+        ].join(',');
 
         function extractMeta(message, color, options) {
             return {
@@ -649,6 +673,49 @@
             UIFeedbackManager.feedbackForToast(meta || { message: plainText, color: '#90A4AE' }, toastEl);
         }
 
+        function normalizeModalShell(shell) {
+            if (!UI.isElement(shell) || shell.dataset.phase3ModalNormalized === 'true') return;
+            shell.dataset.phase3ModalNormalized = 'true';
+            shell.classList.add('phase3-modal-shell');
+
+            const heading = shell.querySelector(
+                '.modal-title, .settings-title, .stats-title, .codex-title, .achievements-title, .daily-title, h1, h2, h3'
+            );
+            if (heading) heading.classList.add('phase3-modal-heading');
+
+            const footer = shell.querySelector('.modal-buttons, .modal-buttons-col, .settings-actions, .daily-actions');
+            if (footer) footer.classList.add('phase3-modal-footer');
+
+            shell.querySelectorAll(
+                '.modal-btn, .settings-close, .daily-close, .achievements-close, .stats-close-btn, .codex-close-btn, .modal-close-btn, [aria-label*="Close"]'
+            ).forEach((btn) => {
+                if (!UI.isElement(btn)) return;
+                btn.classList.add('phase3-modal-control');
+                if (
+                    btn.matches('.settings-close, .daily-close, .achievements-close, .stats-close-btn, .codex-close-btn, .modal-close-btn') ||
+                    /\bclose\b/i.test(btn.getAttribute('aria-label') || btn.textContent || '')
+                ) {
+                    btn.classList.add('phase3-modal-close');
+                }
+            });
+        }
+
+        function normalizeOverlayShell(overlay) {
+            if (!UI.isElement(overlay)) return;
+            overlay.classList.add('phase3-overlay-shell');
+            if (!overlay.dataset.phase3OverlayNormalized) {
+                overlay.dataset.phase3OverlayNormalized = 'true';
+                overlay.setAttribute('data-overlay-kind', (overlay.className || '').replace(/\s+/g, ' ').trim() || 'dialog');
+            }
+            if (overlay.matches(MODAL_SURFACE_SELECTOR)) normalizeModalShell(overlay);
+            overlay.querySelectorAll(MODAL_SURFACE_SELECTOR).forEach((shell) => {
+                if (!overlay.contains(shell)) return;
+                const parentShell = shell.parentElement && shell.parentElement.closest(MODAL_SURFACE_SELECTOR);
+                if (parentShell && parentShell !== shell && overlay.contains(parentShell)) return;
+                normalizeModalShell(shell);
+            });
+        }
+
         function attachObserver() {
             if (!document.body || observer) return;
             const dialogOverlayClassPattern = /(^|\\s)(settings-overlay|modal-overlay|welcome-back-overlay|naming-overlay|feed-menu-overlay|minigame-menu-overlay|minigame-summary-overlay|competition-overlay|tutorial-overlay|phase2-quick-actions-overlay)(\\s|$)/;
@@ -667,6 +734,7 @@
                             node.classList.add('phase2-world-banner');
                         }
                         if (node.matches(OVERLAY_SELECTOR) || dialogOverlayClassPattern.test(node.className || '')) {
+                            normalizeOverlayShell(node);
                             UIFeedbackManager.overlayOpened(node);
                         }
                         node.querySelectorAll && node.querySelectorAll('.toast, .reward-card-pop, .offline-update-banner').forEach((child) => {
@@ -677,6 +745,12 @@
                             if (child.matches('.reward-card-pop')) UIFeedbackManager.rewardMoment(child);
                             if (child.matches('.offline-update-banner')) child.classList.add('phase2-world-banner');
                         });
+                        if (node.querySelectorAll) {
+                            node.querySelectorAll(OVERLAY_SELECTOR).forEach(normalizeOverlayShell);
+                            node.querySelectorAll(MODAL_SURFACE_SELECTOR).forEach((shell) => {
+                                if (shell.closest(OVERLAY_SELECTOR)) normalizeModalShell(shell);
+                            });
+                        }
                     });
                     mutation.removedNodes.forEach((node) => {
                         if (!UI.isElement(node)) return;
@@ -687,6 +761,7 @@
                 });
             });
             observer.observe(document.body, { childList: true, subtree: true });
+            document.querySelectorAll(OVERLAY_SELECTOR).forEach(normalizeOverlayShell);
         }
 
         function patchShowToast() {
