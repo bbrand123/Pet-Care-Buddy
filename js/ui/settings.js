@@ -1084,17 +1084,35 @@
         (function restoreTextSize() {
             try {
                 const firstRunDefaultsKey = STORAGE_KEYS.firstRunA11yDefaults;
+                const firstRunAudioRepairKey = 'myLittleFriend_firstRunAudioDefaultsRepairV2';
                 const hasSaveData = !!localStorage.getItem(STORAGE_KEYS.gameSave);
                 const shouldApplyFirstRunDefaults = !hasSaveData && localStorage.getItem(firstRunDefaultsKey) !== 'true';
                 if (shouldApplyFirstRunDefaults) {
                     if (localStorage.getItem(STORAGE_KEYS.reducedMotion) === null) localStorage.setItem(STORAGE_KEYS.reducedMotion, 'true');
                     if (localStorage.getItem(STORAGE_KEYS.srVerbosity) === null) localStorage.setItem(STORAGE_KEYS.srVerbosity, 'brief');
-                    if (localStorage.getItem(STORAGE_KEYS.soundEnabled) === null) localStorage.setItem(STORAGE_KEYS.soundEnabled, 'false');
-                    if (localStorage.getItem(STORAGE_KEYS.musicEnabled) === null) localStorage.setItem(STORAGE_KEYS.musicEnabled, 'false');
+                    // Keep audio on by default; autoplay/unlock is still gated by first interaction.
+                    if (localStorage.getItem(STORAGE_KEYS.soundEnabled) === null) localStorage.setItem(STORAGE_KEYS.soundEnabled, 'true');
+                    if (localStorage.getItem(STORAGE_KEYS.musicEnabled) === null) localStorage.setItem(STORAGE_KEYS.musicEnabled, 'true');
                     if (localStorage.getItem(STORAGE_KEYS.samplePackEnabled) === null) localStorage.setItem(STORAGE_KEYS.samplePackEnabled, 'false');
                     if (localStorage.getItem(STORAGE_KEYS.calmMode) === null) localStorage.setItem(STORAGE_KEYS.calmMode, 'true');
                     if (localStorage.getItem(STORAGE_KEYS.coachChecklistMinimized) === null) localStorage.setItem(STORAGE_KEYS.coachChecklistMinimized, 'true');
                     localStorage.setItem(firstRunDefaultsKey, 'true');
+                }
+                // Repair installs that were auto-muted by the previous first-run defaults rollout.
+                // This tries to match the default-applied signature and runs once.
+                const shouldRepairFirstRunMutedAudio =
+                    localStorage.getItem(firstRunAudioRepairKey) !== 'true'
+                    && localStorage.getItem(firstRunDefaultsKey) === 'true'
+                    && localStorage.getItem(STORAGE_KEYS.soundEnabled) === 'false'
+                    && localStorage.getItem(STORAGE_KEYS.musicEnabled) === 'false'
+                    && localStorage.getItem(STORAGE_KEYS.calmMode) === 'true'
+                    && localStorage.getItem(STORAGE_KEYS.srVerbosity) === 'brief';
+                if (shouldRepairFirstRunMutedAudio) {
+                    localStorage.setItem(STORAGE_KEYS.soundEnabled, 'true');
+                    localStorage.setItem(STORAGE_KEYS.musicEnabled, 'true');
+                    localStorage.setItem(firstRunAudioRepairKey, 'true');
+                } else if (localStorage.getItem(firstRunAudioRepairKey) !== 'true') {
+                    localStorage.setItem(firstRunAudioRepairKey, 'true');
                 }
 	                const size = localStorage.getItem(STORAGE_KEYS.textSize);
 	                if (size === 'large') document.documentElement.setAttribute('data-text-size', 'large');
@@ -1110,9 +1128,9 @@
                 // D29: Restore high-contrast mode
                 const hc = localStorage.getItem('petcare_highContrast');
                 if (hc === 'true') document.documentElement.setAttribute('data-high-contrast', 'true');
-                if (shouldApplyFirstRunDefaults && typeof GameAudio !== 'undefined') {
-                    if (typeof GameAudio.getEnabled === 'function' && GameAudio.getEnabled()) GameAudio.toggle();
-                    if (typeof GameAudio.getMusicEnabled === 'function' && GameAudio.getMusicEnabled()) GameAudio.toggleMusic();
+                if ((shouldApplyFirstRunDefaults || shouldRepairFirstRunMutedAudio) && typeof GameAudio !== 'undefined') {
+                    if (typeof GameAudio.getEnabled === 'function' && typeof GameAudio.toggle === 'function' && !GameAudio.getEnabled()) GameAudio.toggle();
+                    if (typeof GameAudio.getMusicEnabled === 'function' && typeof GameAudio.toggleMusic === 'function' && !GameAudio.getMusicEnabled()) GameAudio.toggleMusic();
                     if (typeof GameAudio.getSamplePackEnabled === 'function' && typeof GameAudio.toggleSamplePack === 'function' && GameAudio.getSamplePackEnabled()) GameAudio.toggleSamplePack();
                 }
             } catch (e) {}
