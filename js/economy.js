@@ -1809,7 +1809,13 @@
             const forceRare = Math.max(0, Number((eco.pity || {}).mysteryEggRareMisses) || 0) >= pityThreshold;
             if (forceRare) {
                 reward = grantMysteryEggAccessoryReward();
-                if (reward) reward.pityGuaranteed = true;
+                if (reward) {
+                    reward.pityGuaranteed = true;
+                } else {
+                    const coinReward = 20 + Math.floor(Math.random() * 31);
+                    addCoins(coinReward, 'Mystery Egg Bonus', true);
+                    reward = { type: 'coins', amount: coinReward, label: `${coinReward} coins`, emoji: '🪙', pityGuaranteed: true };
+                }
             }
             const roll = reward ? 1 : Math.random();
             if (!reward && roll < 0.2) {
@@ -1842,6 +1848,11 @@
                 reward = { type: 'loot', itemId: lootId, label: loot.name, emoji: loot.emoji, rarity: loot.rarity || 'common' };
             } else {
                 reward = grantMysteryEggAccessoryReward();
+                if (!reward) {
+                    const coinReward = 20 + Math.floor(Math.random() * 31);
+                    addCoins(coinReward, 'Mystery Egg Bonus', true);
+                    reward = { type: 'coins', amount: coinReward, label: `${coinReward} coins`, emoji: '🪙' };
+                }
             }
             const rareHit = mysteryEggRewardIsRare(reward);
             if (!eco.pity || typeof eco.pity !== 'object') eco.pity = { mysteryEggRareMisses: 0 };
@@ -1943,7 +1954,8 @@
         function consumeAuctionItem(itemType, itemId, qty) {
             const count = Math.max(1, Math.floor(Number(qty) || 1));
             if (itemType === 'loot') {
-                const inv = gameState.exploration.lootInventory;
+                const ex = ensureExplorationState();
+                const inv = ex.lootInventory;
                 if ((inv[itemId] || 0) < count) return false;
                 inv[itemId] -= count;
                 if (inv[itemId] <= 0) delete inv[itemId];
@@ -1971,6 +1983,8 @@
                 return;
             }
             if (itemType === 'crop') {
+                if (!gameState.garden) gameState.garden = {};
+                if (!gameState.garden.inventory) gameState.garden.inventory = {};
                 if (!gameState.garden.inventory[itemId]) gameState.garden.inventory[itemId] = 0;
                 gameState.garden.inventory[itemId] += count;
                 return;
