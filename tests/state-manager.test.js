@@ -1,11 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { EventBus, EVENTS } = require('../js/eventbus.js');
+const { EventBus, EVENTS, createEventBus } = require('../js/eventbus.js');
 const StateManager = require('../js/state.js');
+const StateDomainBridges = require('../js/state/state-domain-bridges.js');
 
 test('StateManager proxies nested writes and emits structured events', () => {
     EventBus._listeners = {};
+    StateDomainBridges.attachCoinsChangedBridge({ stateManager: StateManager, eventBus: EventBus, events: EVENTS });
     const state = {
         phase: 'egg',
         economy: { coins: 10 },
@@ -37,6 +39,25 @@ test('StateManager proxies nested writes and emits structured events', () => {
     assert.equal(root.phase, 'pet');
     assert.equal(root.economy.coins, 7);
     assert.equal(root.nested.value, 9);
+});
+
+test('createEventBus and createStateManager provide isolated instances', () => {
+    const bus = createEventBus();
+    const manager = StateManager.createStateManager({ globalRef: global });
+    StateDomainBridges.attachCoinsChangedBridge({ stateManager: manager, eventBus: bus, events: EVENTS });
+
+    const stateEvents = [];
+    const coinEvents = [];
+    bus.on(EVENTS.STATE_CHANGED, (evt) => stateEvents.push(evt));
+    bus.on(EVENTS.COINS_CHANGED, (evt) => coinEvents.push(evt));
+
+    const root = manager.init({ phase: 'egg', economy: { coins: 1 } }, { eventBus: bus });
+    root.economy.coins = 9;
+
+    assert.equal(root.economy.coins, 9);
+    assert.equal(stateEvents.length, 1);
+    assert.equal(coinEvents.length, 1);
+    assert.equal(coinEvents[0].balance, 9);
 });
 
 test('StateManager.serialize returns schema-stamped payload and strips transient fields', () => {

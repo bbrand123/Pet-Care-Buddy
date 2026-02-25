@@ -1,12 +1,22 @@
 (function initMLFSaveOfflineSimulation(root, factory) {
     'use strict';
     if (typeof module !== 'undefined' && module.exports) {
-        module.exports = factory();
+        let OfflineConfig = null;
+        try {
+            OfflineConfig = require('./offline-progression-config.js');
+        } catch (_) {}
+        module.exports = factory(OfflineConfig);
         return;
     }
-    root.MLFSaveOfflineSimulation = factory();
-})(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFSaveOfflineSimulation() {
+    root.MLFSaveOfflineSimulation = factory(root.MLFOfflineProgressionConfig);
+})(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFSaveOfflineSimulation(OfflineConfig) {
     'use strict';
+
+    const OFFLINE = OfflineConfig || {};
+    const GARDEN_TICK_MS = Number(OFFLINE.GARDEN_TICK_MS) || 60000;
+    const LEGACY_NEEDS_DECAY_MINUTES_PER_STEP = Number(OFFLINE.LEGACY_NEEDS_DECAY_MINUTES_PER_STEP) || 2;
+    const LEGACY_NEEDS_DECAY_MAX_POINTS = Number(OFFLINE.LEGACY_NEEDS_DECAY_MAX_POINTS) || 80;
+    const OFFLINE_SUMMARY_MINUTES_THRESHOLD = Number(OFFLINE.OFFLINE_SUMMARY_MINUTES_THRESHOLD) || 5;
 
     function clampFallback(value, min, max) {
         return Math.max(min, Math.min(max, value));
@@ -26,7 +36,7 @@
 
         const now = Number.isFinite(deps.now) ? deps.now : Date.now();
         const timePassed = now - save.garden.lastGrowTick;
-        const gardenTicksPassed = Math.floor(timePassed / 60000);
+        const gardenTicksPassed = Math.floor(timePassed / GARDEN_TICK_MS);
         if (gardenTicksPassed <= 0) {
             return { changed: false, gardenTicksPassed: 0 };
         }
@@ -68,7 +78,7 @@
         const elderConfig = deps.elderConfig || { wisdomDecayReduction: 1 };
         const timePassed = now - save.lastUpdate;
         const minutesPassed = Math.max(0, timePassed / 60000);
-        const decay = Math.min(Math.floor(minutesPassed / 2), 80);
+        const decay = Math.min(Math.floor(minutesPassed / LEGACY_NEEDS_DECAY_MINUTES_PER_STEP), LEGACY_NEEDS_DECAY_MAX_POINTS);
         if (decay <= 0) {
             return { changed: false, minutesPassed, decay };
         }
@@ -137,7 +147,7 @@
             save.pet = save.pets[save.activePetIndex] || save.pets[0] || save.pet;
         }
 
-        if (minutesPassed >= 5 && save.pet && activeOldStats) {
+        if (minutesPassed >= OFFLINE_SUMMARY_MINUTES_THRESHOLD && save.pet && activeOldStats) {
             save._offlineChanges = {
                 minutes: Math.round(minutesPassed),
                 hunger: save.pet.hunger - activeOldStats.hunger,
@@ -169,6 +179,10 @@
     }
 
     return Object.freeze({
+        GARDEN_TICK_MS,
+        LEGACY_NEEDS_DECAY_MINUTES_PER_STEP,
+        LEGACY_NEEDS_DECAY_MAX_POINTS,
+        OFFLINE_SUMMARY_MINUTES_THRESHOLD,
         applyGardenOfflineGrowth,
         applyNeedsOfflineSimulation,
         applyOfflineSimulation

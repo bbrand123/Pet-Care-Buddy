@@ -7,6 +7,14 @@
         reduceEffects: 'phase2.effects.reduce',
         favorites: 'phase2.quickActions.favorites'
     };
+    const PLATFORM = (window.MLFPlatformAdapters && typeof window.MLFPlatformAdapters.createDefaultAdapters === 'function')
+        ? window.MLFPlatformAdapters.createDefaultAdapters({
+            root: window,
+            navigatorRef: window.navigator,
+            eventBus: window.EventBus,
+            events: window.EVENTS
+        })
+        : null;
 
     const OVERLAY_SELECTOR = [
         '.settings-overlay',
@@ -37,6 +45,7 @@
             ).replace(/\s+/g, ' ').trim();
         },
         safeStorageGet(key, fallback) {
+            if (PLATFORM && PLATFORM.storage) return PLATFORM.storage.getItem(key, fallback);
             try {
                 const value = localStorage.getItem(key);
                 return value == null ? fallback : value;
@@ -45,6 +54,10 @@
             }
         },
         safeStorageSet(key, value) {
+            if (PLATFORM && PLATFORM.storage) {
+                PLATFORM.storage.setItem(key, value);
+                return;
+            }
             try { localStorage.setItem(key, value); } catch (e) {}
         },
         isReducedMotion() {
@@ -74,6 +87,9 @@
             return Math.max(min, Math.min(max, n));
         },
         readFavorites() {
+            if (PLATFORM && PLATFORM.storage) {
+                return PLATFORM.storage.getJSON(STORAGE.favorites, {}) || {};
+            }
             try {
                 const raw = localStorage.getItem(STORAGE.favorites);
                 if (!raw) return {};
@@ -84,6 +100,10 @@
             }
         },
         writeFavorites(map) {
+            if (PLATFORM && PLATFORM.storage) {
+                PLATFORM.storage.setJSON(STORAGE.favorites, map || {});
+                return;
+            }
             try { localStorage.setItem(STORAGE.favorites, JSON.stringify(map || {})); } catch (e) {}
         }
     };
@@ -224,9 +244,7 @@
     window.UIQualityManager = QualityManager;
 
     const GameTransitions = (() => {
-        const originalRemove = Element.prototype.remove;
         const noAnimate = new WeakSet();
-        let removePatched = false;
 
         function durationFor(kind) {
             if (UI.isReducedMotion()) return 0;
@@ -286,17 +304,15 @@
             if (UI.isElement(el)) noAnimate.add(el);
         }
 
-        function patchRemove() {
-            if (removePatched) return;
-            removePatched = true;
-            Element.prototype.remove = function patchedRemove() {
-                const el = this;
-                const kind = classify(el);
-                if (!kind || !el.isConnected || UI.isReducedMotion() || noAnimate.has(el) || el.dataset.phase2Exiting === 'true') {
-                    return originalRemove.call(el);
-                }
-                return exit(el, kind, () => originalRemove.call(el));
-            };
+        function removeWithTransition(el, kindHint, onDone) {
+            if (!UI.isElement(el) || !el.isConnected) {
+                if (typeof onDone === 'function') onDone();
+                return;
+            }
+            exit(el, kindHint, () => {
+                if (el && el.parentNode) el.remove();
+                if (typeof onDone === 'function') onDone();
+            });
         }
 
         function animateGameContentSwap() {
@@ -344,7 +360,6 @@
             observer.observe(document.body, { childList: true, subtree: true });
         }
 
-        patchRemove();
         patchRenderFns();
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', observeAddedNodes, { once: true });
@@ -352,7 +367,7 @@
             observeAddedNodes();
         }
 
-        return { enter, exit, markNoAnimate, animateGameContentSwap };
+        return { enter, exit, markNoAnimate, animateGameContentSwap, removeWithTransition };
     })();
     window.GameTransitions = GameTransitions;
 
@@ -492,6 +507,9 @@
         }
 
         function hapticsEnabled() {
+            if (PLATFORM && PLATFORM.haptics && typeof PLATFORM.haptics.isEnabled === 'function') {
+                return PLATFORM.haptics.isEnabled();
+            }
             try {
                 if (typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS && STORAGE_KEYS.hapticOff) {
                     return localStorage.getItem(STORAGE_KEYS.hapticOff) !== 'true';
@@ -509,10 +527,18 @@
                 if (typeof window.postNativeHaptic === 'function') {
                     return !!window.postNativeHaptic(type, options);
                 }
+                if (PLATFORM && PLATFORM.haptics && typeof PLATFORM.haptics.postNative === 'function'
+                    && PLATFORM.haptics.postNative({ type, strength: options.strength || null, action: options.action || null })) {
+                    return true;
+                }
                 const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.haptics;
                 if (handler && typeof handler.postMessage === 'function') {
                     handler.postMessage({ type, strength: options.strength || null, action: options.action || null });
                     return true;
+                }
+                if (PLATFORM && PLATFORM.haptics && typeof PLATFORM.haptics.vibrate === 'function') {
+                    const pattern = options.pattern || (type === 'success' ? [20, 18, 26] : type === 'error' ? [28, 28, 28] : [12]);
+                    return !!PLATFORM.haptics.vibrate(pattern);
                 }
                 if (navigator.vibrate) {
                     const pattern = options.pattern || (type === 'success' ? [20, 18, 26] : type === 'error' ? [28, 28, 28] : [12]);
@@ -605,8 +631,7 @@
     window.UIFeedbackManager = UIFeedbackManager;
 
     const ToastSystemEnhancer = (() => {
-        let showToastOriginal = null;
-        const pendingMeta = [];
+        let hookBinding = null;
         let observer = null;
         const MODAL_SURFACE_SELECTOR = [
             '.modal-content',
@@ -648,6 +673,8 @@
 
         function classifyToastEl(toastEl, meta) {
             if (!toastEl) return;
+            if (toastEl.dataset.phase2ToastEnhanced === 'true' && !meta) return;
+            toastEl.dataset.phase2ToastEnhanced = 'true';
             const textEl = toastEl.querySelector('.toast-text');
             const plainText = (textEl && textEl.textContent) || (toastEl.textContent || '');
             const semantic = UIFeedbackManager.semanticFromText(plainText, meta && meta.color);
@@ -724,8 +751,7 @@
                     mutation.addedNodes.forEach((node) => {
                         if (!UI.isElement(node)) return;
                         if (node.matches('.toast')) {
-                            const meta = pendingMeta.shift() || null;
-                            classifyToastEl(node, meta);
+                            classifyToastEl(node, null);
                         }
                         if (node.matches('.reward-card-pop')) {
                             UIFeedbackManager.rewardMoment(node);
@@ -735,12 +761,13 @@
                         }
                         if (node.matches(OVERLAY_SELECTOR) || dialogOverlayClassPattern.test(node.className || '')) {
                             normalizeOverlayShell(node);
-                            UIFeedbackManager.overlayOpened(node);
+                            if (node.dataset.phase2OverlayHookHandled !== 'true') {
+                                UIFeedbackManager.overlayOpened(node);
+                            }
                         }
                         node.querySelectorAll && node.querySelectorAll('.toast, .reward-card-pop, .offline-update-banner').forEach((child) => {
                             if (child.matches('.toast')) {
-                                const meta = pendingMeta.shift() || null;
-                                classifyToastEl(child, meta);
+                                classifyToastEl(child, null);
                             }
                             if (child.matches('.reward-card-pop')) UIFeedbackManager.rewardMoment(child);
                             if (child.matches('.offline-update-banner')) child.classList.add('phase2-world-banner');
@@ -755,7 +782,7 @@
                     mutation.removedNodes.forEach((node) => {
                         if (!UI.isElement(node)) return;
                         if (node.matches && (node.matches(OVERLAY_SELECTOR) || dialogOverlayClassPattern.test(node.className || ''))) {
-                            UIFeedbackManager.overlayDismissed();
+                            if (node.dataset.phase2OverlayHookHandled !== 'true') UIFeedbackManager.overlayDismissed();
                         }
                     });
                 });
@@ -764,16 +791,32 @@
             document.querySelectorAll(OVERLAY_SELECTOR).forEach(normalizeOverlayShell);
         }
 
-        function patchShowToast() {
-            if (typeof window.showToast !== 'function' || window.showToast.__phase2Wrapped) return;
-            showToastOriginal = window.showToast;
-            const wrapped = function phase2ShowToast(message, color, options) {
-                pendingMeta.push(extractMeta(message, color, options));
-                return showToastOriginal.apply(this, arguments);
-            };
-            wrapped.__phase2Wrapped = true;
-            wrapped.__phase2Original = showToastOriginal;
-            window.showToast = wrapped;
+        function bindUiHooks() {
+            if (hookBinding || !window.MLFPhase2UiHookBindings || typeof window.MLFPhase2UiHookBindings.bindPhase2Hooks !== 'function') return;
+            hookBinding = window.MLFPhase2UiHookBindings.bindPhase2Hooks({
+                uiHooks: window.MLFUiHooks,
+                callbacks: {
+                    onToastShown(detail) {
+                        if (!detail || !detail.element) return;
+                        classifyToastEl(detail.element, detail);
+                    },
+                    onOverlayOpened(detail) {
+                        const overlay = detail && detail.element;
+                        if (!UI.isElement(overlay)) return;
+                        overlay.dataset.phase2OverlayHookHandled = 'true';
+                        normalizeOverlayShell(overlay);
+                        UIFeedbackManager.overlayOpened(overlay);
+                    },
+                    onOverlayClosed(detail) {
+                        const overlay = detail && detail.element;
+                        if (overlay && UI.isElement(overlay)) overlay.dataset.phase2OverlayHookHandled = 'true';
+                        UIFeedbackManager.overlayDismissed();
+                    },
+                    onRoomChanged() {
+                        QualityManager.sampleFrames(700);
+                    }
+                }
+            });
         }
 
         function patchAlertConfirmSurface() {
@@ -791,7 +834,7 @@
         }
 
         function init() {
-            patchShowToast();
+            bindUiHooks();
             patchAlertConfirmSurface();
             attachObserver();
         }
@@ -1303,45 +1346,13 @@
     })();
 
     function patchModalManager() {
-        if (typeof window.ModalManager === 'undefined' || !ModalManager || ModalManager.__phase2Patched) return;
-        ModalManager.__phase2Patched = true;
-        const originalOpen = ModalManager.open && ModalManager.open.bind(ModalManager);
-        const originalClose = ModalManager.close && ModalManager.close.bind(ModalManager);
-        if (originalOpen) {
-            ModalManager.open = function phase2ModalOpen(config) {
-                const overlay = originalOpen(config);
-                if (overlay) {
-                    overlay.classList.add('phase2-game-overlay');
-                    GameTransitions.enter(overlay, 'overlay');
-                    UIFeedbackManager.overlayOpened(overlay);
-                }
-                return overlay;
-            };
-        }
-        if (originalClose) {
-            ModalManager.close = function phase2ModalClose(id) {
-                const overlay = ModalManager.getOverlay ? ModalManager.getOverlay(id) : null;
-                if (overlay) {
-                    UIFeedbackManager.overlayDismissed();
-                }
-                return originalClose(id);
-            };
-        }
+        // Base UI layers now emit explicit modal/overlay hooks; phase2 listens through MLFUiHooks.
+        return false;
     }
 
     function patchRoomSwitchFeedback() {
-        if (typeof window.switchRoom !== 'function' || window.switchRoom.__phase2Wrapped) return;
-        const original = window.switchRoom;
-        const wrapped = function phase2SwitchRoom(roomId) {
-            const previous = window.gameState && gameState.currentRoom;
-            const result = original.apply(this, arguments);
-            if (previous !== (window.gameState && gameState.currentRoom)) {
-                QualityManager.sampleFrames(700);
-            }
-            return result;
-        };
-        wrapped.__phase2Wrapped = true;
-        window.switchRoom = wrapped;
+        // Room switch sampling now runs from the explicit `room:changed` UI hook.
+        return false;
     }
 
     function bindGlobalFeedbackTap() {

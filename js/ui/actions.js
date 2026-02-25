@@ -18,8 +18,20 @@
             groom: { icon: '✂️', label: 'Groom' },
             exercise: { icon: '💪', label: 'Exercise' }
         };
+        const _uiActionsPlatform = (typeof MLFPlatformAdapters !== 'undefined' && MLFPlatformAdapters && typeof MLFPlatformAdapters.createDefaultAdapters === 'function')
+            ? MLFPlatformAdapters.createDefaultAdapters({
+                root: (typeof window !== 'undefined') ? window : globalThis,
+                navigatorRef: (typeof navigator !== 'undefined') ? navigator : null,
+                eventBus: (typeof EventBus !== 'undefined') ? EventBus : null,
+                events: (typeof EVENTS !== 'undefined') ? EVENTS : null
+            })
+            : null;
 
         function getFavorites() {
+            if (_uiActionsPlatform && _uiActionsPlatform.storage) {
+                const value = _uiActionsPlatform.storage.getJSON(STORAGE_KEYS.favorites, [null, null, null]);
+                return Array.isArray(value) ? value : [null, null, null];
+            }
             try {
                 const saved = localStorage.getItem(STORAGE_KEYS.favorites);
                 if (saved) return JSON.parse(saved);
@@ -28,6 +40,10 @@
         }
 
         function saveFavorites(favs) {
+            if (_uiActionsPlatform && _uiActionsPlatform.storage) {
+                _uiActionsPlatform.storage.setJSON(STORAGE_KEYS.favorites, favs);
+                return;
+            }
             try {
                 localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favs));
             } catch (e) {}
@@ -145,6 +161,9 @@
         const MORE_ACTIONS_PREF_KEY = STORAGE_KEYS.moreActionsExpanded;
 
         function getMoreActionsExpandedPref() {
+            if (_uiActionsPlatform && _uiActionsPlatform.prefs) {
+                return _uiActionsPlatform.prefs.getBoolean(MORE_ACTIONS_PREF_KEY, false);
+            }
             try {
                 return localStorage.getItem(MORE_ACTIONS_PREF_KEY) === 'true';
             } catch (e) {
@@ -153,6 +172,10 @@
         }
 
         function setMoreActionsExpandedPref(expanded) {
+            if (_uiActionsPlatform && _uiActionsPlatform.prefs) {
+                _uiActionsPlatform.prefs.setBoolean(MORE_ACTIONS_PREF_KEY, expanded);
+                return;
+            }
             try {
                 localStorage.setItem(MORE_ACTIONS_PREF_KEY, expanded ? 'true' : 'false');
             } catch (e) {}

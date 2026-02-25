@@ -224,6 +224,14 @@
             lastSeasonalEventCheck: 0
         };
 
+        if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.createInitialState === 'function') {
+            gameState = MLFCanonicalGameState.createInitialState({
+                baseState: gameState,
+                now: Date.now(),
+                resetRuntimeTransientState: true
+            });
+        }
+
         // Initialize StateManager with the gameState reference
         if (typeof StateManager !== 'undefined') {
             const proxiedState = StateManager.init(gameState, {
@@ -231,6 +239,33 @@
             });
             if (proxiedState) gameState = proxiedState;
         }
+
+        const _mlfPlatformAdapters = (typeof MLFPlatformAdapters !== 'undefined' && MLFPlatformAdapters && typeof MLFPlatformAdapters.createDefaultAdapters === 'function')
+            ? MLFPlatformAdapters.createDefaultAdapters({
+                root: (typeof window !== 'undefined') ? window : globalThis,
+                eventBus: (typeof EventBus !== 'undefined') ? EventBus : null,
+                events: (typeof EVENTS !== 'undefined') ? EVENTS : null
+            })
+            : null;
+        const _corePersistenceCoordinator = (typeof MLFCorePersistenceCoordinator !== 'undefined'
+            && MLFCorePersistenceCoordinator
+            && typeof MLFCorePersistenceCoordinator.createPersistenceCoordinator === 'function'
+            && _mlfPlatformAdapters && _mlfPlatformAdapters.storage)
+            ? MLFCorePersistenceCoordinator.createPersistenceCoordinator({
+                storage: _mlfPlatformAdapters.storage,
+                saveKey: STORAGE_KEYS.gameSave
+            })
+            : null;
+        const _deviceFeedbackService = (typeof MLFCoreDeviceFeedbackService !== 'undefined'
+            && MLFCoreDeviceFeedbackService
+            && typeof MLFCoreDeviceFeedbackService.createDeviceFeedbackService === 'function')
+            ? MLFCoreDeviceFeedbackService.createDeviceFeedbackService({
+                root: (typeof window !== 'undefined') ? window : globalThis,
+                navigatorRef: (typeof navigator !== 'undefined') ? navigator : null,
+                eventBus: (typeof EventBus !== 'undefined') ? EventBus : null,
+                events: (typeof EVENTS !== 'undefined') ? EVENTS : null
+            })
+            : null;
 
         function createDefaultCompetitionState() {
             return {
@@ -365,6 +400,9 @@
         // Short vibration on supported mobile devices for tactile satisfaction
         function isHapticsEnabled() {
             try {
+                if (_deviceFeedbackService && typeof _deviceFeedbackService.isHapticsEnabled === 'function') {
+                    return _deviceFeedbackService.isHapticsEnabled();
+                }
                 return localStorage.getItem(STORAGE_KEYS.hapticOff) !== 'true';
             } catch (e) {
                 return true;
@@ -374,6 +412,10 @@
         function hapticBuzz(ms) {
             try {
                 if (!isHapticsEnabled()) return;
+                if (_deviceFeedbackService && typeof _deviceFeedbackService.buzz === 'function') {
+                    _deviceFeedbackService.buzz(ms || 50);
+                    return;
+                }
                 if (navigator.vibrate) navigator.vibrate(ms || 50);
             } catch (e) { /* unsupported — silently ignore */ }
         }
@@ -411,6 +453,9 @@
         function postNativeHaptic(payload) {
             try {
                 if (!isHapticsEnabled()) return false;
+                if (_deviceFeedbackService && typeof _deviceFeedbackService.postNative === 'function') {
+                    return _deviceFeedbackService.postNative(payload || { type: 'confirm', strength: 'light' });
+                }
                 const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.haptics;
                 if (!bridge || typeof bridge.postMessage !== 'function') return false;
                 bridge.postMessage(payload || { type: 'confirm', strength: 'light' });
@@ -441,8 +486,12 @@
                     type: String(cfg.type || 'confirm'),
                     strength: cfg.strength ? String(cfg.strength) : undefined
                 });
-                if (navigator.vibrate && cfg.vibrate && Array.isArray(cfg.vibrate)) {
-                    navigator.vibrate(cfg.vibrate);
+                if (cfg.vibrate && Array.isArray(cfg.vibrate)) {
+                    if (_deviceFeedbackService && typeof _deviceFeedbackService.vibrate === 'function') {
+                        _deviceFeedbackService.vibrate(cfg.vibrate);
+                    } else if (navigator.vibrate) {
+                        navigator.vibrate(cfg.vibrate);
+                    }
                 }
                 return true;
             } catch (e) {
@@ -507,8 +556,12 @@
                 } else if (HAPTIC_PATTERNS[action]) {
                     postNativeHaptic({ type: 'confirm', strength: action === 'exercise' ? 'medium' : 'light' });
                 }
-                if (navigator.vibrate && HAPTIC_PATTERNS[action]) {
-                    navigator.vibrate(HAPTIC_PATTERNS[action]);
+                if (HAPTIC_PATTERNS[action]) {
+                    if (_deviceFeedbackService && typeof _deviceFeedbackService.vibrate === 'function') {
+                        _deviceFeedbackService.vibrate(HAPTIC_PATTERNS[action]);
+                    } else if (navigator.vibrate) {
+                        navigator.vibrate(HAPTIC_PATTERNS[action]);
+                    }
                 }
             } catch (e) { /* unsupported — silently ignore */ }
         }
@@ -1177,10 +1230,16 @@
 
         function suppressUnloadAutosaveForReload() {
             _suppressUnloadAutosave = true;
+            if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.suppressUnloadAutosaveForReload === 'function') {
+                _corePersistenceCoordinator.suppressUnloadAutosaveForReload();
+            }
         }
 
         function hasExternalSaveChangeSinceLastSave() {
             try {
+                if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.hasExternalSaveChangeSinceLastSave === 'function') {
+                    return _corePersistenceCoordinator.hasExternalSaveChangeSinceLastSave();
+                }
                 const current = localStorage.getItem(STORAGE_KEYS.gameSave);
                 return current !== _lastSavedStorageSnapshot;
             } catch (e) {
@@ -1189,6 +1248,9 @@
         }
 
         function shouldRunUnloadAutosave() {
+            if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.shouldRunUnloadAutosave === 'function') {
+                return _corePersistenceCoordinator.shouldRunUnloadAutosave();
+            }
             if (_suppressUnloadAutosave) return false;
             if (hasExternalSaveChangeSinceLastSave()) return false;
             return true;
@@ -1196,7 +1258,7 @@
 
 	        function saveGame(options) {
 	            try {
-	                const saveOptions = (options && typeof options === 'object') ? options : null;
+                const saveOptions = (options && typeof options === 'object') ? options : null;
                     const nowMs = Date.now();
 	                ensureExplorationState();
 	                ensureEconomyState();
@@ -1225,8 +1287,12 @@
 	                const serialized = snapshot && typeof snapshot.serialized === 'string' ? snapshot.serialized : '{}';
 	                const schemaVersion = (snapshot && Number.isInteger(snapshot.schemaVersion)) ? snapshot.schemaVersion : 1;
 	                gameState.saveSchemaVersion = schemaVersion;
-	                localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
+	                if (_mlfPlatformAdapters && _mlfPlatformAdapters.storage) _mlfPlatformAdapters.storage.setItem(STORAGE_KEYS.gameSave, serialized);
+                    else localStorage.setItem(STORAGE_KEYS.gameSave, serialized);
 	                _lastSavedStorageSnapshot = serialized;
+                    if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.markSaveSnapshot === 'function') {
+                        _corePersistenceCoordinator.markSaveSnapshot(serialized);
+                    }
 	                if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function' && saveOptions && saveOptions.source === 'lifecycle') {
 	                    MLFDiagnostics.log('SAVE', 'Lifecycle save wrote local storage.', {
 	                        reason: saveOptions.reason || 'native-lifecycle',
@@ -1302,7 +1368,9 @@
 	        function loadGame() {
 	            let _needsSaveAfterLoad = false;
 	            try {
-	                const saved = localStorage.getItem(STORAGE_KEYS.gameSave);
+	                const saved = (_mlfPlatformAdapters && _mlfPlatformAdapters.storage)
+                        ? _mlfPlatformAdapters.storage.getItem(STORAGE_KEYS.gameSave, null)
+                        : localStorage.getItem(STORAGE_KEYS.gameSave);
 	                if (saved) {
 	                    let parsed = JSON.parse(saved);
 
@@ -1571,46 +1639,29 @@
                     }
 
                     const nowMs = Date.now();
-                    const activeBeforeHouseholdSim = parsed.pet ? {
-                        hunger: parsed.pet.hunger,
-                        cleanliness: parsed.pet.cleanliness,
-                        happiness: parsed.pet.happiness,
-                        energy: parsed.pet.energy
-                    } : null;
-
                     ensureHouseholdStateForRuntime(parsed, nowMs);
 
-                    const hasHouseholdSim = (typeof MLFHouseholdState !== 'undefined' && MLFHouseholdState && typeof MLFHouseholdState.simulateHouseholdToNowOnState === 'function');
-                    if (hasHouseholdSim) {
+                    if (typeof MLFOfflineProgression !== 'undefined' && MLFOfflineProgression && typeof MLFOfflineProgression.applyOfflineProgression === 'function') {
                         try {
-                            if (typeof MLFSaveOfflineSimulation !== 'undefined' && MLFSaveOfflineSimulation && typeof MLFSaveOfflineSimulation.applyGardenOfflineGrowth === 'function') {
-                                MLFSaveOfflineSimulation.applyGardenOfflineGrowth(parsed, {
-                                    now: nowMs,
-                                    getCurrentSeason,
-                                    seasons: SEASONS,
-                                    gardenCrops: GARDEN_CROPS
-                                });
-                            }
-                            const simResult = simulateHouseholdToNowForRuntime(parsed, nowMs) || {};
-                            parsed.timeOfDay = getTimeOfDay();
-                            if (activeBeforeHouseholdSim && parsed.pet && parsed.lastUpdate) {
-                                const minutesPassed = Math.max(0, Math.round((nowMs - parsed.lastUpdate) / 60000));
-                                if (minutesPassed >= 5) {
-                                    parsed._offlineChanges = {
-                                        minutes: minutesPassed,
-                                        hunger: (parsed.pet.hunger || 0) - (activeBeforeHouseholdSim.hunger || 0),
-                                        cleanliness: (parsed.pet.cleanliness || 0) - (activeBeforeHouseholdSim.cleanliness || 0),
-                                        happiness: (parsed.pet.happiness || 0) - (activeBeforeHouseholdSim.happiness || 0),
-                                        energy: (parsed.pet.energy || 0) - (activeBeforeHouseholdSim.energy || 0)
-                                    };
-                                }
-                            }
-                            if (simResult && simResult.meta && simResult.meta.catchUpClamped && typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function') {
-                                MLFDiagnostics.log('HOUSEHOLD', 'Household offline catch-up was clamped.', simResult.meta);
+                            const offlineResult = MLFOfflineProgression.applyOfflineProgression(parsed, {
+                                now: nowMs,
+                                getCurrentSeason,
+                                getTimeOfDay,
+                                seasons: SEASONS,
+                                gardenCrops: GARDEN_CROPS,
+                                clamp,
+                                personalityTraits: PERSONALITY_TRAITS,
+                                elderConfig: ELDER_CONFIG,
+                                householdStateApi: (typeof MLFHouseholdState !== 'undefined') ? MLFHouseholdState : null,
+                                householdOptions: {}
+                            }) || null;
+                            if (offlineResult && offlineResult.meta && offlineResult.meta.household && offlineResult.meta.household.catchUpClamped
+                                && typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.log === 'function') {
+                                MLFDiagnostics.log('HOUSEHOLD', 'Household offline catch-up was clamped.', offlineResult.meta.household);
                             }
                         } catch (offlineSimulationError) {
                             if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
-                                MLFDiagnostics.warn('LOAD', 'Household offline simulation failed; continuing with loaded state.', {
+                                MLFDiagnostics.warn('LOAD', 'Offline progression catch-up failed; continuing with loaded state.', {
                                     error: String(offlineSimulationError && offlineSimulationError.message ? offlineSimulationError.message : offlineSimulationError)
                                 });
                             }
@@ -1651,8 +1702,12 @@
                     if (_needsSaveAfterLoad) {
                         try {
                             const migrated = JSON.stringify(parsed);
-                            localStorage.setItem(STORAGE_KEYS.gameSave, migrated);
+                            if (_mlfPlatformAdapters && _mlfPlatformAdapters.storage) _mlfPlatformAdapters.storage.setItem(STORAGE_KEYS.gameSave, migrated);
+                            else localStorage.setItem(STORAGE_KEYS.gameSave, migrated);
                             _lastSavedStorageSnapshot = migrated;
+                            if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.markSaveSnapshot === 'function') {
+                                _corePersistenceCoordinator.markSaveSnapshot(migrated);
+                            }
 	                        } catch (e) {
 	                            if (typeof MLFDiagnostics !== 'undefined' && MLFDiagnostics && typeof MLFDiagnostics.warn === 'function') {
 	                                MLFDiagnostics.warn('LOAD', 'Failed to persist migrated save immediately after load.', {
@@ -1662,15 +1717,27 @@
 	                        }
 	                    } else {
 	                        _lastSavedStorageSnapshot = saved;
+                            if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.markSaveSnapshot === 'function') {
+                                _corePersistenceCoordinator.markSaveSnapshot(saved);
+                            }
 	                    }
-	                    // Reset session-local transient state (Recommendations #1, #2)
-	                    parsed._sessionMinigameCount = 0;
-	                    parsed._minigameRewardSession = null;
-	                    parsed._careActionTimestamps = [];
-	                    if (parsed.security && parsed.security.coinGainSession) parsed.security.coinGainSession.earned = 0;
-	                    if (parsed.security && parsed.security.coinGainMinute) {
-	                        parsed.security.coinGainMinute.windowStart = 0;
-	                        parsed.security.coinGainMinute.earned = 0;
+	                    if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.normalizeLoadedState === 'function') {
+	                        MLFCanonicalGameState.normalizeLoadedState(parsed, {
+	                            now: nowMs,
+	                            ensureHouseholdState: ensureHouseholdStateForRuntime,
+	                            resetRuntimeTransientState: true,
+                                preserveOfflineChanges: true
+	                        });
+	                    } else {
+	                        // Reset session-local transient state (legacy fallback)
+	                        parsed._sessionMinigameCount = 0;
+	                        parsed._minigameRewardSession = null;
+	                        parsed._careActionTimestamps = [];
+	                        if (parsed.security && parsed.security.coinGainSession) parsed.security.coinGainSession.earned = 0;
+	                        if (parsed.security && parsed.security.coinGainMinute) {
+	                            parsed.security.coinGainMinute.windowStart = 0;
+	                            parsed.security.coinGainMinute.earned = 0;
+	                        }
 	                    }
 
                     return parsed;
@@ -1706,6 +1773,9 @@
 	                    suppressUnloadAutosaveForReload,
 	                    onStartFreshReset: function onStartFreshReset() {
 	                        _lastSavedStorageSnapshot = null;
+                            if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.clearSaveSnapshot === 'function') {
+                                _corePersistenceCoordinator.clearSaveSnapshot();
+                            }
 	                    },
 	                    announce
 	                });
@@ -1722,8 +1792,13 @@
         function exportSaveData() {
             try {
                 syncActivePetToArray();
-                const exportState = JSON.parse(JSON.stringify(gameState));
-                delete exportState._offlineChanges;
+                const exportState = (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.stripTransientState === 'function')
+                    ? MLFCanonicalGameState.stripTransientState(gameState)
+                    : (function legacyClone() {
+                        const clone = JSON.parse(JSON.stringify(gameState));
+                        delete clone._offlineChanges;
+                        return clone;
+                    })();
                 const data = JSON.stringify(exportState, null, 2);
                 const blob = new Blob([data], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -1784,8 +1859,12 @@
                             return;
                         }
                         const imported = JSON.stringify(data);
-                        localStorage.setItem(STORAGE_KEYS.gameSave, imported);
-                        _lastSavedStorageSnapshot = imported;
+                        if (_mlfPlatformAdapters && _mlfPlatformAdapters.storage) _mlfPlatformAdapters.storage.setItem(STORAGE_KEYS.gameSave, imported);
+                        else localStorage.setItem(STORAGE_KEYS.gameSave, imported);
+	                        _lastSavedStorageSnapshot = imported;
+                            if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.markSaveSnapshot === 'function') {
+                                _corePersistenceCoordinator.markSaveSnapshot(imported);
+                            }
                         suppressUnloadAutosaveForReload();
                         showToast('Save data imported! Reloading...', '#66BB6A');
                         announce('Save data imported. The game will reload.', true);
@@ -2098,102 +2177,114 @@
 
         // ==================== VISIBILITY HANDLING ====================
 
-        // Handle page visibility changes
-	        document.addEventListener('visibilitychange', () => {
-	            if (document.hidden) {
-	                if (typeof resetMinigameRewardSession === 'function') resetMinigameRewardSession('background');
-	                // Page is hidden, save current state
-	                saveGame();
-	            } else {
-                // Page is visible again, apply any decay that occurred while away
-                if (gameState.phase === 'pet' && gameState.pet) {
-                    // Pause the decay timer while we overwrite pet stats to avoid
-                    // the timer firing during or right after the load, which could
-                    // double-apply decay or have its changes overwritten.
-                    stopDecayTimer();
-                    _petPhaseTimersRunning = false;
+        function handleRuntimeHiddenForVisibilityResume() {
+            if (typeof resetMinigameRewardSession === 'function') resetMinigameRewardSession('background');
+            saveGame();
+            return { saved: true };
+        }
 
-                    const saved = loadGame();
-                    if (saved && saved.pet) {
-                        // Restore all pets (decay was applied to all in loadGame)
-                        if (saved.pets && saved.pets.length > 0) {
-                            gameState.pets = saved.pets;
-                            gameState.activePetIndex = saved.activePetIndex || 0;
-                            if (gameState.activePetIndex < 0 || gameState.activePetIndex >= gameState.pets.length) {
-                                gameState.activePetIndex = 0;
-                            }
-                            gameState.pet = gameState.pets[gameState.activePetIndex] || saved.pet;
-                        } else {
-                            // Restore all pet fields from the loaded save to avoid
-                            // losing careActions, neglectCount, careQuality, etc.
-                            Object.assign(gameState.pet, saved.pet);
-                        }
+        function handleRuntimeVisibleForVisibilityResume() {
+            if (!(gameState.phase === 'pet' && gameState.pet)) return { skipped: true, reason: 'not-pet-phase' };
 
-                        // Restore garden state (growth may have happened while away)
-                        if (saved.garden) {
-                            gameState.garden = saved.garden;
-                        }
+            // Pause decay while rehydrating the resumed save.
+            stopDecayTimer();
+            _petPhaseTimersRunning = false;
 
-                        // Restore fields that may have changed in another tab
-                        if (saved.minigamePlayCounts) gameState.minigamePlayCounts = saved.minigamePlayCounts;
-                        if (saved.minigameHighScores) gameState.minigameHighScores = saved.minigameHighScores;
-                        if (saved.minigameScoreHistory) gameState.minigameScoreHistory = saved.minigameScoreHistory;
-                        if (saved.relationships) gameState.relationships = saved.relationships;
-                        if (saved.household) gameState.household = saved.household;
-                        if (saved.furniture) gameState.furniture = saved.furniture;
-                        if (saved.roomUnlocks) gameState.roomUnlocks = saved.roomUnlocks;
-                        if (saved.roomUpgrades) gameState.roomUpgrades = saved.roomUpgrades;
-                        if (saved.roomCustomizations) gameState.roomCustomizations = saved.roomCustomizations;
-                        if (saved.badges) gameState.badges = saved.badges;
-                        if (saved.stickers) gameState.stickers = saved.stickers;
-                        if (saved.trophies) gameState.trophies = saved.trophies;
-                        if (saved.streak) gameState.streak = saved.streak;
-                        if (saved.dailyChecklist) gameState.dailyChecklist = saved.dailyChecklist;
-                        if (saved.competition) gameState.competition = normalizeCompetitionState(saved.competition);
-                        if (saved.exploration) gameState.exploration = saved.exploration;
-                        if (saved.economy) gameState.economy = saved.economy;
-                        ensureEconomyState();
-                        if (saved.breedingEggs) {
-                            gameState.breedingEggs = saved.breedingEggs.filter((egg) => egg && typeof egg === 'object');
-                            gameState.breedingEggs.forEach((egg) => ensureBreedingEggData(egg));
-                        }
-                        if (saved.hatchedBreedingEggs) gameState.hatchedBreedingEggs = saved.hatchedBreedingEggs;
-                        if (typeof saved.totalFeedCount === 'number') gameState.totalFeedCount = saved.totalFeedCount;
-                        if (typeof saved.adultsRaised === 'number') gameState.adultsRaised = saved.adultsRaised;
-                        ensureRoomSystemsState();
-
-                        // Update time of day (may have changed while tab was hidden)
-                        const newTimeOfDay = getTimeOfDay();
-                        if (gameState.timeOfDay !== newTimeOfDay) {
-                            gameState.timeOfDay = newTimeOfDay;
-                            updateDayNightDisplay();
-                        }
-
-                        // Update season
-                        gameState.season = getCurrentSeason();
-                        ensureExplorationState();
-                        updateExplorationUnlocks(true);
-                        resolveExpeditionIfReady(false, true);
-
-                        updateNeedDisplays();
-                        updatePetMood();
-                        updateWellnessBar();
-                        if (typeof updateRoomNavBadge === 'function') updateRoomNavBadge();
-
-                        // Re-render garden if currently viewing it
-                        if (gameState.currentRoom === 'garden') {
-                            renderGardenUI();
-                        }
-
-                        saveGame();
+            try {
+                const saved = loadGame();
+                if (saved && saved.pet) {
+                    if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.normalizeLoadedState === 'function') {
+                        MLFCanonicalGameState.normalizeLoadedState(saved, {
+                            now: Date.now(),
+                            ensureHouseholdState: ensureHouseholdStateForRuntime,
+                            resetRuntimeTransientState: true,
+                            preserveOfflineChanges: true
+                        });
                     }
 
-                    // Restart the decay timer now that stats are settled
-                    startDecayTimer();
-                    _petPhaseTimersRunning = true;
+                    if (saved.pets && saved.pets.length > 0) {
+                        gameState.pets = saved.pets;
+                        gameState.activePetIndex = saved.activePetIndex || 0;
+                        if (gameState.activePetIndex < 0 || gameState.activePetIndex >= gameState.pets.length) {
+                            gameState.activePetIndex = 0;
+                        }
+                        gameState.pet = gameState.pets[gameState.activePetIndex] || saved.pet;
+                    } else {
+                        Object.assign(gameState.pet, saved.pet);
+                    }
+
+                    if (saved.garden) gameState.garden = saved.garden;
+                    if (saved.minigamePlayCounts) gameState.minigamePlayCounts = saved.minigamePlayCounts;
+                    if (saved.minigameHighScores) gameState.minigameHighScores = saved.minigameHighScores;
+                    if (saved.minigameScoreHistory) gameState.minigameScoreHistory = saved.minigameScoreHistory;
+                    if (saved.relationships) gameState.relationships = saved.relationships;
+                    if (saved.household) gameState.household = saved.household;
+                    if (saved.furniture) gameState.furniture = saved.furniture;
+                    if (saved.roomUnlocks) gameState.roomUnlocks = saved.roomUnlocks;
+                    if (saved.roomUpgrades) gameState.roomUpgrades = saved.roomUpgrades;
+                    if (saved.roomCustomizations) gameState.roomCustomizations = saved.roomCustomizations;
+                    if (saved.badges) gameState.badges = saved.badges;
+                    if (saved.stickers) gameState.stickers = saved.stickers;
+                    if (saved.trophies) gameState.trophies = saved.trophies;
+                    if (saved.streak) gameState.streak = saved.streak;
+                    if (saved.dailyChecklist) gameState.dailyChecklist = saved.dailyChecklist;
+                    if (saved.competition) gameState.competition = normalizeCompetitionState(saved.competition);
+                    if (saved.exploration) gameState.exploration = saved.exploration;
+                    if (saved.economy) gameState.economy = saved.economy;
+                    ensureEconomyState();
+                    if (saved.breedingEggs) {
+                        gameState.breedingEggs = saved.breedingEggs.filter((egg) => egg && typeof egg === 'object');
+                        gameState.breedingEggs.forEach((egg) => ensureBreedingEggData(egg));
+                    }
+                    if (saved.hatchedBreedingEggs) gameState.hatchedBreedingEggs = saved.hatchedBreedingEggs;
+                    if (typeof saved.totalFeedCount === 'number') gameState.totalFeedCount = saved.totalFeedCount;
+                    if (typeof saved.adultsRaised === 'number') gameState.adultsRaised = saved.adultsRaised;
+                    ensureRoomSystemsState();
+
+                    const newTimeOfDay = getTimeOfDay();
+                    if (gameState.timeOfDay !== newTimeOfDay) {
+                        gameState.timeOfDay = newTimeOfDay;
+                        updateDayNightDisplay();
+                    }
+
+                    gameState.season = getCurrentSeason();
+                    ensureExplorationState();
+                    updateExplorationUnlocks(true);
+                    resolveExpeditionIfReady(false, true);
+
+                    updateNeedDisplays();
+                    updatePetMood();
+                    updateWellnessBar();
+                    if (typeof updateRoomNavBadge === 'function') updateRoomNavBadge();
+                    if (gameState.currentRoom === 'garden') renderGardenUI();
+
+                    saveGame();
                 }
+                return { resumed: true, hadSave: !!saved };
+            } finally {
+                startDecayTimer();
+                _petPhaseTimersRunning = true;
             }
-        });
+        }
+
+        const _visibilityResumeCoordinator = (typeof MLFCoreVisibilityResumeCoordinator !== 'undefined'
+            && MLFCoreVisibilityResumeCoordinator
+            && typeof MLFCoreVisibilityResumeCoordinator.createVisibilityResumeCoordinator === 'function')
+            ? MLFCoreVisibilityResumeCoordinator.createVisibilityResumeCoordinator({
+                onHidden: handleRuntimeHiddenForVisibilityResume,
+                onVisible: handleRuntimeVisibleForVisibilityResume
+            })
+            : null;
+
+        // Handle page visibility changes
+	        document.addEventListener('visibilitychange', () => {
+                if (_visibilityResumeCoordinator && typeof _visibilityResumeCoordinator.handleDocumentVisibilityChange === 'function') {
+                    _visibilityResumeCoordinator.handleDocumentVisibilityChange(document, { source: 'visibilitychange' });
+                    return;
+                }
+	            if (document.hidden) handleRuntimeHiddenForVisibilityResume();
+                else handleRuntimeVisibleForVisibilityResume();
+	        });
 
         // showPetCodex(), showStatsScreen(), and startNewPet() are defined in ui.js
 
@@ -2202,7 +2293,9 @@
         function init() {
             // Initialize dark mode from saved preference
             try {
-                const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
+                const savedTheme = (_mlfPlatformAdapters && _mlfPlatformAdapters.storage)
+                    ? _mlfPlatformAdapters.storage.getItem(STORAGE_KEYS.theme, null)
+                    : localStorage.getItem(STORAGE_KEYS.theme);
                 if (savedTheme) {
                     document.documentElement.setAttribute('data-theme', savedTheme);
                     const meta = document.querySelector('meta[name="theme-color"]');
@@ -2229,6 +2322,14 @@
                 if (hydratedRoot) gameState = hydratedRoot;
             }
             ensureHouseholdStateForRuntime(gameState, Date.now());
+            if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.normalizeLoadedState === 'function') {
+                MLFCanonicalGameState.normalizeLoadedState(gameState, {
+                    now: Date.now(),
+                    ensureHouseholdState: ensureHouseholdStateForRuntime,
+                    resetRuntimeTransientState: true,
+                    preserveOfflineChanges: true
+                });
+            }
             if (!saved && _loadError) {
                 showSaveRecoveryDialog();
             }
@@ -2469,11 +2570,29 @@
         }
 
         // Start the game when page loads (or immediately if loaded after DOMContentLoaded).
-        let _coreBootStarted = false;
+        let _coreBootStartedFallback = false;
+        const _coreBootstrapCoordinator = (typeof MLFCoreBootstrapCoordinator !== 'undefined'
+            && MLFCoreBootstrapCoordinator
+            && typeof MLFCoreBootstrapCoordinator.createBootstrapCoordinator === 'function')
+            ? MLFCoreBootstrapCoordinator.createBootstrapCoordinator({
+                canBoot: function canBootCoreRuntime() {
+                    return !(typeof window !== 'undefined' && window.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ === false);
+                },
+                onBoot: function onBootCoreRuntime() {
+                    init();
+                    setupGlobalUiHapticCoverage();
+                    dismissSplash();
+                }
+            })
+            : null;
         function bootCoreRuntime() {
-            if (_coreBootStarted) return;
+            if (_coreBootstrapCoordinator && typeof _coreBootstrapCoordinator.boot === 'function') {
+                _coreBootstrapCoordinator.boot();
+                return;
+            }
+            if (_coreBootStartedFallback) return;
             if (typeof window !== 'undefined' && window.__MLF_ALL_RUNTIME_SCRIPTS_LOADED__ === false) return;
-            _coreBootStarted = true;
+            _coreBootStartedFallback = true;
             init();
             setupGlobalUiHapticCoverage();
             dismissSplash();

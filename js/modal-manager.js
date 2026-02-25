@@ -72,6 +72,10 @@ const ModalManager = {
 
         this._stack.push(descriptor);
         document.body.appendChild(overlay);
+        if (typeof MLFUiHooks !== 'undefined' && MLFUiHooks && typeof MLFUiHooks.emit === 'function') {
+            MLFUiHooks.emit('overlay:opened', { element: overlay, overlayId: config.id, source: 'ModalManager.open' });
+            MLFUiHooks.emit('modal:opened', { element: overlay, modalId: config.id, source: 'ModalManager.open' });
+        }
 
         // Register with the existing escape key stack
         if (typeof pushModalEscape === 'function') {
@@ -115,27 +119,40 @@ const ModalManager = {
             popModalEscape(descriptor.closeHandler);
         }
 
-        // Remove from DOM
-        if (descriptor.overlay && descriptor.overlay.parentNode) {
-            descriptor.overlay.innerHTML = '';
-            descriptor.overlay.remove();
-        }
+        var finalizeClose = function finalizeClose() {
+            if (typeof MLFUiHooks !== 'undefined' && MLFUiHooks && typeof MLFUiHooks.emit === 'function') {
+                MLFUiHooks.emit('overlay:closed', { element: descriptor.overlay, overlayId: id, source: 'ModalManager.close' });
+                MLFUiHooks.emit('modal:closed', { element: descriptor.overlay, modalId: id, source: 'ModalManager.close' });
+            }
+            if (descriptor.returnFocus &&
+                document.contains(descriptor.returnFocus) &&
+                typeof descriptor.returnFocus.focus === 'function') {
+                descriptor.returnFocus.focus();
+            }
+            if (typeof descriptor.onClose === 'function') {
+                try {
+                    descriptor.onClose();
+                } catch (err) {
+                    console.error('[ModalManager] onClose error for \"' + id + '\":', err);
+                }
+            }
+        };
 
-        // Return focus
-        if (descriptor.returnFocus &&
-            document.contains(descriptor.returnFocus) &&
-            typeof descriptor.returnFocus.focus === 'function') {
-            descriptor.returnFocus.focus();
-        }
-
-        // Call onClose callback
-        if (typeof descriptor.onClose === 'function') {
-            try {
-                descriptor.onClose();
-            } catch (err) {
-                console.error('[ModalManager] onClose error for "' + id + '":', err);
+        if (descriptor.overlay) {
+            if (typeof MLFUiHooks !== 'undefined' && MLFUiHooks && typeof MLFUiHooks.emit === 'function') {
+                MLFUiHooks.emit('overlay:closing', { element: descriptor.overlay, overlayId: id, source: 'ModalManager.close' });
+                MLFUiHooks.emit('modal:closing', { element: descriptor.overlay, modalId: id, source: 'ModalManager.close' });
+            }
+            if (descriptor.overlay.parentNode) {
+                const transitions = (typeof GameTransitions !== 'undefined') ? GameTransitions : (typeof window !== 'undefined' ? window.GameTransitions : null);
+                if (transitions && typeof transitions.removeWithTransition === 'function') {
+                    transitions.removeWithTransition(descriptor.overlay, 'overlay', finalizeClose);
+                    return;
+                }
+                descriptor.overlay.remove();
             }
         }
+        finalizeClose();
     },
 
     /**

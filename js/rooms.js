@@ -299,6 +299,12 @@
 
             const previousRoom = gameState.currentRoom;
             gameState.currentRoom = roomId;
+            if (typeof EventBus !== 'undefined' && EventBus && typeof EventBus.emit === 'function' && typeof EVENTS !== 'undefined' && EVENTS && EVENTS.ROOM_CHANGED) {
+                EventBus.emit(EVENTS.ROOM_CHANGED, { previousRoom, roomId, source: 'rooms.switchRoom' });
+            }
+            if (typeof MLFUiHooks !== 'undefined' && MLFUiHooks && typeof MLFUiHooks.emit === 'function') {
+                MLFUiHooks.emit('room:changed', { previousRoom, roomId, source: 'rooms.switchRoom' });
+            }
 
             // Disable room-switch buttons during transition to prevent double-taps
             const roomBtns = document.querySelectorAll('.room-btn');

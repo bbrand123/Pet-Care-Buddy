@@ -3,22 +3,27 @@
     if (typeof module !== 'undefined' && module.exports) {
         let Autonomy = null;
         let Relationships = null;
+        let OfflineConfig = null;
         try {
             Autonomy = require('./autonomy.js');
         } catch (_) {}
         try {
             Relationships = require('./relationships.js');
         } catch (_) {}
-        module.exports = factory(Autonomy, Relationships);
+        try {
+            OfflineConfig = require('../save/offline-progression-config.js');
+        } catch (_) {}
+        module.exports = factory(Autonomy, Relationships, OfflineConfig);
         return;
     }
-    root.MLFHouseholdSimulator = factory(root.MLFSimAutonomy, root.MLFSimRelationships);
-})(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFHouseholdSimulator(Autonomy, Relationships) {
+    root.MLFHouseholdSimulator = factory(root.MLFSimAutonomy, root.MLFSimRelationships, root.MLFOfflineProgressionConfig);
+})(typeof globalThis !== 'undefined' ? globalThis : window, function createMLFHouseholdSimulator(Autonomy, Relationships, OfflineConfig) {
     'use strict';
 
+    const OFFLINE = OfflineConfig || {};
     const SIM_VERSION = 1;
-    const FIXED_STEP_MS = 60 * 1000;
-    const MAX_CATCHUP_MS = 72 * 60 * 60 * 1000;
+    const FIXED_STEP_MS = Number(OFFLINE.HOUSEHOLD_FIXED_STEP_MS) || (60 * 1000);
+    const MAX_CATCHUP_MS = Number(OFFLINE.HOUSEHOLD_MAX_CATCHUP_MS) || (72 * 60 * 60 * 1000);
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));

@@ -6,7 +6,10 @@ const BASE_RUNTIME_FILES = [
   './balance.js',
   './eventbus.js',
   './state.js',
+  './state/canonical-state.js',
+  './state/state-domain-bridges.js',
   './state/migrations.js',
+  './save/offline-progression-config.js',
   './sim/relationships.js',
   './sim/autonomy.js',
   './sim/household-simulator.js',
@@ -22,7 +25,14 @@ const BASE_RUNTIME_FILES = [
   './save/migrate.js',
   './save/lifecycle-bridge.js',
   './save/offline-simulation.js',
+  './save/offline-progression.js',
   './save/recovery-ui.js',
+  './platform/adapters.js',
+  './core/persistence-coordinator.js',
+  './core/visibility-resume-coordinator.js',
+  './core/bootstrap-coordinator.js',
+  './core/device-feedback-service.js',
+  './ui/ui-hooks.js',
   './constants.js',
   './retention/strings.js',
   './retention/telemetry.js',
@@ -73,6 +83,7 @@ const UI_RUNTIME_FILES = [
   './ui/economy.js',
   './ui/exploration.js',
   './ui/settings.js',
+  './ui/phase2-hooks.js',
   './ui/phase2-managers.js'
 ];
 

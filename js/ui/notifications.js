@@ -12,6 +12,14 @@
         const MAX_NOTIFICATION_HISTORY = 20;
         let _notificationHistory = [];
         const _toastDecodeEl = document.createElement('textarea');
+        const _uiNotificationsPlatform = (typeof MLFPlatformAdapters !== 'undefined' && MLFPlatformAdapters && typeof MLFPlatformAdapters.createDefaultAdapters === 'function')
+            ? MLFPlatformAdapters.createDefaultAdapters({
+                root: (typeof window !== 'undefined') ? window : globalThis,
+                navigatorRef: (typeof navigator !== 'undefined') ? navigator : null,
+                eventBus: (typeof EventBus !== 'undefined') ? EventBus : null,
+                events: (typeof EVENTS !== 'undefined') ? EVENTS : null
+            })
+            : null;
 
         function decodeEntities(text) {
             _toastDecodeEl.innerHTML = text;
@@ -66,6 +74,7 @@
             `;
 
             document.body.appendChild(overlay);
+            emitUiHook('overlay:opened', { element: overlay, source: 'notifications.showNotificationHistory', overlayType: 'notif-history' });
 
             function closeHistory() {
                 popModalEscape(closeHistory);
@@ -109,6 +118,7 @@
             `;
             overlay.setAttribute('aria-labelledby', 'tools-menu-title');
             document.body.appendChild(overlay);
+            emitUiHook('overlay:opened', { element: overlay, source: 'notifications.showToolsMenu', overlayType: 'tools-menu' });
 
             const runAction = (action) => {
                 if (action === 'furniture' && typeof showFurnitureModal === 'function') showFurnitureModal();
@@ -121,7 +131,10 @@
 
             function closeToolsMenu() {
                 popModalEscape(closeToolsMenu);
-                overlay.remove();
+                emitUiHook('overlay:closing', { element: overlay, source: 'notifications.showToolsMenu', overlayType: 'tools-menu' });
+                removeElementWithOptionalTransition(overlay, 'overlay', () => {
+                    emitUiHook('overlay:closed', { element: overlay, source: 'notifications.showToolsMenu', overlayType: 'tools-menu' });
+                });
                 if (triggerEl && typeof triggerEl.focus === 'function') triggerEl.focus();
             }
 
@@ -198,13 +211,39 @@
             return text.replace(emojiRegex, '<span aria-hidden="true">$1</span>');
         }
 
+        function emitUiHook(type, detail) {
+            if (typeof MLFUiHooks === 'undefined' || !MLFUiHooks || typeof MLFUiHooks.emit !== 'function') return null;
+            try {
+                return MLFUiHooks.emit(type, detail || null);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function removeElementWithOptionalTransition(el, kind, onDone) {
+            if (!el) {
+                if (typeof onDone === 'function') onDone();
+                return;
+            }
+            const transitions = (typeof window !== 'undefined' && window.GameTransitions) ? window.GameTransitions : null;
+            if (transitions && typeof transitions.removeWithTransition === 'function') {
+                transitions.removeWithTransition(el, kind || null, onDone);
+                return;
+            }
+            el.remove();
+            if (typeof onDone === 'function') onDone();
+        }
+
         // Animated modal close: adds closing class, waits for animation, then removes
         function animateModalClose(overlay, callback) {
             if (!overlay) { if (callback) callback(); return; }
+            emitUiHook('overlay:closing', { element: overlay, source: 'notifications.animateModalClose' });
             overlay.classList.add('modal-closing');
             setTimeout(() => {
-                overlay.remove();
-                if (callback) callback();
+                removeElementWithOptionalTransition(overlay, 'overlay', () => {
+                    emitUiHook('overlay:closed', { element: overlay, source: 'notifications.animateModalClose' });
+                    if (callback) callback();
+                });
             }, 220);
         }
 
@@ -246,6 +285,9 @@
         }
 
         function getCoachChecklistMinimizedPref() {
+            if (_uiNotificationsPlatform && _uiNotificationsPlatform.prefs) {
+                return _uiNotificationsPlatform.prefs.getBoolean(COACH_CHECKLIST_MINIMIZED_KEY, isNarrowViewport());
+            }
             try {
                 const raw = localStorage.getItem(COACH_CHECKLIST_MINIMIZED_KEY);
                 if (raw === 'true') return true;
@@ -255,6 +297,10 @@
         }
 
         function setCoachChecklistMinimizedPref(minimized) {
+            if (_uiNotificationsPlatform && _uiNotificationsPlatform.prefs) {
+                _uiNotificationsPlatform.prefs.setBoolean(COACH_CHECKLIST_MINIMIZED_KEY, minimized);
+                return;
+            }
             try {
                 localStorage.setItem(COACH_CHECKLIST_MINIMIZED_KEY, minimized ? 'true' : 'false');
             } catch (e) {}
@@ -289,7 +335,7 @@
             }
         }
 
-        function renderToastNow(safeMessage, color) {
+        function renderToastNow(safeMessage, color, meta = null) {
             let container = document.getElementById('toast-container');
             if (!container) {
                 container = document.createElement('div');
@@ -305,7 +351,10 @@
                 for (let i = 0; i < toRemove; i++) {
                     const old = existingToasts[i];
                     old.classList.add('toast-exiting');
-                    setTimeout(() => old.remove(), 300);
+                    const oldText = (old.querySelector('.toast-text') && old.querySelector('.toast-text').textContent) || old.textContent || '';
+                    setTimeout(() => removeElementWithOptionalTransition(old, 'toast', () => {
+                        emitUiHook('toast:removed', { element: old, plainText: oldText, reason: 'overflow' });
+                    }), 300);
                 }
             }
             const toast = document.createElement('div');
@@ -313,9 +362,24 @@
             toast.style.setProperty('--toast-color', color);
             toast.innerHTML = `<span class="toast-icon">${renderUiIcon('state', '🔔', '')}</span><span class="toast-text">${wrapEmojiForAria(safeMessage)}</span>`;
             container.appendChild(toast);
+            emitUiHook('toast:shown', Object.assign({
+                element: toast,
+                color: color,
+                plainText: (meta && meta.plainText) || ((toast.querySelector('.toast-text') && toast.querySelector('.toast-text').textContent) || ''),
+                safeMessage: safeMessage,
+                source: 'notifications.renderToastNow'
+            }, meta || {}));
             setTimeout(() => {
-                toast.remove();
-                setUiBusyState();
+                removeElementWithOptionalTransition(toast, 'toast', () => {
+                    emitUiHook('toast:removed', {
+                        element: toast,
+                        color: color,
+                        plainText: (meta && meta.plainText) || '',
+                        source: 'notifications.renderToastNow',
+                        reason: 'timeout'
+                    });
+                    setUiBusyState();
+                });
             }, 3500);
             setUiBusyState();
         }
@@ -450,7 +514,11 @@
                 ? `Updates: ${first.join(' • ')} (+${remainder} more)`
                 : first.join(' • ');
             trafficMinimizeCoachChecklist();
-            renderToastNow(escapeHTML(summary || 'New updates available.'), '#90A4AE');
+            renderToastNow(escapeHTML(summary || 'New updates available.'), '#90A4AE', {
+                plainText: summary || 'New updates available.',
+                priority: 'normal',
+                options: { deferredSummary: true }
+            });
         }
 
         function flushToastQueue() {
@@ -479,7 +547,7 @@
             }
             trafficMinimizeCoachChecklist();
             const next = _toastQueue.shift();
-            renderToastNow(next.safeMessage, next.color);
+            renderToastNow(next.safeMessage, next.color, next);
             if (_toastQueue.length > 0) _toastQueueTimer = setTimeout(flushToastQueue, 520);
             else flushDeferredToasts();
         }
@@ -506,7 +574,14 @@
                     if (captured) return;
                 } catch (e) {}
             }
-            const item = { safeMessage, color, plainText, priority };
+            const item = { safeMessage, color, plainText, priority, options };
+            emitUiHook('toast:queued', {
+                plainText,
+                color,
+                priority,
+                options,
+                source: 'notifications.showToast'
+            });
             if (isGameplayTrafficHigh() && priority !== 'critical') {
                 queueDeferredToast(item);
             } else {
@@ -537,6 +612,9 @@
         function soundCueCaptionsEnabled() {
             if (typeof GameAudio !== 'undefined' && typeof GameAudio.getSoundCueCaptionsEnabled === 'function') {
                 return !!GameAudio.getSoundCueCaptionsEnabled();
+            }
+            if (_uiNotificationsPlatform && _uiNotificationsPlatform.prefs && typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.soundCueCaptions) {
+                return _uiNotificationsPlatform.prefs.getBoolean(STORAGE_KEYS.soundCueCaptions, false);
             }
             try {
                 return !!(typeof STORAGE_KEYS !== 'undefined' && STORAGE_KEYS.soundCueCaptions && localStorage.getItem(STORAGE_KEYS.soundCueCaptions) === 'true');

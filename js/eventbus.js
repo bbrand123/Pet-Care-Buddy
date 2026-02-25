@@ -69,67 +69,53 @@ const EVENTS = Object.freeze({
     SHOW_COMPLETED: 'competition:showCompleted'
 });
 
-/**
- * Lightweight publish-subscribe event bus.
- * @namespace
- */
-const EventBus = {
-    /** @private */
-    _listeners: {},
+function createEventBus() {
+    return {
+        _listeners: {},
 
-    /**
-     * Subscribe to an event.
-     * @param {string} event - Event name (use EVENTS constants)
-     * @param {Function} callback - Handler function receiving event data
-     * @returns {Function} Unsubscribe function for convenience
-     */
-    on(event, callback) {
-        if (!this._listeners[event]) {
-            this._listeners[event] = [];
-        }
-        this._listeners[event].push(callback);
-        // Return unsubscribe function
-        return () => this.off(event, callback);
-    },
-
-    /**
-     * Unsubscribe from an event.
-     * @param {string} event - Event name
-     * @param {Function} callback - The exact function reference passed to on()
-     */
-    off(event, callback) {
-        const list = this._listeners[event];
-        if (!list) return;
-        const idx = list.indexOf(callback);
-        if (idx !== -1) list.splice(idx, 1);
-        if (list.length === 0) delete this._listeners[event];
-    },
-
-    /**
-     * Emit an event, calling all subscribed listeners with the provided data.
-     * @param {string} event - Event name
-     * @param {*} [data] - Data to pass to listeners
-     */
-    emit(event, data) {
-        const list = this._listeners[event];
-        if (!list || list.length === 0) return;
-        // Iterate over a copy in case a listener modifies the list
-        const snapshot = list.slice();
-        for (let i = 0; i < snapshot.length; i++) {
-            try {
-                snapshot[i](data);
-            } catch (err) {
-                console.error('[EventBus] Error in listener for "' + event + '":', err);
+        on(event, callback) {
+            if (!this._listeners[event]) {
+                this._listeners[event] = [];
             }
+            this._listeners[event].push(callback);
+            return () => this.off(event, callback);
+        },
+
+        off(event, callback) {
+            const list = this._listeners[event];
+            if (!list) return;
+            const idx = list.indexOf(callback);
+            if (idx !== -1) list.splice(idx, 1);
+            if (list.length === 0) delete this._listeners[event];
+        },
+
+        emit(event, data) {
+            const list = this._listeners[event];
+            if (!list || list.length === 0) return;
+            const snapshot = list.slice();
+            for (let i = 0; i < snapshot.length; i++) {
+                try {
+                    snapshot[i](data);
+                } catch (err) {
+                    console.error('[EventBus] Error in listener for "' + event + '":', err);
+                }
+            }
+        },
+
+        clearAll() {
+            this._listeners = {};
         }
-    }
-};
+    };
+}
+
+const EventBus = createEventBus();
 
 if (typeof globalThis !== 'undefined') {
     globalThis.EVENTS = EVENTS;
     globalThis.EventBus = EventBus;
+    globalThis.createEventBus = createEventBus;
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { EVENTS, EventBus };
+    module.exports = { EVENTS, EventBus, createEventBus };
 }
