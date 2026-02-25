@@ -20,15 +20,33 @@
                 showToast('A pet is needed for trivia time.', '#FFA726');
                 return;
             }
+            const ruleModifier = getMinigameRuleModifier('trivia');
+            const questionPool = getPackedTriviaPool(TRIVIA_QUESTIONS);
+            const questionCount = Math.max(5, Math.min(8, 5 + Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraQuestions) || 0)));
+            const pickPool = Array.isArray(questionPool) ? questionPool.slice() : [];
+            const selectedQuestions = [];
+            while (pickPool.length > 0 && selectedQuestions.length < questionCount) {
+                const next = getMiniGameContentSelection('trivia', 'questions', pickPool, {
+                    recentWindow: 8,
+                    idKey: 'id'
+                }) || pickPool[0];
+                if (!next) break;
+                selectedQuestions.push(next);
+                const nextId = String(next.id || next.q || next.prompt || selectedQuestions.length);
+                const nextIdx = pickPool.findIndex((item) => String(item && (item.id || item.q || item.prompt)) === nextId);
+                if (nextIdx >= 0) pickPool.splice(nextIdx, 1);
+                else pickPool.shift();
+            }
             triviaState = {
-                questions: shuffleArray([...TRIVIA_QUESTIONS]).slice(0, 5),
+                questions: selectedQuestions.length ? selectedQuestions : shuffleArray([...TRIVIA_QUESTIONS]).slice(0, 5),
                 index: 0,
                 correct: 0,
-                answered: false
+                answered: false,
+                ruleModifier
             };
             initMiniGameRuntimeTracking(triviaState, { overlaySelector: '.trivia-game-overlay' });
             renderTriviaGame();
-            announce('Animal trivia started. Choose the best answer for each fact.');
+            announce(`Animal trivia started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Choose the best answer for each fact.`);
         }
 
         function renderTriviaGame() {
@@ -41,14 +59,14 @@
             overlay.setAttribute('aria-label', 'Animal trivia mini game');
             overlay.innerHTML = `
                 <div class="exp-game-shell">
-                    <h2 class="exp-game-title">🦉 Animal Trivia</h2>
+                    <h2 class="exp-game-title">🦉 Animal Trivia${triviaState.ruleModifier && triviaState.ruleModifier.name ? ` · ${escapeHTML(triviaState.ruleModifier.name)}` : ''}</h2>
                     <div class="exp-game-hud">
-                        <span id="trivia-progress">Q 1/5</span>
+                        <span id="trivia-progress">Q 1/${triviaState.questions.length}</span>
                         <span id="trivia-score">Correct: 0</span>
                     </div>
                     <div class="trivia-question" id="trivia-question"></div>
                     <div class="trivia-options" id="trivia-options"></div>
-                    <p class="exp-game-note" id="trivia-fact">Pick an answer.</p>
+                    <p class="exp-game-note" id="trivia-fact">${triviaState.ruleModifier && triviaState.ruleModifier.name ? `Rule: ${escapeHTML(triviaState.ruleModifier.name)}. ` : ''}Pick an answer.</p>
                     <div class="exp-game-controls">
                         <button type="button" id="trivia-next" disabled>Next</button>
                         <button type="button" id="trivia-done">Done</button>
@@ -82,11 +100,12 @@
             if (!q) return;
             if (progress) progress.textContent = `Q ${triviaState.index + 1}/${triviaState.questions.length}`;
             if (score) score.textContent = `Correct: ${triviaState.correct}`;
-            if (questionEl) questionEl.textContent = q.q;
-            if (factEl) factEl.textContent = triviaState.answered ? q.fact : 'Pick an answer.';
+            if (questionEl) questionEl.textContent = q.prompt || q.q;
+            if (factEl) factEl.textContent = triviaState.answered ? (q.fact || q.explanation || 'Nice work!') : 'Pick an answer.';
             if (nextBtn) nextBtn.disabled = !triviaState.answered;
             if (optionsEl) {
-                optionsEl.innerHTML = q.options.map((opt, idx) => (
+                const options = Array.isArray(q.options) ? q.options : (Array.isArray(q.choices) ? q.choices : []);
+                optionsEl.innerHTML = options.map((opt, idx) => (
                     `<button type="button" class="trivia-option" data-opt="${idx}" ${triviaState.answered ? 'disabled' : ''}>${escapeHTML(opt)}</button>`
                 )).join('');
                 optionsEl.querySelectorAll('.trivia-option').forEach((btn) => {

@@ -84,3 +84,68 @@ test('content packs stay deferred when registry service is missing and can be ap
 
     g.ContentPackRegistryService = originalService;
 });
+
+test('starter task packs merge into daily lanes and weekly arcs via registries', () => {
+    const g = globalThis;
+    g.ContentPackRegistryService = registryService;
+    g.DAILY_FIXED_TASKS = [
+        { id: 'base_fixed_a', nameTemplate: 'Base fixed', lane: 'fixed' }
+    ];
+    g.DAILY_MODE_TASKS = [
+        { id: 'base_mode_a', nameTemplate: 'Base mode', lane: 'mode' }
+    ];
+    g.DAILY_WILDCARD_TASKS = [
+        { id: 'base_wild_a', nameTemplate: 'Base wildcard', lane: 'wildcard' }
+    ];
+    g.DAILY_TASKS = [];
+    g.WEEKLY_THEMED_ARCS = [
+        { id: 'base_weekly_arc', theme: 'Base Arc', tasks: [{ id: 'base_task', trackKey: 'feedCount', target: 1 }] }
+    ];
+    g.DAILY_SEASONAL_TASKS = {};
+    g.REWARD_MODIFIERS = {};
+    g.REWARD_BUNDLES = {};
+    g.STICKERS = {};
+    g.BADGES = {};
+    g.TROPHIES = {};
+    g.EXPLORATION_LOOT = {};
+    g.BIOME_LOOT_POOLS = {};
+    g.BIOME_EVENT_TEXT_POOLS = {};
+    g.BIOME_NPC_ENCOUNTER_TEXT_POOLS = {};
+    g.RIVAL_TRAINERS = [];
+    g.BOSS_ENCOUNTERS = {};
+    g.FURNITURE = { decorations: {} };
+    g.ROOM_FURNITURE_ITEMS = {};
+    g.ROOM_THEMES = {};
+    g.ROOM_COSMETIC_SETS = {};
+    g.ROOM_COSMETIC_BONUSES = {};
+    g.PET_TYPES = {
+        dog: {}, cat: {}, bunny: {}, bird: {}, hamster: {}, turtle: {}, fish: {}, frog: {},
+        hedgehog: {}, penguin: {}, unicorn: {}, dragon: {}, pegasus: {}
+    };
+    g.MUTATION_COLORS = {};
+    g.MUTATION_PATTERNS = {};
+    g.HYBRID_PET_TYPES = {};
+    g.HYBRID_LOOKUP = {};
+    g.PET_TYPE_ADVANTAGES = {};
+    g.BREEDING_OUTCOME_FLAVOR_TEXTS = [];
+    g.EXPLORATION_BIOMES = { forest: {}, beach: {}, mountain: {}, cave: {}, skyIsland: {}, underwater: {}, skyZone: {} };
+    g.ROOMS = { arcade: {}, observatory: {}, garden: {}, kitchen: {} };
+
+    require('../js/data/packs/starter-packs.js');
+    const report = g.reapplyAllContentPacksToGlobals();
+
+    assert.equal(report.ok, true, `Content pack validation errors: ${report.errors.join('; ')}`);
+
+    assert.ok(g.DAILY_MODE_TASKS.some((t) => t && t.id === 'daily_explorer_loop'));
+    assert.ok(g.DAILY_FIXED_TASKS.some((t) => t && t.id === 'daily_cleanup_care'));
+    assert.ok(g.DAILY_WILDCARD_TASKS.some((t) => t && t.id === 'daily_bond_journal'));
+    assert.ok(g.WEEKLY_THEMED_ARCS.some((arc) => arc && arc.id === 'arc_minigame_marathon'));
+    assert.ok(g.WEEKLY_THEMED_ARCS.some((arc) => arc && arc.id === 'arc_culinary_current'));
+
+    const dailyTaskIds = new Set(g.DAILY_TASKS.map((t) => t && t.id));
+    assert.ok(dailyTaskIds.has('base_fixed_a'));
+    assert.ok(dailyTaskIds.has('base_mode_a'));
+    assert.ok(dailyTaskIds.has('base_wild_a'));
+    assert.ok(dailyTaskIds.has('daily_explorer_loop'));
+    assert.ok(dailyTaskIds.has('daily_bond_journal'));
+});

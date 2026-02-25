@@ -303,8 +303,26 @@
                 }
             }
         }
-        const packedIngredients = getPackItems('cooking', (item) => item && item.kind === 'ingredient');
-        const packedRecipes = getPackItems('cooking', (item) => !item || item.kind !== 'ingredient');
+        const packedIngredients = getPackItems('cooking', (item) => item && item.kind === 'ingredient').map((item) => {
+            const normalized = isObject(item) ? Object.assign({}, item) : item;
+            if (!isObject(normalized)) return normalized;
+            const rawId = toId(normalized.id);
+            if (rawId && rawId.indexOf('ingredient_') === 0) {
+                normalized.id = toId((normalized.data && normalized.data.id) || rawId.slice('ingredient_'.length));
+            }
+            return normalized;
+        });
+        const packedRecipes = getPackItems('cooking', (item) => !item || item.kind !== 'ingredient').map((item) => {
+            if (!isObject(item)) return item;
+            const normalized = Object.assign({}, item);
+            if (Array.isArray(normalized.ingredients)) {
+                normalized.ingredients = normalized.ingredients.map((ingId) => {
+                    const id = toId(ingId);
+                    return id.indexOf('ingredient_') === 0 ? id.slice('ingredient_'.length) : id;
+                });
+            }
+            return normalized;
+        });
         return {
             ingredients: mergeById(ingredients, packedIngredients, { idKey: 'id' }),
             recipes: mergeById(baseRecipeCandidates, packedRecipes, { idKey: 'id' })

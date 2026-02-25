@@ -41,12 +41,24 @@
             if (existing) existing.remove();
 
             const matchDiff = getMinigameDifficulty('matching');
+            const deckPool = getPackedMatchingDeckPool(MATCHING_ITEMS);
+            const selectedDeck = getMiniGameContentSelection('matching', 'decks', deckPool, {
+                recentWindow: 3,
+                idKey: 'id'
+            }) || deckPool[0] || { id: 'base_matching', theme: 'Classic', pairs: MATCHING_ITEMS.slice() };
+            const ruleModifier = getMinigameRuleModifier('matching');
+            const deckPairs = Array.isArray(selectedDeck.pairs) && selectedDeck.pairs.length ? selectedDeck.pairs : MATCHING_ITEMS;
+            const pairCapBonus = Math.max(0, Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraPairs) || 0));
             // Scale pairs: 6 at base, up to 10 at max difficulty (capped by available items)
-            const pairCount = Math.min(6 + Math.floor((matchDiff - 1) * 4), MATCHING_ITEMS.length);
+            const pairCount = Math.min(6 + Math.floor((matchDiff - 1) * 4) + pairCapBonus, deckPairs.length);
 
             // Pick random items to make pairs — assign a pairId so matching is
             // based on pair identity rather than emoji equality alone.
-            const shuffledItems = shuffleArray([...MATCHING_ITEMS]);
+            const shuffledItems = shuffleArray(deckPairs.map((pair, idx) => ({
+                id: pair.id || `pair_${idx + 1}`,
+                emoji: pair.emoji,
+                name: pair.name || pair.label || `Pair ${idx + 1}`
+            })));
             const selected = shuffledItems.slice(0, pairCount);
             const paired = selected.flatMap((item, i) => [
                 { ...item, pairId: i },
@@ -69,12 +81,15 @@
                 totalPairs: pairCount,
                 moves: 0,
                 difficulty: matchDiff,
+                deck: selectedDeck,
+                ruleModifier,
                 locked: false,
                 _timeouts: []
             };
 
             renderMatchingGame();
-            announce('Matching game started! Flip cards to find matching pairs!');
+            const modNote = ruleModifier && ruleModifier.name ? ` Rule: ${ruleModifier.name}.` : '';
+            announce(`Matching game started! Theme: ${selectedDeck.theme || 'Classic'}. Flip cards to find matching pairs!${modNote}`);
         }
 
         function renderMatchingGame() {
@@ -98,14 +113,14 @@
 
             overlay.innerHTML = `
                 <div class="matching-game">
-                    <h2 class="matching-game-title">🃏 Matching Game!</h2>
+                    <h2 class="matching-game-title">🃏 Matching Game${matchingState.deck && matchingState.deck.theme ? ` · ${escapeHTML(matchingState.deck.theme)}` : ''}!</h2>
                     <p class="matching-game-score" id="matching-score" aria-live="polite">Pairs found: 0 / ${matchingState.totalPairs}</p>
                     <p class="matching-game-moves" id="matching-moves">Moves: 0</p>
                     <p class="sr-only" id="matching-live" aria-live="assertive" aria-atomic="true"></p>
                     <div class="matching-grid" id="matching-grid">
                         ${cardsHTML}
                     </div>
-                    <p class="matching-instruction" id="matching-instruction">Flip two cards to find a match!</p>
+                    <p class="matching-instruction" id="matching-instruction">${matchingState.ruleModifier && matchingState.ruleModifier.name ? `Rule: ${escapeHTML(matchingState.ruleModifier.name)}. ` : ''}Flip two cards to find a match!</p>
                     <div class="matching-buttons">
                         <button class="matching-done-btn" id="matching-done" aria-label="Stop playing Matching Game">Done</button>
                     </div>

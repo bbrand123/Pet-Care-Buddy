@@ -6,6 +6,25 @@
 
         let tournamentState = null;
 
+        function pickTournamentRivalNames(count) {
+            const targetCount = Math.max(1, Math.floor(Number(count) || 7));
+            const pool = getPackedTournamentRivalNames(TOURNAMENT_RIVALS).map((name, idx) => ({ id: `tour_name_${idx}_${name}`, name }));
+            const available = pool.slice();
+            const picked = [];
+            while (available.length > 0 && picked.length < targetCount) {
+                const next = getMiniGameContentSelection('tournament', 'rivalNames', available, {
+                    recentWindow: 6,
+                    idKey: 'id'
+                }) || available[0];
+                if (!next) break;
+                picked.push(next.name);
+                const idx = available.findIndex((entry) => entry.id === next.id);
+                if (idx >= 0) available.splice(idx, 1);
+                else available.shift();
+            }
+            return picked;
+        }
+
         function getTournamentState() {
             const expansion = ensureMiniGameExpansionMeta();
             if (!expansion.tournament || typeof expansion.tournament !== 'object') {
@@ -18,7 +37,7 @@
         }
 
         function startNewTournamentSeason(tournament) {
-            const entrants = ['You', ...shuffleArray([...TOURNAMENT_RIVALS]).slice(0, 7)];
+            const entrants = ['You', ...pickTournamentRivalNames(7)];
             const quarter = [];
             for (let i = 0; i < entrants.length; i += 2) {
                 quarter.push({ a: entrants[i], b: entrants[i + 1], winner: '', aScore: 0, bScore: 0 });
@@ -46,10 +65,13 @@
 
         function simulateTournamentMatch(match) {
             const petStrength = typeof getPetMiniGameStrength === 'function' ? getPetMiniGameStrength(gameState.pet) : 0.5;
+            const ruleModifier = tournamentState && tournamentState.ruleModifier ? tournamentState.ruleModifier : getMinigameRuleModifier('tournament');
+            const scoreBias = Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.playerScoreBonus) || 0;
+            const varianceMult = Math.max(0.5, Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.scoreVarianceMultiplier) || 1);
             const scoreFor = (name) => {
-                const base = 52 + Math.random() * 42;
+                const base = 52 + (Math.random() * 42 * varianceMult);
                 const playerBoost = name === 'You'
-                    ? ((petStrength - 0.45) * 36)
+                    ? ((petStrength - 0.45) * 36) + scoreBias
                     : ((Math.random() * 8 - 4) - ((petStrength - 0.5) * 8));
                 return Math.max(18, Math.round(base + playerBoost + Math.random() * 18));
             };
@@ -124,7 +146,7 @@
                 gameId: 'tournament',
                 gameName: 'Tournament Cup',
                 score,
-                coinScore: wins * 9 + championBonus * 6,
+                coinScore: Math.round((wins * 9 + championBonus * 6) * Math.max(0.5, Number((tournamentState && tournamentState.ruleModifier && tournamentState.ruleModifier.effect && tournamentState.ruleModifier.effect.coinMultiplier) || 1))),
                 statDelta: {
                     happiness: Math.min(30, 8 + wins * 4 + championBonus * 3),
                     energy: -Math.min(14, 6 + wins * 2),
@@ -180,6 +202,7 @@
                 return;
             }
             tournamentState = getTournamentState();
+            tournamentState.ruleModifier = getMinigameRuleModifier('tournament');
             const existing = document.querySelector('.tournament-game-overlay');
             if (existing) existing.remove();
             const overlay = document.createElement('div');
@@ -189,7 +212,7 @@
             overlay.setAttribute('aria-label', 'Mini game tournament');
             overlay.innerHTML = `
                 <div class="exp-game-shell tournament-shell">
-                    <h2 class="exp-game-title">🏆 Tournament Cup</h2>
+                    <h2 class="exp-game-title">🏆 Tournament Cup${tournamentState.ruleModifier && tournamentState.ruleModifier.name ? ` · ${escapeHTML(tournamentState.ruleModifier.name)}` : ''}</h2>
                     <div class="exp-game-hud">
                         <span id="tour-season">Season ${tournamentState.season || 1}</span>
                         <span id="tour-round">Round: ${tournamentState.round + 1}</span>
@@ -208,7 +231,7 @@
                             </table>
                         </div>
                     </div>
-                    <p class="exp-game-note" id="tour-note">Advance the bracket one round at a time.</p>
+                    <p class="exp-game-note" id="tour-note">${tournamentState.ruleModifier && tournamentState.ruleModifier.description ? escapeHTML(tournamentState.ruleModifier.description) : 'Advance the bracket one round at a time.'}</p>
                     <div class="exp-game-controls">
                         <button type="button" id="tour-next">Play Next Round</button>
                         <button type="button" id="tour-done">Done</button>

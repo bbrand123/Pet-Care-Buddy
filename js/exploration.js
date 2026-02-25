@@ -475,6 +475,25 @@
             const prefixes = ['Curious', 'Gentle', 'Brave', 'Swift', 'Misty', 'Sunny', 'Starry'];
             const suffixes = ['Scout', 'Pal', 'Wanderer', 'Paws', 'Fluff', 'Companion', 'Friend'];
             const npcName = `${randomFromArray(prefixes)} ${randomFromArray(suffixes)}`;
+            let introText = '';
+            if (typeof getPackedBiomeEvents === 'function') {
+                const npcTextPool = getPackedBiomeEvents('npc', sourceBiome || 'forest')
+                    .filter((entry) => !entry.npcType || entry.npcType === resolvedType || entry.npcType === 'any');
+                const pickedNpcText = (typeof chooseRotatingContentWithHistory === 'function')
+                    ? chooseRotatingContentWithHistory(npcTextPool, {
+                        scope: 'exploration',
+                        key: `npc:${sourceBiome || 'forest'}`,
+                        idKey: 'id',
+                        recentWindow: 5,
+                        state: gameState
+                    })
+                    : null;
+                if (pickedNpcText && pickedNpcText.text) {
+                    introText = String(pickedNpcText.text)
+                        .replace(/\{npcName\}/g, npcName)
+                        .replace(/\{biome\}/g, String(sourceLabel || ((EXPLORATION_BIOMES[sourceBiome] || {}).name || 'the wilds')));
+                }
+            }
             const npc = {
                 id: `npc_${Date.now()}_${Math.floor(Math.random() * 100000)}`,
                 type: resolvedType,
@@ -488,7 +507,8 @@
                 status: 'wild',
                 befriended: false,
                 discoveredAt: Date.now(),
-                lastBefriendAt: 0
+                lastBefriendAt: 0,
+                introText
             };
             ex.npcEncounters.unshift(npc);
             if (ex.npcEncounters.length > 12) ex.npcEncounters = ex.npcEncounters.slice(0, 12);
@@ -673,7 +693,10 @@
                     }
                 }
                 if (npc) {
-                    setTimeout(() => showToast(`${npc.icon} You discovered ${npc.name} in the wild!`, '#FFD54F'), 620);
+                    const npcToast = npc.introText
+                        ? `${npc.icon} ${npc.introText}`
+                        : `${npc.icon} You discovered ${npc.name} in the wild!`;
+                    setTimeout(() => showToast(npcToast, '#FFD54F'), 620);
                 }
                 if (pityResult && pityResult.pityGranted) {
                     setTimeout(() => showToast(`✨ Expedition pity activated: guaranteed rare loot found!`, '#BA68C8'), 740);

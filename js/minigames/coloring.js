@@ -27,15 +27,23 @@
 
             const existing = document.querySelector('.coloring-game-overlay');
             if (existing) existing.remove();
+            const ruleModifier = getMinigameRuleModifier('coloring');
+            const templatePool = getPackedColoringTemplatePool();
+            const selectedTemplate = getMiniGameContentSelection('coloring', 'templates', templatePool, {
+                recentWindow: 4,
+                idKey: 'id'
+            }) || { id: 'classic_meadow', name: 'Sunny Meadow', variant: 'meadow' };
 
             coloringState = {
                 selectedColor: COLORING_PALETTE[0].hex,
                 regionsColored: new Set(),
-                totalRegions: 0
+                totalRegions: 0,
+                template: selectedTemplate,
+                ruleModifier
             };
 
             renderColoringGame();
-            announce('Coloring time! Pick a color and click or tap parts of the picture to color them!');
+            announce(`Coloring time! Template: ${selectedTemplate.name || 'Classic Scene'}${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Pick a color and click or tap parts of the picture to color them!`);
         }
 
         function renderColoringGame() {
@@ -46,7 +54,7 @@
             overlay.setAttribute('aria-label', 'Coloring mini-game');
 
             const petType = gameState.pet.type;
-            const scene = generateColoringScene(petType);
+            const scene = generateColoringScene(petType, coloringState && coloringState.template);
 
             let paletteHTML = '';
             COLORING_PALETTE.forEach((color) => {
@@ -60,8 +68,8 @@
 
             overlay.innerHTML = `
                 <div class="coloring-game">
-                    <h2 class="coloring-game-title">🎨 Coloring Time!</h2>
-                    <p class="coloring-game-hint" id="coloring-hint" aria-live="polite">Pick a color, then click or tap to paint! Use Tab to move between regions.</p>
+                    <h2 class="coloring-game-title">🎨 Coloring Time${coloringState && coloringState.template && coloringState.template.name ? ` · ${escapeHTML(coloringState.template.name)}` : ''}${coloringState && coloringState.ruleModifier && coloringState.ruleModifier.name ? ` · ${escapeHTML(coloringState.ruleModifier.name)}` : ''}!</h2>
+                    <p class="coloring-game-hint" id="coloring-hint" aria-live="polite">${coloringState && coloringState.template && coloringState.template.description ? `${escapeHTML(coloringState.template.description)} ` : ''}Pick a color, then click or tap to paint! Use Tab to move between regions.</p>
                     <div class="coloring-canvas-wrap">
                         ${scene}
                     </div>
@@ -204,13 +212,35 @@
             overlay.querySelector('#coloring-done').focus();
         }
 
-        function generateColoringScene(petType) {
+        function generateColoringScene(petType, template) {
             const petParts = getColoringPetParts(petType);
+            const variant = (template && template.variant) ? String(template.variant) : 'meadow';
 
             let petPartsHTML = '';
             petParts.forEach(part => {
                 petPartsHTML += part;
             });
+
+            let extraSceneRegions = '';
+            if (variant === 'moonlight') {
+                extraSceneRegions = `
+                    <circle class="coloring-region" data-region="moon" cx="245" cy="52" r="22" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <path class="coloring-region" data-region="hill-back" d="M0 230 Q70 180 140 230 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <path class="coloring-region" data-region="hill-front" d="M120 230 Q210 165 300 230 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                `;
+            } else if (variant === 'pond') {
+                extraSceneRegions = `
+                    <ellipse class="coloring-region" data-region="pond" cx="165" cy="260" rx="62" ry="22" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <path class="coloring-region" data-region="reeds-left" d="M110 250 Q108 235 113 220 Q118 235 116 250 Z" fill="#F5F5F5" stroke="#333" stroke-width="1.5"/>
+                    <path class="coloring-region" data-region="reeds-right" d="M215 252 Q213 236 219 222 Q224 237 222 252 Z" fill="#F5F5F5" stroke="#333" stroke-width="1.5"/>
+                `;
+            } else if (variant === 'festival') {
+                extraSceneRegions = `
+                    <path class="coloring-region" data-region="banner" d="M70 85 Q150 40 230 85 L228 100 Q150 58 72 100 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <circle class="coloring-region" data-region="lantern-left" cx="92" cy="112" r="10" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    <circle class="coloring-region" data-region="lantern-right" cx="208" cy="112" r="10" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                `;
+            }
 
             return `
                 <svg class="coloring-scene" viewBox="0 0 300 360" xmlns="http://www.w3.org/2000/svg">
@@ -235,6 +265,7 @@
 
                     <!-- Cloud -->
                     <path class="coloring-region" data-region="cloud" d="M40 70 Q50 40 75 55 Q85 30 110 48 Q125 35 138 58 Q140 75 110 78 Q80 80 50 78 Z" fill="#F5F5F5" stroke="#333" stroke-width="2"/>
+                    ${extraSceneRegions}
 
                     <!-- Tree trunk -->
                     <rect class="coloring-region" data-region="trunk" x="32" y="175" width="22" height="60" rx="3" fill="#F5F5F5" stroke="#333" stroke-width="2"/>

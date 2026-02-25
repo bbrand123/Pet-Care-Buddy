@@ -2017,9 +2017,26 @@ const EXPLORATION_NARRATIVES = {
  */
 function getExplorationNarrative(biomeId, petName) {
     const pool = EXPLORATION_NARRATIVES[biomeId];
-    if (!pool || pool.length === 0) return null;
-    const msg = pool[Math.floor(Math.random() * pool.length)];
-    return msg.replace(/\{name\}/g, petName || 'Your pet');
+    const basePool = Array.isArray(pool) ? pool.map((text, idx) => ({ id: `base_${biomeId}_${idx + 1}`, text })) : [];
+    let combinedPool = basePool;
+    if (typeof getPackedBiomeEvents === 'function') {
+        const packedEvents = getPackedBiomeEvents('event', biomeId)
+            .map((entry, idx) => ({ id: entry.id || `pack_${biomeId}_${idx + 1}`, text: entry.text || entry.message || '' }))
+            .filter((entry) => entry.text);
+        if (packedEvents.length > 0) combinedPool = basePool.concat(packedEvents);
+    }
+    if (!combinedPool || combinedPool.length === 0) return null;
+    const picked = (typeof chooseRotatingContentWithHistory === 'function')
+        ? chooseRotatingContentWithHistory(combinedPool, {
+            scope: 'exploration',
+            key: `narrative:${biomeId}`,
+            idKey: 'id',
+            recentWindow: 6,
+            state: (typeof gameState !== 'undefined' ? gameState : null)
+        })
+        : combinedPool[Math.floor(Math.random() * combinedPool.length)];
+    const msg = (picked && picked.text) ? picked.text : (combinedPool[0] && combinedPool[0].text) || '';
+    return String(msg).replace(/\{name\}/g, petName || 'Your pet');
 }
 
 // ==================== MILESTONE PERSONALITY REACTIONS ====================

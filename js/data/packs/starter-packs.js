@@ -323,7 +323,7 @@
             { id: 'cooking_specials_forest', kind: 'minigameRule', scopes: ['cooking'], weight: 2, name: 'Forest Specials', description: 'Cooking orders favor forest recipes this rotation.', effect: { preferTag: 'forest' } },
             { id: 'cooking_specials_festival', kind: 'minigameRule', scopes: ['cooking'], weight: 1, name: 'Festival Specials', description: 'Festival recipes appear more often.', effect: { preferTag: 'festival', extraRounds: 1 } },
             { id: 'fishing_long_session', kind: 'minigameRule', scopes: ['fishing'], weight: 2, name: 'Long Session', description: 'Two extra casts this run.', effect: { extraCasts: 2 } },
-            { id: 'fishing_tournament_cast', kind: 'minigameRule', scopes: ['fishing'], weight: 1, name: 'Tournament Cast', description: 'One extra cast with higher pressure.', effect: { extraCasts: 1 } },
+            { id: 'fishing_tournament_cast', kind: 'minigameRule', scopes: ['fishing'], weight: 1, name: 'Tournament Cast', description: 'One extra cast with higher pressure.', effect: { extraCasts: 1, velocityMultiplier: 1.1, zoneSizeMultiplier: 0.9 } },
             { id: 'coloring_gallery_week', kind: 'minigameRule', scopes: ['coloring'], weight: 1, name: 'Gallery Week', description: 'Rotating templates are featured in the gallery.' , effect: {} },
             { id: 'tournament_open_scoring', kind: 'minigameRule', scopes: ['tournament'], weight: 2, name: 'Open Scoring', description: 'High-variance bracket scoring this week.', effect: { scoreVarianceMultiplier: 1.25 } },
             { id: 'tournament_home_crowd', kind: 'minigameRule', scopes: ['tournament'], weight: 1, name: 'Home Crowd', description: 'You gain a slight score bonus in the bracket.', effect: { playerScoreBonus: 4, coinMultiplier: 1.05 } },
@@ -416,6 +416,188 @@
             { id: 'flavor_reefkitty_1', kind: 'outcomeFlavor', petType: 'reefkitty', text: 'A salty sparkle clings to this little one, like they dreamed of tide pools before hatching.' },
             { id: 'flavor_skyhound_1', kind: 'outcomeFlavor', petType: 'skyhound', text: 'This pup seems ready to chase clouds the moment those tiny wings get stronger.' },
             { id: 'flavor_lilyhopper_1', kind: 'outcomeFlavor', petType: 'lilyhopper', text: 'You can almost hear pond ripples and meadow grass in every tiny bounce.' }
+        ]
+    });
+
+    addPack({
+        id: 'starter_trivia_biomes_and_care_v2',
+        version: '1.0.0',
+        type: 'trivia',
+        items: [
+            { id: 'trivia_octopus_camouflage', prompt: 'Octopuses can change skin color and texture mainly to...', choices: ['Store oxygen', 'Communicate and camouflage', 'Grow larger', 'Sleep faster'], answer: 1, tags: ['ocean', 'camouflage'], fact: 'Octopuses use specialized skin cells to rapidly alter appearance.' },
+            { id: 'trivia_penguin_huddle', prompt: 'Why do emperor penguins huddle together in Antarctica?', choices: ['To share food', 'To stay warm', 'To practice swimming', 'To hide eggs from the sun'], answer: 1, tags: ['cold', 'birds'], fact: 'Huddling helps penguins reduce heat loss in extreme cold.' },
+            { id: 'trivia_salmon_return', prompt: 'Many salmon return to the place they were born using cues related to...', choices: ['Moon color', 'Smell and environmental signals', 'Thunder sounds', 'Tree roots'], answer: 1, tags: ['fish', 'migration'], fact: 'Salmon use a mix of olfactory and environmental navigation cues.' },
+            { id: 'trivia_beaver_dams', prompt: 'Beavers build dams that often create...', choices: ['Sand dunes', 'Wetland habitats', 'Desert caves', 'Snow tunnels'], answer: 1, tags: ['habitat'], fact: 'Beaver dams can create wetlands used by many species.' },
+            { id: 'trivia_frog_skin', prompt: 'Many frogs can absorb some water through their...', choices: ['Claws', 'Skin', 'Teeth', 'Eyes'], answer: 1, tags: ['amphibian'], fact: 'Frog skin plays a major role in water balance and gas exchange.' },
+            { id: 'trivia_owl_head_turn', prompt: 'Owls can turn their heads very far because they have...', choices: ['Flexible feathers only', 'More neck vertebrae than humans', 'No shoulder bones', 'Double skulls'], answer: 1, tags: ['owl'], fact: 'Owls have extra neck vertebrae that help them rotate their heads widely.' },
+            { id: 'trivia_crab_shell', prompt: 'A crab’s hard outer shell is called an...', choices: ['Exoskeleton', 'Endoskeleton', 'Carapace core', 'Gill shield'], answer: 0, tags: ['coast'], fact: 'Crabs have exoskeletons that they molt as they grow.' },
+            { id: 'trivia_butterfly_taste', prompt: 'Butterflies can “taste” many plants using sensors on their...', choices: ['Wings', 'Antennae only', 'Feet', 'Tail'], answer: 2, tags: ['insects'], fact: 'Butterflies often use receptors on their feet to test plants.' }
+        ]
+    });
+
+    addPack({
+        id: 'starter_matching_decks_v2',
+        version: '1.0.0',
+        type: 'matching',
+        items: [
+            { id: 'deck_reef_curios', theme: 'Reef Curios', difficulty: 2, pairs: [
+                { id: 'shell', emoji: '🐚', name: 'Shell' }, { id: 'coral', emoji: '🪸', name: 'Coral' }, { id: 'bubble', emoji: '🫧', name: 'Bubble' }, { id: 'pearl', emoji: '⚪', name: 'Pearl' },
+                { id: 'starfish', emoji: '⭐', name: 'Sea Star' }, { id: 'anchor', emoji: '⚓', name: 'Anchor Charm' }, { id: 'wave', emoji: '🌊', name: 'Wave Token' }, { id: 'crab', emoji: '🦀', name: 'Crab Badge' },
+                { id: 'kelp', emoji: '🌿', name: 'Kelp Ribbon' }, { id: 'lanternfish', emoji: '🐟', name: 'Lanternfish' }
+            ] },
+            { id: 'deck_workshop_playroom', theme: 'Workshop Playroom', difficulty: 2, pairs: [
+                { id: 'gear', emoji: '⚙️', name: 'Gear' }, { id: 'hammer', emoji: '🔨', name: 'Hammer' }, { id: 'ribbon', emoji: '🎀', name: 'Ribbon' }, { id: 'blocks', emoji: '🧱', name: 'Blocks' },
+                { id: 'paint', emoji: '🎨', name: 'Paint Tray' }, { id: 'clock', emoji: '⏰', name: 'Clock' }, { id: 'kite', emoji: '🪁', name: 'Kite' }, { id: 'drum', emoji: '🥁', name: 'Drum' },
+                { id: 'lantern', emoji: '🏮', name: 'Lantern' }, { id: 'book', emoji: '📘', name: 'Manual' }
+            ] }
+        ]
+    });
+
+    addPack({
+        id: 'starter_cooking_rotation_v2',
+        version: '1.0.0',
+        type: 'cooking',
+        items: [
+            { id: 'ingredient_coconut', kind: 'ingredient', icon: '🥥', name: 'Coconut Flakes' },
+            { id: 'ingredient_pea', kind: 'ingredient', icon: '🫛', name: 'Sweet Peas' },
+            { id: 'ingredient_yam', kind: 'ingredient', icon: '🍠', name: 'Yam Mash' },
+            { id: 'recipe_tropical_crunch', name: 'Tropical Crunch', ingredients: ['coconut', 'apple', 'oats'], difficulty: 'easy', rewardProfile: { specialFood: 2 }, tags: ['summer', 'festival'], steps: ['Mix', 'Toast', 'Serve'] },
+            { id: 'recipe_garden_green_bites', name: 'Garden Green Bites', ingredients: ['pea', 'herb', 'mint'], difficulty: 'easy', rewardProfile: { specialFood: 1 }, tags: ['garden', 'forest'], steps: ['Chop', 'Blend', 'Plate'] },
+            { id: 'recipe_hearth_root_stew', name: 'Hearth Root Stew', ingredients: ['yam', 'pumpkin', 'herb'], difficulty: 'medium', rewardProfile: { specialFood: 2 }, tags: ['forest', 'autumn'], steps: ['Dice', 'Simmer', 'Finish'] },
+            { id: 'recipe_tide_harbor_mix', name: 'Tide Harbor Mix', ingredients: ['fish', 'seaweed', 'pea'], difficulty: 'medium', rewardProfile: { specialFood: 2 }, tags: ['beach', 'pond'], steps: ['Flake', 'Steam', 'Fold'] },
+            { id: 'recipe_festival_cloud_bowl', name: 'Festival Cloud Bowl', ingredients: ['rice', 'berry', 'coconut'], difficulty: 'medium', rewardProfile: { specialFood: 2 }, tags: ['festival', 'sweet'], steps: ['Whisk', 'Layer', 'Garnish'] }
+        ]
+    });
+
+    addPack({
+        id: 'starter_fishing_catch_pack_v2',
+        version: '1.0.0',
+        type: 'fishing',
+        items: [
+            { id: 'catch_willow_darter', name: 'Willow Darter', emoji: '🐟', rarity: 'common', biomes: ['pond'], seasons: ['spring'], flavor: 'It zips between lily stems like a tiny green arrow.' },
+            { id: 'catch_driftlamp_koi', name: 'Driftlamp Koi', emoji: '🎏', rarity: 'rare', biomes: ['pond'], times: ['night', 'sunset'], flavor: 'A warm glow follows its tail in soft rings.' },
+            { id: 'catch_sandpiper_goby', name: 'Sandpiper Goby', emoji: '🐠', rarity: 'common', biomes: ['beach'], times: ['day'], flavor: 'It hides in ripples and darts out with each wave.' },
+            { id: 'catch_mirror_herring', name: 'Mirror Herring', emoji: '✨', rarity: 'uncommon', biomes: ['beach', 'any'], flavor: 'Its scales flash like tiny hand mirrors in the sun.' },
+            { id: 'catch_bath_bubbletetra', name: 'Bubble Tetra', emoji: '🫧', rarity: 'common', biomes: ['indoor'], flavor: 'A playful little fish that circles bright reflections.' },
+            { id: 'catch_dusk_ribbon_ray', name: 'Dusk Ribbon Ray', emoji: '🪁', rarity: 'rare', biomes: ['beach'], times: ['sunset', 'night'], flavor: 'It glides like fabric caught in a sea breeze.' },
+            { id: 'catch_frostfin_sprig', name: 'Frostfin Sprig', emoji: '❄️', rarity: 'uncommon', biomes: ['pond'], seasons: ['winter'], flavor: 'Its fins shimmer pale blue in cold water.' },
+            { id: 'catch_cinder_minnow', name: 'Cinder Minnow', emoji: '🔥', rarity: 'uncommon', biomes: ['pond', 'any'], seasons: ['summer'], flavor: 'It flashes copper-orange when startled.' }
+        ]
+    });
+
+    addPack({
+        id: 'starter_coloring_templates_v2',
+        version: '1.0.0',
+        type: 'coloring',
+        items: [
+            { id: 'template_cloud_garden', name: 'Cloud Garden', variant: 'moonlight', description: 'Moonlit hills and a calm sky make this one great for soft palettes.' },
+            { id: 'template_reed_hideaway', name: 'Reed Hideaway', variant: 'pond', description: 'A pond-side template with reeds and water reflections.' },
+            { id: 'template_lantern_party', name: 'Lantern Party', variant: 'festival', description: 'Bright lanterns and banners for bold contrast themes.' },
+            { id: 'template_meadow_morning', name: 'Meadow Morning', variant: 'meadow', description: 'A sunny classic scene that works with any pet color scheme.' }
+        ]
+    });
+
+    addPack({
+        id: 'starter_tournament_rivals_names_v2',
+        version: '1.0.0',
+        type: 'tournaments',
+        items: [
+            { id: 'tour_cinder', name: 'Cinder' }, { id: 'tour_meadow', name: 'Meadow' }, { id: 'tour_quill', name: 'Quill' }, { id: 'tour_reef', name: 'Reef' }, { id: 'tour_slate', name: 'Slate' },
+            { id: 'tour_vesper', name: 'Vesper' }, { id: 'tour_kestrel', name: 'Kestrel' }, { id: 'tour_ember', name: 'Ember' }, { id: 'tour_clove', name: 'Clove' }, { id: 'tour_marin', name: 'Marin' }
+        ]
+    });
+
+    addPack({
+        id: 'starter_biome_events_and_npcs_v2',
+        version: '1.0.0',
+        type: 'biomeEvents',
+        items: [
+            { id: 'event_forest_4', biomeId: 'forest', kind: 'event', text: '{name} found a little ring of polished stones and added one more before moving on.' },
+            { id: 'npc_forest_3', biomeId: 'forest', kind: 'npc', text: '{npcName} waved from a mossy stump in {biome} and traded a trail tip for a joke.' },
+            { id: 'event_beach_4', biomeId: 'beach', kind: 'event', text: '{name} followed a line of tiny crab tracks to a shell tucked under sea grass.' },
+            { id: 'npc_beach_3', biomeId: 'beach', kind: 'npc', text: '{npcName} in {biome} showed you how to spot shiny stones just as the tide pulled back.' },
+            { id: 'event_mountain_4', biomeId: 'mountain', kind: 'event', text: '{name} found a wind-worn marker and rested where the view stretched past the clouds.' },
+            { id: 'npc_mountain_3', biomeId: 'mountain', kind: 'npc', text: '{npcName} in {biome} shared a shortcut between ledges marked by little pebbles.' },
+            { id: 'event_cave_4', biomeId: 'cave', kind: 'event', text: '{name} spotted crystals reflecting in a puddle and uncovered a hidden trinket nearby.' },
+            { id: 'npc_cave_3', biomeId: 'cave', kind: 'npc', text: '{npcName} from {biome} listened to echo taps and pointed out the safest tunnel turn.' },
+            { id: 'event_skyIsland_4', biomeId: 'skyIsland', kind: 'event', text: '{name} found a patch of cloud grass where petals floated upward instead of falling down.' },
+            { id: 'npc_skyIsland_3', biomeId: 'skyIsland', kind: 'npc', text: '{npcName} glided through {biome} and offered a race to the next floating root arch.' },
+            { id: 'event_underwater_4', biomeId: 'underwater', kind: 'event', text: '{name} traced a bubble trail through coral shelves and found a pearl-hidden nook.' },
+            { id: 'npc_underwater_3', biomeId: 'underwater', kind: 'npc', text: '{npcName} in {biome} nudged open a coral path and showed where the currents stay calm.' },
+            { id: 'event_skyZone_4', biomeId: 'skyZone', kind: 'event', text: '{name} drifted into a quiet air pocket and heard distant chimes lining up with the wind.' },
+            { id: 'npc_skyZone_3', biomeId: 'skyZone', kind: 'npc', text: '{npcName} crossed {biome} on a thermal arc and taught you a safer route between chimes.' }
+        ]
+    });
+
+    addPack({
+        id: 'starter_rivals_expansion_v2',
+        version: '1.0.0',
+        type: 'rivals',
+        items: [
+            { id: 'rival_iris_grove_keeper', data: { id: 'rival_iris_grove_keeper', name: 'Iris', emoji: '🌿', title: 'Grove Keeper', petType: 'hedgehog', petName: 'Thistle', stats: { hunger: 86, cleanliness: 88, happiness: 90, energy: 84 }, difficulty: 8, battleHP: 122, winMessage: 'Thistle bows gracefully after the match.', loseMessage: 'The grove trains patience and timing.', rematchTier: 2, minRivalsDefeated: 9 } },
+            { id: 'rival_orin_tide_scout', data: { id: 'rival_orin_tide_scout', name: 'Orin', emoji: '🌊', title: 'Tide Scout', petType: 'penguin', petName: 'Skiff', stats: { hunger: 84, cleanliness: 80, happiness: 88, energy: 92 }, difficulty: 7, battleHP: 116, winMessage: 'Skiff splashes in approval.', loseMessage: 'Tide scouting keeps us quick on our paws!', minRivalsDefeated: 8 } }
+        ]
+    });
+
+    addPack({
+        id: 'starter_bosses_variants_v2',
+        version: '1.0.0',
+        type: 'bosses',
+        items: [
+            { id: 'reefLanternMatriarch', data: { name: 'Reef Lantern Matriarch', emoji: '🪸✨', season: null, type: 'fish', maxHP: 172, attack: 10, defense: 7, rematchRequiresBossesDefeated: 3, moves: [ { name: 'Coral Flare', emoji: '🪸', power: 16 }, { name: 'Lantern Sweep', emoji: '🏮', power: 14 }, { name: 'Tide Mend', emoji: '🌊', power: 6, healSelf: 18 } ], rewards: { happiness: 24, energy: 16 }, victoryMessage: 'The Matriarch dims her lantern glow and parts the reef for you.' } },
+            { id: 'cloudbell_archon', data: { name: 'Cloudbell Archon', emoji: '☁️🔔', season: null, type: 'bird', maxHP: 190, attack: 12, defense: 8, rematchTier: 1, rematchRequiresBossesDefeated: 5, moves: [ { name: 'Bell Gust', emoji: '🔔', power: 18 }, { name: 'Cloud Lance', emoji: '☁️', power: 17 }, { name: 'Sky Refrain', emoji: '🎼', power: 7, healSelf: 22 } ], rewards: { happiness: 28, energy: 20 }, victoryMessage: 'The Archon rings a final note and the storm clouds clear.' } }
+        ]
+    });
+
+    addPack({
+        id: 'starter_loot_biome_expansion_v2',
+        version: '1.0.0',
+        type: 'loot',
+        items: [
+            { id: 'fernLantern', kind: 'lootItem', data: { id: 'fernLantern', name: 'Fern Lantern', emoji: '🏮', rarity: 'uncommon', flavorText: 'A tiny lantern wrapped in dried fern fibers and green glass.' } },
+            { id: 'brineCompass', kind: 'lootItem', data: { id: 'brineCompass', name: 'Brine Compass', emoji: '🧭', rarity: 'rare', flavorText: 'Its needle jitters near tide pools and hidden reef paths.' } },
+            { id: 'cloudKnot', kind: 'lootItem', data: { id: 'cloudKnot', name: 'Cloud Knot', emoji: '🪢', rarity: 'uncommon', flavorText: 'A light knot of sky thread that never seems to unravel.' } },
+            { id: 'hollowChime', kind: 'lootItem', data: { id: 'hollowChime', name: 'Hollow Chime', emoji: '🎐', rarity: 'common', flavorText: 'It sings softly whenever a draft passes through it.' } },
+            { id: 'table_forest_bonus_v2', kind: 'biomeLootTable', biomeId: 'forest', entries: [
+                { id: 'fernLantern', weight: 3.5, min: 1, max: 1 }, { id: 'hollowChime', weight: 2.8, min: 1, max: 1 }
+            ] },
+            { id: 'table_beach_bonus_v2', kind: 'biomeLootTable', biomeId: 'beach', entries: [
+                { id: 'brineCompass', weight: 1.1, min: 1, max: 1 }, { id: 'hollowChime', weight: 2.2, min: 1, max: 1 }
+            ] },
+            { id: 'table_sky_bonus_v2', kind: 'biomeLootTable', biomeId: 'skyZone', entries: [
+                { id: 'cloudKnot', weight: 2.8, min: 1, max: 1 }, { id: 'hollowChime', weight: 2.5, min: 1, max: 1 }
+            ] }
+        ]
+    });
+
+    addPack({
+        id: 'starter_room_cosmetics_v2',
+        version: '1.0.0',
+        type: 'cosmetics',
+        items: [
+            { id: 'auroraPaper', kind: 'roomTheme', data: { id: 'auroraPaper', name: 'Aurora Paper' } },
+            { id: 'windChimeStand', kind: 'roomFurniture', data: { id: 'windChimeStand', name: 'Wind Chime Stand', emoji: '🎐' } },
+            { id: 'cookbookShelf', kind: 'roomFurniture', data: { id: 'cookbookShelf', name: 'Cookbook Shelf', emoji: '📚' } },
+            { id: 'shellGarland', kind: 'decoration', data: { id: 'shellGarland', name: 'Shell Garland', emoji: '🐚', description: 'A strand of polished shells and sea-glass beads' } },
+            { id: 'starMobile', kind: 'decoration', data: { id: 'starMobile', name: 'Star Mobile', emoji: '🌟', description: 'A hanging mobile that catches light at night' } },
+            { id: 'set_tide_studio', kind: 'roomCosmeticSet', data: { id: 'set_tide_studio', name: 'Tide Studio', themeId: 'auroraPaper', furnitureIds: ['reefTank', 'cookbookShelf'], decorationId: 'shellGarland', unlock: { source: 'exploration', biome: 'beach' } } },
+            { id: 'bonus_tide_studio_set', kind: 'roomCosmeticBonus', data: { id: 'bonus_tide_studio_set', sourceType: 'set', sourceId: 'set_tide_studio', roomId: 'kitchen', system: 'minigame', multiplier: 1.03 } },
+            { id: 'bonus_wind_chime_comp', kind: 'roomCosmeticBonus', data: { id: 'bonus_wind_chime_comp', sourceType: 'furniture', sourceId: 'windChimeStand', roomId: '*', system: 'competition', multiplier: 1.02 } }
+        ]
+    });
+
+    addPack({
+        id: 'starter_breeding_outcomes_v2',
+        version: '1.0.0',
+        type: 'breeding',
+        items: [
+            { id: 'moonmist', kind: 'mutationColor', data: { name: 'Moonmist', hex: '#C7D2FE', description: 'Cool silver-blue tones with soft glow highlights' } },
+            { id: 'ringlet', kind: 'mutationPattern', data: { name: 'Ringlet', description: 'Soft circular markings that trail across the coat' } },
+            { id: 'gullcat', kind: 'hybridType', data: { name: 'Gullcat', emoji: '🐱', parents: ['cat', 'bird'], colors: ['#E0F2FF', '#C0C0C0', '#FFD166', '#90CAF9'], sounds: ['Mrr-caw!', 'Wing-purr!', 'Skree-mew!'], happySounds: ['Sky pounce!', 'Purr glide!', 'Feather zoom!'], sadSounds: ['Soft caw...', 'Quiet purr...'], mythical: false, hybrid: true, description: 'A nimble cliffside companion with bright eyes and gliding leaps.' } },
+            { id: 'flavor_general_gentle_4', kind: 'outcomeFlavor', text: 'The nursery air feels extra bright, as if the new hatchling brought a little sunrise with them.' },
+            { id: 'flavor_mutation_glow_3', kind: 'outcomeFlavor', text: 'A rare pattern shimmer settled in during incubation, giving this baby a striking signature look.', onlyMutation: true },
+            { id: 'flavor_hybrid_discovery_3', kind: 'outcomeFlavor', text: 'Two family stories now overlap in one tiny set of paws and a brand-new personality.', onlyHybrid: true },
+            { id: 'flavor_gullcat_1', kind: 'outcomeFlavor', petType: 'gullcat', text: 'This little one already watches the room like a cliffside lookout waiting for a sea breeze.' }
         ]
     });
 

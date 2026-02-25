@@ -18,23 +18,54 @@
                 showToast('You need a pet before cooking.', '#FFA726');
                 return;
             }
+            const cookingContent = getPackedCookingCatalog(COOKING_INGREDIENTS);
+            const ruleModifier = getMinigameRuleModifier('cooking');
+            const extraRounds = Math.max(0, Math.floor(Number(ruleModifier && ruleModifier.effect && ruleModifier.effect.extraRounds) || 0));
             cookingState = {
                 round: 1,
-                maxRounds: 5,
+                maxRounds: 5 + extraRounds,
                 successes: 0,
                 failures: 0,
                 selected: [],
-                recipe: []
+                recipe: [],
+                recipeMeta: null,
+                recipes: Array.isArray(cookingContent && cookingContent.recipes) ? cookingContent.recipes : [],
+                ingredientCatalog: Array.isArray(cookingContent && cookingContent.ingredients) ? cookingContent.ingredients : COOKING_INGREDIENTS.slice(),
+                ruleModifier,
+                dailySpecialTag: ruleModifier && ruleModifier.effect ? ruleModifier.effect.preferTag : null
             };
             initMiniGameRuntimeTracking(cookingState, { overlaySelector: '.cooking-game-overlay' });
-            cookingState.recipe = generateCookingRecipe();
+            cookingState.recipeMeta = generateCookingRecipe();
+            cookingState.recipe = (cookingState.recipeMeta && Array.isArray(cookingState.recipeMeta.ingredients))
+                ? cookingState.recipeMeta.ingredients.slice()
+                : [];
             renderCookingGame();
-            announce('Cooking mini game started. Match ingredients to craft special pet food.');
+            const modNote = ruleModifier && ruleModifier.name ? ` Rule: ${ruleModifier.name}.` : '';
+            announce(`Cooking mini game started. Match ingredients to craft special pet food.${modNote}`);
         }
 
         function generateCookingRecipe() {
-            const picks = shuffleArray([...COOKING_INGREDIENTS]).slice(0, 3);
-            return picks.map((item) => item.id);
+            if (!cookingState) {
+                const picks = shuffleArray([...COOKING_INGREDIENTS]).slice(0, 3);
+                return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id), rewardProfile: { specialFood: 1 } };
+            }
+            const allRecipes = Array.isArray(cookingState.recipes) ? cookingState.recipes : [];
+            const taggedRecipes = cookingState.dailySpecialTag
+                ? allRecipes.filter((recipe) => Array.isArray(recipe.tags) && recipe.tags.includes(cookingState.dailySpecialTag))
+                : [];
+            const recipePool = taggedRecipes.length ? taggedRecipes : allRecipes;
+            const pickedRecipe = getMiniGameContentSelection('cooking', 'recipes', recipePool, {
+                recentWindow: 4,
+                idKey: 'id'
+            });
+            if (pickedRecipe && Array.isArray(pickedRecipe.ingredients) && pickedRecipe.ingredients.length === 3) {
+                return pickedRecipe;
+            }
+            const fallbackPool = Array.isArray(cookingState.ingredientCatalog) && cookingState.ingredientCatalog.length
+                ? cookingState.ingredientCatalog
+                : COOKING_INGREDIENTS;
+            const picks = shuffleArray([...fallbackPool]).slice(0, 3);
+            return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id), rewardProfile: { specialFood: 1 } };
         }
 
         function renderCookingGame() {
@@ -47,16 +78,16 @@
             overlay.setAttribute('aria-label', 'Cooking mini game');
             overlay.innerHTML = `
                 <div class="exp-game-shell">
-                    <h2 class="exp-game-title">🍲 Cooking Lab</h2>
+                    <h2 class="exp-game-title">🍲 Cooking Lab${cookingState.recipeMeta && cookingState.recipeMeta.name ? ` · ${escapeHTML(cookingState.recipeMeta.name)}` : ''}</h2>
                     <div class="exp-game-hud">
-                        <span id="cooking-round">Round 1/5</span>
+                        <span id="cooking-round">Round 1/${cookingState.maxRounds}</span>
                         <span id="cooking-success">Recipes: 0</span>
                         <span id="cooking-stock">Special Food: ${Math.floor((ensureMiniGameExpansionMeta().specialFoodStock || 0))}</span>
                     </div>
                     <div class="cooking-recipe" id="cooking-recipe"></div>
                     <div class="cooking-selected" id="cooking-selected" aria-live="polite"></div>
                     <div class="cooking-grid" id="cooking-grid"></div>
-                    <p class="exp-game-note" id="cooking-note">Select exactly 3 ingredients, then cook.</p>
+                    <p class="exp-game-note" id="cooking-note">${cookingState.ruleModifier && cookingState.ruleModifier.name ? `Rule: ${escapeHTML(cookingState.ruleModifier.name)}. ` : ''}Select exactly 3 ingredients, then cook.</p>
                     <div class="exp-game-controls">
                         <button type="button" id="cook-btn">Cook Recipe</button>
                         <button type="button" id="cook-clear">Clear</button>
@@ -67,7 +98,7 @@
             document.body.appendChild(overlay);
             trackMiniGameOverlay(cookingState, overlay);
             const grid = overlay.querySelector('#cooking-grid');
-            grid.innerHTML = COOKING_INGREDIENTS.map((item) => (
+            grid.innerHTML = (Array.isArray(cookingState.ingredientCatalog) ? cookingState.ingredientCatalog : COOKING_INGREDIENTS).map((item) => (
                 `<button type="button" class="cooking-item" data-ing="${item.id}">${item.icon} ${escapeHTML(item.name)}</button>`
             )).join('');
 
@@ -118,12 +149,18 @@
             if (roundEl) roundEl.textContent = `Round ${Math.min(cookingState.round, cookingState.maxRounds)}/${cookingState.maxRounds}`;
             if (successEl) successEl.textContent = `Recipes: ${cookingState.successes}`;
             if (stockEl) stockEl.textContent = `Special Food: ${Math.floor((ensureMiniGameExpansionMeta().specialFoodStock || 0))}`;
-            const recipeDetails = cookingState.recipe.map((id) => COOKING_INGREDIENTS.find((i) => i.id === id)).filter(Boolean);
-            if (recipeEl) recipeEl.innerHTML = `<strong>Target Recipe:</strong> ${recipeDetails.map((i) => `${i.icon} ${escapeHTML(i.name)}`).join(' + ')}`;
+            const ingredientCatalog = Array.isArray(cookingState.ingredientCatalog) ? cookingState.ingredientCatalog : COOKING_INGREDIENTS;
+            const recipeDetails = cookingState.recipe.map((id) => ingredientCatalog.find((i) => i.id === id)).filter(Boolean);
+            if (recipeEl) {
+                const diffLabel = cookingState.recipeMeta && cookingState.recipeMeta.difficulty
+                    ? ` <span class="cooking-recipe-meta">(${escapeHTML(String(cookingState.recipeMeta.difficulty))})</span>`
+                    : '';
+                recipeEl.innerHTML = `<strong>Target Recipe:</strong> ${recipeDetails.map((i) => `${i.icon} ${escapeHTML(i.name)}`).join(' + ')}${diffLabel}`;
+            }
             if (selectedEl) {
                 selectedEl.innerHTML = cookingState.selected.length > 0
                     ? `<strong>Selected:</strong> ${cookingState.selected.map((id) => {
-                        const item = COOKING_INGREDIENTS.find((i) => i.id === id);
+                        const item = ingredientCatalog.find((i) => i.id === id);
                         return item ? `${item.icon} ${escapeHTML(item.name)}` : id;
                     }).join(' + ')}`
                     : '<strong>Selected:</strong> (none)';
@@ -150,9 +187,10 @@
             const noteEl = document.getElementById('cooking-note');
             if (pick === target) {
                 cookingState.successes += 1;
-                grantSpecialPetFood(1);
+                const rewardFood = Math.max(1, Math.floor(Number(cookingState.recipeMeta && cookingState.recipeMeta.rewardProfile && cookingState.recipeMeta.rewardProfile.specialFood) || 1));
+                grantSpecialPetFood(rewardFood);
                 if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
-                if (noteEl) noteEl.textContent = 'Perfect mix! Special pet food crafted.';
+                if (noteEl) noteEl.textContent = `Perfect mix! ${cookingState.recipeMeta && cookingState.recipeMeta.name ? `${cookingState.recipeMeta.name} crafted. ` : ''}Special pet food +${rewardFood}.`;
             } else {
                 cookingState.failures += 1;
                 if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.miss);
@@ -166,7 +204,10 @@
                 endCookingGame(true);
                 return;
             }
-            cookingState.recipe = generateCookingRecipe();
+            cookingState.recipeMeta = generateCookingRecipe();
+            cookingState.recipe = (cookingState.recipeMeta && Array.isArray(cookingState.recipeMeta.ingredients))
+                ? cookingState.recipeMeta.ingredients.slice()
+                : [];
             updateCookingUI();
         }
 

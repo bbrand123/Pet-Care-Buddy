@@ -2,26 +2,58 @@
 
         let fishingState = null;
 
+        function getFishingCatchCandidates() {
+            const packCatches = getPackedFishingCatchPool();
+            if (!Array.isArray(packCatches) || packCatches.length === 0) return [];
+            const season = (typeof getCurrentSeason === 'function') ? getCurrentSeason() : null;
+            const timeOfDay = gameState && gameState.timeOfDay ? gameState.timeOfDay : null;
+            const roomId = gameState && gameState.currentRoom ? gameState.currentRoom : null;
+            const biomeHint = roomId === 'beach' ? 'beach'
+                : roomId === 'garden' ? 'pond'
+                : roomId === 'park' ? 'pond'
+                : roomId === 'bathroom' ? 'indoor'
+                : 'pond';
+            const filtered = packCatches.filter((entry) => {
+                if (!entry) return false;
+                if (Array.isArray(entry.seasons) && entry.seasons.length && season && !entry.seasons.includes(season)) return false;
+                if (Array.isArray(entry.times) && entry.times.length && timeOfDay && !entry.times.includes(timeOfDay)) return false;
+                if (Array.isArray(entry.biomes) && entry.biomes.length && !entry.biomes.includes(biomeHint) && !entry.biomes.includes('any')) return false;
+                return true;
+            });
+            return filtered.length ? filtered : packCatches;
+        }
+
         function startFishingGame() {
             if (!gameState.pet) {
                 showToast('You need a pet for pond fishing.', '#FFA726');
                 return;
             }
             const difficulty = getMinigameDifficulty('fishing');
+            const ruleModifier = getMinigameRuleModifier('fishing');
+            const effect = (ruleModifier && ruleModifier.effect) || {};
+            const extraCasts = Math.max(0, Math.floor(Number(effect.extraCasts) || 0));
+            const velocityMult = Math.max(0.6, Number(effect.velocityMultiplier) || 1);
+            const zoneMult = Math.max(0.55, Number(effect.zoneSizeMultiplier) || 1);
             fishingState = {
-                roundsLeft: 10,
+                roundsLeft: 10 + extraCasts,
                 catches: 0,
                 misses: 0,
                 marker: 0,
-                velocity: 1.8 + difficulty * 0.9,
+                difficulty,
+                velocity: (1.8 + difficulty * 0.9) * velocityMult,
                 zoneStart: 35,
-                zoneSize: Math.max(20, Math.round(38 / Math.max(difficulty, 0.75))),
-                timerId: null
+                zoneSize: Math.max(14, Math.round((38 / Math.max(difficulty, 0.75)) * zoneMult)),
+                timerId: null,
+                ruleModifier,
+                caughtFish: [],
+                lastCatch: null
             };
             initMiniGameRuntimeTracking(fishingState, { overlaySelector: '.fishing-game-overlay' });
             randomizeFishingZone();
             renderFishingGame();
-            announce('Fishing started. Reel in when the bobber enters the fish zone.');
+            announce(miniGameTouchMode()
+                ? `Fishing started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Tap Catch when the bobber enters the fish zone.`
+                : `Fishing started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Reel in when the bobber enters the fish zone.`);
         }
 
         function randomizeFishingZone() {
@@ -40,17 +72,17 @@
             overlay.setAttribute('aria-label', 'Pond fishing mini game');
             overlay.innerHTML = `
                 <div class="exp-game-shell">
-                    <h2 class="exp-game-title">🎣 Pond Fishing</h2>
+                    <h2 class="exp-game-title">🎣 Pond Fishing${fishingState.ruleModifier && fishingState.ruleModifier.name ? ` · ${escapeHTML(fishingState.ruleModifier.name)}` : ''}</h2>
                     <div class="exp-game-hud">
-                        <span id="fishing-rounds">Casts Left: 10</span>
+                        <span id="fishing-rounds">Casts Left: ${fishingState.roundsLeft}</span>
                         <span id="fishing-catches">Catches: 0</span>
                         <span id="fishing-misses">Misses: 0</span>
                     </div>
-                    <div class="fishing-meter" id="fishing-meter" tabindex="0" aria-label="Fishing meter. Press Space to reel in.">
+                    <div class="fishing-meter" id="fishing-meter" tabindex="0" aria-label="${miniGameTouchMode() ? 'Fishing meter. Tap Catch when the marker enters the fish zone.' : 'Fishing meter. Press Space to reel in.'}">
                         <div class="fishing-zone" id="fishing-zone"></div>
                         <div class="fishing-marker" id="fishing-marker"></div>
                     </div>
-                    <p class="exp-game-note" id="fishing-note">Press Catch when the marker is inside the fish zone.</p>
+                    <p class="exp-game-note" id="fishing-note">${miniGameTouchMode() ? 'Tap Catch when the marker is inside the fish zone.' : 'Press Catch when the marker is inside the fish zone.'}</p>
                     <div class="exp-game-controls">
                         <button type="button" id="fishing-catch">Catch</button>
                         <button type="button" id="fishing-done">Done</button>
@@ -68,6 +100,11 @@
                     e.preventDefault();
                     catchAction();
                 }
+            });
+            bindMiniGameEvent(fishingState, overlay.querySelector('#fishing-meter'), 'pointerdown', (e) => {
+                if (!miniGameTouchMode() && e.pointerType === 'mouse') return;
+                e.preventDefault();
+                catchAction();
             });
             bindMiniGameEvent(fishingState, overlay, 'click', (e) => {
                 if (e.target === overlay) requestMiniGameExit(fishingState ? fishingState.catches : 0, () => endFishingGame(false));
@@ -119,7 +156,18 @@
             fishingState.roundsLeft -= 1;
             if (inZone) {
                 fishingState.catches += 1;
-                if (note) note.textContent = 'Nice catch! Cast again.';
+                const catchPool = getFishingCatchCandidates();
+                const caught = getMiniGameContentSelection('fishing', 'catches', catchPool, {
+                    recentWindow: 5,
+                    idKey: 'id'
+                });
+                if (caught) {
+                    fishingState.lastCatch = caught;
+                    fishingState.caughtFish.push({ id: caught.id, name: caught.name, rarity: caught.rarity });
+                    if (note) note.textContent = `Nice catch! ${caught.emoji || '🐟'} ${caught.name}${caught.flavor ? ` — ${caught.flavor}` : ''}`;
+                } else if (note) {
+                    note.textContent = 'Nice catch! Cast again.';
+                }
                 if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.catch);
             } else {
                 fishingState.misses += 1;
@@ -146,6 +194,7 @@
             if (catches > 0 || completed) {
                 const attempts = catches + finalState.misses;
                 const accuracy = attempts > 0 ? Math.round((catches / attempts) * 100) : 0;
+                const uniqueCatchCount = new Set((finalState.caughtFish || []).map((item) => item && item.id).filter(Boolean)).size;
                 finalizeExpandedMiniGame({
                     gameId: 'fishing',
                     gameName: 'Pond Fishing',
@@ -159,6 +208,7 @@
                     summaryStats: [
                         { label: 'Catches', value: catches },
                         { label: 'Accuracy', value: accuracy },
+                        { label: 'Unique Fish', value: uniqueCatchCount },
                         { label: 'Happiness', value: Math.min(22, catches * 4) }
                     ],
                     medalThresholds: { bronze: 3, silver: 6, gold: 8 }

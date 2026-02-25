@@ -9,6 +9,70 @@
             return arr;
         }
 
+        function getMiniGameContentSelection(scope, key, pool, options) {
+            const items = Array.isArray(pool) ? pool.filter(Boolean) : [];
+            if (items.length === 0) return null;
+            if (typeof chooseRotatingContentWithHistory === 'function') {
+                return chooseRotatingContentWithHistory(items, Object.assign({
+                    scope: `minigame:${scope || 'shared'}`,
+                    key: key || 'default',
+                    recentWindow: 4,
+                    idKey: 'id',
+                    state: gameState
+                }, options || {}));
+            }
+            return items[Math.floor(Math.random() * items.length)];
+        }
+
+        function getMinigameRuleModifier(gameId) {
+            if (typeof getDeterministicRuleModifier !== 'function') return null;
+            return getDeterministicRuleModifier(gameId, 'minigameRule', 'minigames');
+        }
+
+        function getPackedTriviaPool(baseQuestions) {
+            if (typeof getPackTriviaQuestions === 'function') return getPackTriviaQuestions(baseQuestions);
+            return Array.isArray(baseQuestions) ? baseQuestions.slice() : [];
+        }
+
+        function getPackedMatchingDeckPool(baseItems) {
+            if (typeof getPackMatchingDecks === 'function') return getPackMatchingDecks(baseItems);
+            return [{ id: 'base_matching', theme: 'Classic', pairs: Array.isArray(baseItems) ? baseItems.slice() : [] }];
+        }
+
+        function getPackedCookingCatalog(baseIngredients) {
+            if (typeof getPackCookingRecipes === 'function') return getPackCookingRecipes(baseIngredients);
+            return {
+                ingredients: Array.isArray(baseIngredients) ? baseIngredients.slice() : [],
+                recipes: []
+            };
+        }
+
+        function getPackedFishingCatchPool() {
+            if (typeof getPackFishingCatches === 'function') return getPackFishingCatches();
+            return [];
+        }
+
+        function getPackedColoringTemplatePool() {
+            if (typeof getPackColoringTemplates === 'function') return getPackColoringTemplates();
+            return [];
+        }
+
+        function getPackedTournamentRivalNames(baseNames) {
+            if (typeof getPackTournamentRivals === 'function') return getPackTournamentRivals(baseNames);
+            return Array.isArray(baseNames) ? baseNames.slice() : [];
+        }
+
+        function miniGameTouchMode() {
+            try {
+                if (typeof isMobileTouchUiActive === 'function') return !!isMobileTouchUiActive();
+            } catch (e) {}
+            try {
+                return !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 900);
+            } catch (e) {
+                return false;
+            }
+        }
+
         // SVG thumbnail previews for mini-game menu cards
 	        const MINI_GAME_THUMBNAILS = {
             fetch: '<svg viewBox="0 0 40 40" class="minigame-thumb" aria-hidden="true"><circle cx="20" cy="16" r="9" fill="#8BC34A" stroke="#558B2F" stroke-width="1.5"/><path d="M14 16h12M20 10v12" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><path d="M20 28q-3 4 0 6q3-2 0-6" fill="#A5D6A7" opacity="0.6"/></svg>',
