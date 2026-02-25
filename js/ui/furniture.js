@@ -169,6 +169,7 @@
                     btn.classList.add('selected');
 
                     // Update game state
+                    if (!gameState.furniture) gameState.furniture = {};
                     if (!gameState.furniture[currentRoom]) {
                         gameState.furniture[currentRoom] = {};
                     }
@@ -184,6 +185,7 @@
                     const type = btn.getAttribute('data-room-custom-type');
                     const value = btn.getAttribute('data-room-custom-value');
                     if (!type || !value) return;
+                    if (!gameState.roomCustomizations) gameState.roomCustomizations = {};
                     if (!gameState.roomCustomizations[currentRoom]) gameState.roomCustomizations[currentRoom] = {};
                     const custom = gameState.roomCustomizations[currentRoom];
                     if (type === 'wallpaper') custom.wallpaper = value;

@@ -74,7 +74,8 @@
                         });
                     }
                 });
-                Object.entries(snapshot.inventory.food || {}).forEach(([id, count]) => {
+                const inv = snapshot.inventory || {};
+                Object.entries(inv.food || {}).forEach(([id, count]) => {
                     if (count > 0 && ECONOMY_SHOP_ITEMS.food[id]) {
                         items.push({
                             key: `food:${id}`,
@@ -87,7 +88,7 @@
                         });
                     }
                 });
-                Object.entries(snapshot.inventory.toys || {}).forEach(([id, count]) => {
+                Object.entries(inv.toys || {}).forEach(([id, count]) => {
                     if (count > 0 && ECONOMY_SHOP_ITEMS.toys[id]) {
                         items.push({
                             key: `toys:${id}`,
@@ -100,7 +101,7 @@
                         });
                     }
                 });
-                Object.entries(snapshot.inventory.medicine || {}).forEach(([id, count]) => {
+                Object.entries(inv.medicine || {}).forEach(([id, count]) => {
                     if (count > 0 && ECONOMY_SHOP_ITEMS.medicine[id]) {
                         items.push({
                             key: `medicine:${id}`,
@@ -113,7 +114,7 @@
                         });
                     }
                 });
-                Object.entries(snapshot.inventory.seeds || {}).forEach(([id, count]) => {
+                Object.entries(inv.seeds || {}).forEach(([id, count]) => {
                     if (count > 0 && GARDEN_CROPS[id]) {
                         items.push({
                             key: `seed:${id}`,
@@ -126,7 +127,7 @@
                         });
                     }
                 });
-                Object.entries(snapshot.inventory.crafted || {}).forEach(([id, count]) => {
+                Object.entries(inv.crafted || {}).forEach(([id, count]) => {
                     if (count > 0 && CRAFTED_ITEMS[id]) {
                         items.push({
                             key: `crafted:${id}`,

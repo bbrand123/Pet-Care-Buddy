@@ -554,14 +554,6 @@
             return true;
         }
 
-	        function openSeedPicker(plotIndex) {
-            const existing = document.querySelector('.seed-picker-overlay');
-            if (existing) {
-                // Pop stale escape handler before removing the old overlay
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
-                existing.remove();
-	        }
-
 	        function getGardenExpansionStatus() {
 	            const garden = gameState.garden || {};
 	            const tiers = Array.isArray(GARDEN_EXPANSION_TIERS) ? GARDEN_EXPANSION_TIERS : [];
@@ -612,6 +604,14 @@
 	            if (gameState.currentRoom === 'garden') renderGardenUI();
 	            return { ok: true, tier, expansionTier: garden.expansionTier };
 	        }
+
+	        function openSeedPicker(plotIndex) {
+            const existing = document.querySelector('.seed-picker-overlay');
+            if (existing) {
+                // Pop stale escape handler before removing the old overlay
+                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                existing.remove();
+            }
 
             const season = gameState.season || getCurrentSeason();
             const overlay = document.createElement('div');

@@ -529,16 +529,6 @@
             }
         }
 
-	        function abandonExpedition(silent) {
-            const ex = ensureExplorationState();
-            if (!ex.expedition) return { ok: false, reason: 'no-expedition' };
-            const abandoned = ex.expedition;
-            ex.expedition = null;
-            saveGame();
-            if (!silent) {
-                showToast('🧭 Expedition ended early. No rewards were collected.', '#FFA726');
-	        }
-
 	        function getExpeditionUpkeepCost(biomeId, duration) {
 	            const safeDuration = duration || EXPEDITION_DURATIONS[0] || { ms: 40000 };
 	            const mins = Math.max(0.5, Number(safeDuration.ms || 0) / 60000);
@@ -558,6 +548,16 @@
 	            const total = Math.round((Math.max(1, Number(baseRolls) || 1) * diminishedMult) + Math.max(0, Number(bonusRolls) || 0));
 	            return Math.max(2, total);
 	        }
+
+	        function abandonExpedition(silent) {
+            const ex = ensureExplorationState();
+            if (!ex.expedition) return { ok: false, reason: 'no-expedition' };
+            const abandoned = ex.expedition;
+            ex.expedition = null;
+            saveGame();
+            if (!silent) {
+                showToast('🧭 Expedition ended early. No rewards were collected.', '#FFA726');
+            }
             return { ok: true, abandoned };
         }
 

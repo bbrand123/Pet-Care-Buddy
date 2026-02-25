@@ -105,13 +105,14 @@
     }
 
     function normalizeRelationships(map, nowMs) {
+        if (!Relationships || typeof Relationships.normalizeRelationship !== 'function') {
+            return isObject(map) ? map : {};
+        }
         const out = {};
         const src = isObject(map) ? map : {};
         Object.keys(src).forEach((key) => {
-            const rel = src[key];
-            if (!Relationships || typeof Relationships.normalizeRelationship !== 'function') return;
             if (key.indexOf('|') === -1) return;
-            out[key] = Relationships.normalizeRelationship(rel, nowMs);
+            out[key] = Relationships.normalizeRelationship(src[key], nowMs);
         });
         return out;
     }
@@ -120,9 +121,10 @@
         const source = isObject(household) ? deepClone(household) : {};
         const petsById = {};
         if (isObject(source.petsById)) {
-            Object.keys(source.petsById).forEach((id) => {
-                const normalizedPet = normalizePetRecord(source.petsById[id], nowMs);
-                if (normalizedPet.id) petsById[String(normalizedPet.id)] = normalizedPet;
+            Object.keys(source.petsById).forEach((sourceKey) => {
+                const normalizedPet = normalizePetRecord(source.petsById[sourceKey], nowMs);
+                if (!normalizedPet.id) normalizedPet.id = sourceKey;
+                if (normalizedPet.id) petsById[normalizedPet.id] = normalizedPet;
             });
         }
         const petIds = sortedPetIds(petsById);
