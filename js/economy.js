@@ -1453,12 +1453,19 @@
                     return { ok: false, reason: 'missing-ingredients' };
                 }
             }
-            const spend = spendCoins(cost, 'Crafting', true);
-            if (!spend.ok) return { ok: false, reason: spend.reason, needed: cost, balance: spend.balance };
+            // P1-23: Validate coin balance before touching any ingredients; then
+            // consume ingredients first and deduct coins last so a partial failure
+            // cannot silently drop coins without any rollback.
+            if (cost > 0 && (ensureEconomyState().coins || 0) < cost) {
+                return { ok: false, reason: 'insufficient-funds', needed: cost, balance: ensureEconomyState().coins || 0 };
+            }
 
             for (const ing of (recipe.ingredients || [])) {
                 consumeIngredient(ing.source, ing.id, ing.count);
             }
+
+            const spend = spendCoins(cost, 'Crafting', true);
+            if (!spend.ok) return { ok: false, reason: spend.reason, needed: cost, balance: spend.balance };
 
             let craftedLabel = recipe.name;
             let craftedEmoji = recipe.emoji || '🛠️';

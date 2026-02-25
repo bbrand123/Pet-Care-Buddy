@@ -1003,6 +1003,9 @@
             const newPet = createPet(npc.type);
             const safeName = sanitizePetName(npc.name);
             if (safeName) newPet.name = safeName;
+            // P1-26: Flush any pending stat changes on the current active pet back to
+            // the pets array before switching the active index.
+            if (typeof syncActivePetToArray === 'function') syncActivePetToArray();
             addPetToFamily(newPet);
             gameState.activePetIndex = gameState.pets.length - 1;
             gameState.pet = gameState.pets[gameState.activePetIndex];

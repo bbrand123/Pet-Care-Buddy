@@ -125,7 +125,9 @@
             return [];
         }
 
-        const MINI_GAMES = getMiniGameDescriptors();
+        // P1-11: Do NOT cache the descriptor list at module-load time.
+        // MiniGameRegistry may not yet be populated when this file is evaluated.
+        // Call getMiniGameDescriptors() lazily at each use site instead.
 
         // ==================== CELEBRATION EFFECTS ====================
 
@@ -398,7 +400,7 @@
 
             const startedGames = [];
             const newGames = [];
-            MINI_GAMES.forEach(game => {
+            getMiniGameDescriptors().forEach(game => {
                 const best = highScores[game.id];
                 const label = game.scoreLabel || '';
                 const bestHTML = best ? `<span class="minigame-card-best">Best: ${best}${label ? ' ' + label : ''}</span>` : '';

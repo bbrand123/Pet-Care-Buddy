@@ -19,8 +19,19 @@
         { id: 'coop', name: 'Co-op Relay', icon: '🤝', description: 'Control two pets at once in cooperative challenges.', a11y: 'keyboard', a11yNote: 'Keyboard: Alternate A and L for each pet', scoreLabel: 'relay', sortOrder: 15 }
     ];
 
-    if (global.MiniGameRegistry && typeof global.MiniGameRegistry.registerMany === 'function') {
-        global.MiniGameRegistry.registerMany(DEFAULT_MINIGAME_DESCRIPTORS);
+    // P1-22: Register immediately if MiniGameRegistry is already present; otherwise
+    // defer until DOMContentLoaded so scripts loaded in any order both work.
+    // registerMany is idempotent (existing IDs are just overwritten), so running
+    // it twice is safe when both paths fire.
+    function attemptRegisterDescriptors() {
+        if (global.MiniGameRegistry && typeof global.MiniGameRegistry.registerMany === 'function') {
+            global.MiniGameRegistry.registerMany(DEFAULT_MINIGAME_DESCRIPTORS);
+            return true;
+        }
+        return false;
+    }
+    if (!attemptRegisterDescriptors() && typeof document !== 'undefined') {
+        document.addEventListener('DOMContentLoaded', attemptRegisterDescriptors, { once: true });
     }
 
     global.DEFAULT_MINIGAME_DESCRIPTORS = DEFAULT_MINIGAME_DESCRIPTORS;

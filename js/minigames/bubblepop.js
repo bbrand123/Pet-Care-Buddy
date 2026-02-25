@@ -434,3 +434,17 @@
             }
             bubblePopState = null;
         }
+
+        // P1-15: Register lifecycle so teardownAll() can clean up bubble pop.
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('bubblepop', {
+                start: startBubblePopGame,
+                teardown: function teardownBubblePopGame() {
+                    if (!bubblePopState) { dismissMiniGameExitDialog(); return false; }
+                    endBubblePopGame();
+                    return true;
+                },
+                getState: function () { return bubblePopState; },
+                overlaySelector: '.bubblepop-game-overlay'
+            });
+        }

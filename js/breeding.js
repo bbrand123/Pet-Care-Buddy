@@ -171,7 +171,7 @@
         function breedPets(pet1Index, pet2Index) {
             const pet1 = gameState.pets[pet1Index];
             const pet2 = gameState.pets[pet2Index];
-            if (!pet1 || !pet2) return null;
+            if (!pet1 || !pet2) return { success: false, reason: 'invalid-pets' };
 
             const check = canBreedPair(pet1, pet2);
             if (!check.eligible) return { success: false, reason: check.reason };

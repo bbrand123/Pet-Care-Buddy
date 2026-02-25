@@ -428,3 +428,17 @@
             }
             hideSeekState = null;
         }
+
+        // P1-13: Register lifecycle so teardownAll() can clean up hide & seek.
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('hideseek', {
+                start: startHideSeekGame,
+                teardown: function teardownHideSeekGame() {
+                    if (!hideSeekState) { dismissMiniGameExitDialog(); return false; }
+                    endHideSeekGame();
+                    return true;
+                },
+                getState: function () { return hideSeekState; },
+                overlaySelector: '.hideseek-game-overlay'
+            });
+        }

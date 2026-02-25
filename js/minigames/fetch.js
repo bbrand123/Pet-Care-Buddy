@@ -47,7 +47,7 @@
             overlay.innerHTML = `
                 <div class="fetch-game">
                     <h2 class="fetch-game-title">🎾 Fetch!</h2>
-	                    <p class="fetch-game-score" id="fetch-score">Fetched: ${fetchState.score} · Time: <span id="fetch-timer">${Math.ceil(fetchState.timeLimitMs / 1000)}s</span></p>
+	                    <p class="fetch-game-score" id="fetch-score">Fetched: <span id="fetch-count">${fetchState.score}</span> · Time: <span id="fetch-timer">${Math.ceil(fetchState.timeLimitMs / 1000)}s</span></p>
                     <div class="fetch-field" id="fetch-field" role="button" aria-label="Click or press Enter to throw the ball" tabindex="0">
                         <div class="fetch-field-clouds" aria-hidden="true">☁️ ☁️</div>
                         <div class="fetch-field-flowers" aria-hidden="true">🌸 🌼 🌷 🌻</div>
@@ -258,9 +258,9 @@
                 fetchState.score++;
                 fetchState.phase = 'ready';
 
-                // Update score display
-                const scoreEl = document.getElementById('fetch-score');
-                if (scoreEl) scoreEl.textContent = `Fetched: ${fetchState.score}`;
+                // P1-12: Update only the count span so the timer <span> is preserved.
+                const countEl = document.getElementById('fetch-count');
+                if (countEl) countEl.textContent = fetchState.score;
 
                 // Reset ball position
                 ball.classList.remove('arc');
@@ -374,4 +374,18 @@
 	            }
 
             fetchState = null;
+        }
+
+        // P1-14: Register lifecycle so teardownAll() can clean up fetch.
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('fetch', {
+                start: startFetchGame,
+                teardown: function teardownFetchGame() {
+                    if (!fetchState) { dismissMiniGameExitDialog(); return false; }
+                    endFetchGame('teardown');
+                    return true;
+                },
+                getState: function () { return fetchState; },
+                overlaySelector: '.fetch-game-overlay'
+            });
         }

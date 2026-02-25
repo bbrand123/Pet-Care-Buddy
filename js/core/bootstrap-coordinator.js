@@ -25,8 +25,13 @@
                 if (typeof opts.onBoot === 'function') {
                     const result = opts.onBoot();
                     if (result && typeof result.then === 'function') {
-                        Promise.resolve(result).catch(function rollbackAsyncBootFailure() {
-                            started = false;
+                        // P1-03: Do NOT reset started on async failure.  The synchronous
+                        // portion of boot (DOM creation, event listeners) already ran, so
+                        // resetting the flag would allow a second boot() call that adds
+                        // duplicate timers, listeners and DOM nodes.  Surface errors via
+                        // opts.onBootError instead.
+                        Promise.resolve(result).catch(function handleAsyncBootFailure(err) {
+                            if (typeof opts.onBootError === 'function') opts.onBootError(err);
                         });
                     }
                 }

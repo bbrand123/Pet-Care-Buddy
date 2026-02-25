@@ -377,3 +377,17 @@
             }
             matchingState = null;
         }
+
+        // P1-16: Register lifecycle so teardownAll() can clean up matching game.
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('matching', {
+                start: startMatchingGame,
+                teardown: function teardownMatchingGame() {
+                    if (!matchingState) { dismissMiniGameExitDialog(); return false; }
+                    endMatchingGame();
+                    return true;
+                },
+                getState: function () { return matchingState; },
+                overlaySelector: '.matching-game-overlay'
+            });
+        }

@@ -1579,7 +1579,6 @@
                     if (prestigeReward.modifierId) addGameplayModifier(prestigeReward.modifierId, `${prestigeReward.icon} Prestige`);
                     if (prestigeReward.collectible) grantBundleCollectible(prestigeReward.collectible);
                     streak.prestige.claimedMonthlyReward = monthKey;
-                    streak.prestige.completedCycles = Math.max(1, streak.prestige.completedCycles || 0);
                     streak.prestige.lifetimeTier = Math.max(streak.prestige.lifetimeTier || 0, Math.floor((streak.prestige.completedCycles || 0) / 2));
                     if (typeof addJournalEntry === 'function') {
                         addJournalEntry('🌠', `Prestige reward unlocked: ${prestigeReward.icon} ${prestigeReward.label}.`);

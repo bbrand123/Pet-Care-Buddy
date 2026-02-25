@@ -470,3 +470,17 @@
 
             simonState = null;
         }
+
+        // P1-17: Register lifecycle so teardownAll() can clean up Simon Says.
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('simonsays', {
+                start: startSimonSaysGame,
+                teardown: function teardownSimonSaysGame() {
+                    if (!simonState) { dismissMiniGameExitDialog(); return false; }
+                    endSimonSaysGame();
+                    return true;
+                },
+                getState: function () { return simonState; },
+                overlaySelector: '.simonsays-game-overlay'
+            });
+        }

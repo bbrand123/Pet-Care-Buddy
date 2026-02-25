@@ -496,3 +496,17 @@
             }
             coloringState = null;
         }
+
+        // P1-18: Register lifecycle so teardownAll() can clean up coloring game.
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('coloring', {
+                start: startColoringGame,
+                teardown: function teardownColoringGame() {
+                    if (!coloringState) { dismissMiniGameExitDialog(); return false; }
+                    endColoringGame();
+                    return true;
+                },
+                getState: function () { return coloringState; },
+                overlaySelector: '.coloring-game-overlay'
+            });
+        }

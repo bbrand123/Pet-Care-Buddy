@@ -168,6 +168,9 @@
             e += 5 * dtMinutes;
             h -= 0.4 * dtMinutes;
             f -= 0.1 * dtMinutes;
+            // P1-09: sleep provides a small hygiene recovery so hygiene can never
+            // bottom-out permanently during long offline periods.
+            hy += 0.15 * dtMinutes;
         } else if (activity.type === 'play') {
             f += 4 * dtMinutes;
             e -= 2 * dtMinutes;
@@ -184,6 +187,8 @@
             hy -= 0.3 * dtMinutes;
         } else {
             e += 0.4 * dtMinutes;
+            // P1-09: idle activity provides passive hygiene recovery.
+            hy += 0.05 * dtMinutes;
         }
 
         setNeed(nextPet, 'hunger', h);
@@ -339,9 +344,64 @@
         return { state: nextState, household: result.household, meta: result.meta };
     }
 
+    // P1-08: lightweight tick that operates on an already-normalised household object
+    // without a full deep-clone, used by the simulateHouseholdToNow inner loop.
+    function _tickNormalizedHouseholdInPlace(household, dtMs, nowMs, options) {
+        const petIds = sortedPetIds(household.petsById);
+        const socialEvents = [];
+        const retentionBeats = [];
+        const tickContext = {
+            activePetId: household.activePetId,
+            petsById: household.petsById,
+            relationships: household.relationships,
+            options: options || {}
+        };
+
+        petIds.forEach((petId) => {
+            const result = tickPet(household.petsById[petId], tickContext, dtMs, nowMs);
+            household.petsById[petId] = result.pet;
+            if (Array.isArray(result.events)) socialEvents.push.apply(socialEvents, result.events);
+        });
+
+        socialEvents.forEach((event) => {
+            if (event && event.type === 'mood-shift') {
+                retentionBeats.push({
+                    type: event.mood === 'happy' ? 'pet_happy_moment' : 'pet_needs_attention',
+                    priority: event.mood === 'happy' ? 'low' : 'medium',
+                    petId: event.petId,
+                    petName: event.petName,
+                    mood: event.mood,
+                    previousMood: event.previousMood,
+                    at: event.at
+                });
+            }
+        });
+
+        const socialResult = applySocialEvents(household, socialEvents, dtMs, nowMs);
+        const withRelationships = socialResult && socialResult.household ? socialResult.household : household;
+        if (socialResult && Array.isArray(socialResult.retentionBeats) && socialResult.retentionBeats.length) {
+            retentionBeats.push.apply(retentionBeats, socialResult.retentionBeats);
+        }
+        withRelationships.lastSimulatedAt = Number.isFinite(nowMs) ? nowMs : withRelationships.lastSimulatedAt;
+        withRelationships.simVersion = SIM_VERSION;
+        return { household: withRelationships, meta: { socialEventCount: socialEvents.length, retentionBeats } };
+    }
+
+    // P1-10: module-level set tracks in-progress simulations to prevent double-decay.
+    const _simInProgress = new WeakSet();
+
     function simulateHouseholdToNow(state, nowMs, options) {
-        const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
         const hasRoot = isObject(state) && isObject(state.household);
+        // P1-10: guard against concurrent calls on the same state object.
+        const guardKey = isObject(state) ? state : null;
+        if (guardKey && _simInProgress.has(guardKey)) {
+            return hasRoot
+                ? { state, household: state.household, meta: { steps: 0, rawElapsedMs: 0, appliedElapsedMs: 0, catchUpClamped: false, socialEventCount: 0, retentionBeats: [] } }
+                : { household: (isObject(state) ? state : {}), meta: { steps: 0, rawElapsedMs: 0, appliedElapsedMs: 0, catchUpClamped: false, socialEventCount: 0, retentionBeats: [] } };
+        }
+        if (guardKey) _simInProgress.add(guardKey);
+
+        const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
         const rootState = hasRoot ? deepClone(state) : { household: deepClone(isObject(state) ? state : {}) };
         let household = normalizeHousehold(rootState.household, now);
 
@@ -360,7 +420,10 @@
             while (cursor < target) {
                 const step = Math.min(FIXED_STEP_MS, target - cursor);
                 cursor += step;
-                const tickResult = tickNormalizedHousehold(household, step, cursor, options && options.tickOptions);
+                // P1-08: household is already normalised from the previous iteration;
+                // call tickNormalizedHousehold with _skipNormalize to avoid a full
+                // JSON deep-clone on every one of potentially thousands of steps.
+                const tickResult = _tickNormalizedHouseholdInPlace(household, step, cursor, options && options.tickOptions);
                 household = tickResult.household;
                 steps++;
                 aggregateSocialEvents += (tickResult.meta && tickResult.meta.socialEventCount) || 0;
@@ -369,6 +432,8 @@
                 }
             }
         }
+
+        if (guardKey) _simInProgress.delete(guardKey);
 
         household.lastSimulatedAt = now;
         household.simVersion = SIM_VERSION;

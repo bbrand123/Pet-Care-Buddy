@@ -110,6 +110,12 @@
             });
             runnerState.obstacles = next;
             runnerState.score += Math.max(1, Math.round(runnerState.speed));
+            // P1-19: Gradually increase speed and spawn rate so the game gets harder.
+            // Every 300 ticks (~16 s at 55 ms/tick) bump speed by 0.3 and tighten spawns.
+            if (runnerState.tick > 0 && runnerState.tick % 300 === 0) {
+                runnerState.speed += 0.3;
+                runnerState.spawnEvery = Math.max(16, runnerState.spawnEvery - 2);
+            }
             updateRunnerUI();
             if (hit) {
                 if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);

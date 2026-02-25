@@ -139,6 +139,8 @@
                 });
             }
 
+            working = nextPayload;
+
             report.appliedMigrations.push({
                 name: migration.name,
                 fromVersion: migration.fromVersion,

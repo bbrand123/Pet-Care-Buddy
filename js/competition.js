@@ -1230,8 +1230,6 @@
             }
 
             const comp = initCompetitionState();
-            const obstacleEntry = chargeCompetitionEntryFee('obstacle');
-            if (!obstacleEntry.ok) return;
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay competition-overlay';
             overlay.setAttribute('role', 'dialog');

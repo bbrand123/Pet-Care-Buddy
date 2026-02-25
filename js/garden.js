@@ -40,6 +40,18 @@
                 if (plot && plot.cropId && plot.stage < 3) {
                     const crop = GARDEN_CROPS[plot.cropId];
                     if (!crop) return;
+                    // P1-24: Fruit trees use a timestamp-based cooldown managed by
+                    // GardenFeaturesCore.afterHarvest, not the tick counter.  Skip
+                    // the tick model for them so both models don't fight each other.
+                    if (crop.plantType === 'fruitTree') {
+                        if (Number.isFinite(plot.nextHarvestAt) && Date.now() >= plot.nextHarvestAt) {
+                            plot.stage = 3;
+                            plot.harvestReady = true;
+                            anyGrew = true;
+                            newlyReadyCrops.push(crop.name);
+                        }
+                        return;
+                    }
                     const effectiveGrowTime = Math.max(1, Math.round(crop.growTime / growthMult));
                     // Watered plants grow faster
                     const waterBonus = plot.watered ? 2 : 1;
@@ -323,8 +335,21 @@
                 updateWellnessBar();
             }
 
-            // Clear the plot
-            garden.plots[plotIndex] = null;
+            // P1-25: Fruit trees should enter a regrowth cooldown rather than be
+            // destroyed.  Delegate to GardenFeaturesCore.afterHarvest which sets
+            // stage=2, harvestReady=false and nextHarvestAt; only null the plot for
+            // regular (non-tree) crops where afterHarvest returns keepPlot:false.
+            let keepPlot = false;
+            if (typeof GardenFeaturesCore !== 'undefined' && GardenFeaturesCore && typeof GardenFeaturesCore.afterHarvest === 'function') {
+                const plantDef = GARDEN_CROPS[plot.cropId];
+                if (plantDef) {
+                    const afterResult = GardenFeaturesCore.afterHarvest(plot, plantDef, { now: Date.now() });
+                    keepPlot = !!(afterResult && afterResult.keepPlot);
+                }
+            }
+            if (!keepPlot) {
+                garden.plots[plotIndex] = null;
+            }
 
             saveGame();
             if (gameState.currentRoom === 'garden') {

@@ -38,8 +38,11 @@
 
         function startNewTournamentSeason(tournament) {
             const entrants = ['You', ...pickTournamentRivalNames(7)];
+            // P1-20: Ensure entrant count is even; pad with a generic rival if needed
+            // so the bracket loop never creates a match with an undefined opponent.
+            if (entrants.length % 2 !== 0) entrants.push('Rival');
             const quarter = [];
-            for (let i = 0; i < entrants.length; i += 2) {
+            for (let i = 0; i + 1 < entrants.length; i += 2) {
                 quarter.push({ a: entrants[i], b: entrants[i + 1], winner: '', aScore: 0, bScore: 0 });
             }
             tournament.lastBracket = [

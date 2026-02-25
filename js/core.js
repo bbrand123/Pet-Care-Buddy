@@ -1316,6 +1316,12 @@
                 if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.hasExternalSaveChangeSinceLastSave === 'function') {
                     return _corePersistenceCoordinator.hasExternalSaveChangeSinceLastSave();
                 }
+                // P1-07: When a non-localStorage storage backend is in use, reading
+                // from localStorage gives a stale/different value that always appears
+                // changed.  Treat no-external-change as the safe default in that case.
+                if (_mlfPlatformAdapters && _mlfPlatformAdapters.storage) {
+                    return false;
+                }
                 const current = localStorage.getItem(STORAGE_KEYS.gameSave);
                 return current !== _lastSavedStorageSnapshot;
             } catch (e) {
@@ -1347,13 +1353,13 @@
                 if (gameState.phase === 'pet') {
                     simulateHouseholdToNowForRuntime(gameState, nowMs, {
                         syncOptions: {
-                            preferHousehold: false
+                            preferHousehold: true
                         },
                         tickOptions: {
                             skipActivePetNeeds: true
                         }
                     });
-                    ensureHouseholdStateForRuntime(gameState, nowMs, { preferHousehold: false });
+                    ensureHouseholdStateForRuntime(gameState, nowMs, { preferHousehold: true });
                     if (gameState.household && typeof gameState.household === 'object') {
                         gameState.household.lastSimulatedAt = nowMs;
                     }
@@ -2284,6 +2290,10 @@
 
             try {
                 const saved = loadGame();
+                // P1-05: show recovery dialog when save is corrupted
+                if (!saved && _loadError) {
+                    showSaveRecoveryDialog();
+                }
                 if (saved && saved.pet) {
                     if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.normalizeLoadedState === 'function') {
                         MLFCanonicalGameState.normalizeLoadedState(saved, {
@@ -2294,43 +2304,51 @@
                         });
                     }
 
-                    if (saved.pets && saved.pets.length > 0) {
-                        gameState.pets = saved.pets;
-                        gameState.activePetIndex = saved.activePetIndex || 0;
-                        if (gameState.activePetIndex < 0 || gameState.activePetIndex >= gameState.pets.length) {
-                            gameState.activePetIndex = 0;
-                        }
-                        gameState.pet = gameState.pets[gameState.activePetIndex] || saved.pet;
+                    // P1-02: Use StateManager.hydrate to properly emit events for all field changes.
+                    if (typeof StateManager !== 'undefined' && StateManager && typeof StateManager.hydrate === 'function') {
+                        const hydratedRoot = StateManager.hydrate(saved, { reason: 'visibility-resume' });
+                        if (hydratedRoot) gameState = hydratedRoot;
                     } else {
-                        Object.assign(gameState.pet, saved.pet);
+                        // Fallback: direct assignment when StateManager is unavailable.
+                        if (saved.pets && saved.pets.length > 0) {
+                            gameState.pets = saved.pets;
+                            gameState.activePetIndex = saved.activePetIndex || 0;
+                            if (gameState.activePetIndex < 0 || gameState.activePetIndex >= gameState.pets.length) {
+                                gameState.activePetIndex = 0;
+                            }
+                            gameState.pet = gameState.pets[gameState.activePetIndex] || saved.pet;
+                        } else {
+                            Object.assign(gameState.pet, saved.pet);
+                        }
+
+                        if (saved.garden) gameState.garden = saved.garden;
+                        if (saved.minigamePlayCounts) gameState.minigamePlayCounts = saved.minigamePlayCounts;
+                        if (saved.minigameHighScores) gameState.minigameHighScores = saved.minigameHighScores;
+                        if (saved.minigameScoreHistory) gameState.minigameScoreHistory = saved.minigameScoreHistory;
+                        if (saved.relationships) gameState.relationships = saved.relationships;
+                        if (saved.household) gameState.household = saved.household;
+                        if (saved.furniture) gameState.furniture = saved.furniture;
+                        if (saved.roomUnlocks) gameState.roomUnlocks = saved.roomUnlocks;
+                        if (saved.roomUpgrades) gameState.roomUpgrades = saved.roomUpgrades;
+                        if (saved.roomCustomizations) gameState.roomCustomizations = saved.roomCustomizations;
+                        if (saved.badges) gameState.badges = saved.badges;
+                        if (saved.stickers) gameState.stickers = saved.stickers;
+                        if (saved.trophies) gameState.trophies = saved.trophies;
+                        if (saved.streak) gameState.streak = saved.streak;
+                        if (saved.dailyChecklist) gameState.dailyChecklist = saved.dailyChecklist;
+                        if (saved.competition) gameState.competition = normalizeCompetitionState(saved.competition);
+                        if (saved.exploration) gameState.exploration = saved.exploration;
+                        if (saved.economy) gameState.economy = saved.economy;
+                        if (saved.breedingEggs) {
+                            gameState.breedingEggs = saved.breedingEggs.filter((egg) => egg && typeof egg === 'object');
+                            gameState.breedingEggs.forEach((egg) => ensureBreedingEggData(egg));
+                        }
+                        if (saved.hatchedBreedingEggs) gameState.hatchedBreedingEggs = saved.hatchedBreedingEggs;
+                        if (typeof saved.totalFeedCount === 'number') gameState.totalFeedCount = saved.totalFeedCount;
+                        if (typeof saved.adultsRaised === 'number') gameState.adultsRaised = saved.adultsRaised;
                     }
 
-                    if (saved.garden) gameState.garden = saved.garden;
-                    if (saved.minigamePlayCounts) gameState.minigamePlayCounts = saved.minigamePlayCounts;
-                    if (saved.minigameHighScores) gameState.minigameHighScores = saved.minigameHighScores;
-                    if (saved.minigameScoreHistory) gameState.minigameScoreHistory = saved.minigameScoreHistory;
-                    if (saved.relationships) gameState.relationships = saved.relationships;
-                    if (saved.household) gameState.household = saved.household;
-                    if (saved.furniture) gameState.furniture = saved.furniture;
-                    if (saved.roomUnlocks) gameState.roomUnlocks = saved.roomUnlocks;
-                    if (saved.roomUpgrades) gameState.roomUpgrades = saved.roomUpgrades;
-                    if (saved.roomCustomizations) gameState.roomCustomizations = saved.roomCustomizations;
-                    if (saved.badges) gameState.badges = saved.badges;
-                    if (saved.stickers) gameState.stickers = saved.stickers;
-                    if (saved.trophies) gameState.trophies = saved.trophies;
-                    if (saved.streak) gameState.streak = saved.streak;
-                    if (saved.dailyChecklist) gameState.dailyChecklist = saved.dailyChecklist;
-                    if (saved.competition) gameState.competition = normalizeCompetitionState(saved.competition);
-                    if (saved.exploration) gameState.exploration = saved.exploration;
-                    if (saved.economy) gameState.economy = saved.economy;
                     ensureEconomyState();
-                    if (saved.breedingEggs) {
-                        gameState.breedingEggs = saved.breedingEggs.filter((egg) => egg && typeof egg === 'object');
-                        gameState.breedingEggs.forEach((egg) => ensureBreedingEggData(egg));
-                    }
-                    if (saved.hatchedBreedingEggs) gameState.hatchedBreedingEggs = saved.hatchedBreedingEggs;
-                    if (typeof saved.totalFeedCount === 'number') gameState.totalFeedCount = saved.totalFeedCount;
-                    if (typeof saved.adultsRaised === 'number') gameState.adultsRaised = saved.adultsRaised;
                     ensureRoomSystemsState();
 
                     const newTimeOfDay = getTimeOfDay();
@@ -2406,6 +2424,9 @@
             }
             _petPhaseTimersRunning = false;
             _petPhaseLastRoom = null;
+            // P1-06: reset suppress flag so autosave-on-unload works again after a
+            // failed import-triggered reload leaves it permanently set.
+            _suppressUnloadAutosave = false;
 
             const saved = loadGame();
             if (saved) {

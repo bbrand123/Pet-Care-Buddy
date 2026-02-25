@@ -99,6 +99,9 @@
             return results;
         },
         clear() {
+            // P1-21: teardown any running games before wiping the registry so they
+            // can clean up their timers, overlays and escape handlers.
+            this.teardownAll();
             order.length = 0;
             Object.keys(byId).forEach((id) => delete byId[id]);
             Object.keys(lifecycleById).forEach((id) => delete lifecycleById[id]);

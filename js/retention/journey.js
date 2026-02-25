@@ -934,11 +934,11 @@
                 byTrack[track].total += 1;
             }
         }
+        const record = getCurrentChapterRecord();
+        if (!record) return null;
         for (const chapterState of states) {
             const chapter = chapters.find((c) => c.id === chapterState.id);
             if (!chapter) continue;
-            const record = getCurrentChapterRecord();
-            if (!record) continue;
             const entry = record.journeyState.chapterProgress[chapter.id];
             if (!entry) continue;
             const objectives = Array.isArray(chapter.objectives) ? chapter.objectives : [];
