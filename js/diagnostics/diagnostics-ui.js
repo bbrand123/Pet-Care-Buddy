@@ -148,8 +148,51 @@
         closeBtn.style.color = '#0f172a';
         closeBtn.style.fontWeight = '600';
 
+        const previousFocus = doc.activeElement && typeof doc.activeElement.focus === 'function'
+            ? doc.activeElement
+            : null;
+
+        function getFocusableElements() {
+            if (!overlay || !overlay.querySelectorAll) return [];
+            return Array.from(overlay.querySelectorAll(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter(function filterFocusable(el) {
+                return !!(el && typeof el.focus === 'function');
+            });
+        }
+
+        function onOverlayKeydown(evt) {
+            if (!evt) return;
+            if (evt.key === 'Escape') {
+                evt.preventDefault();
+                closeDialog();
+                return;
+            }
+            if (evt.key !== 'Tab') return;
+            const focusable = getFocusableElements();
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const active = doc.activeElement;
+            if (evt.shiftKey) {
+                if (active === first || !overlay.contains(active)) {
+                    evt.preventDefault();
+                    try { last.focus(); } catch (_) {}
+                }
+                return;
+            }
+            if (active === last || !overlay.contains(active)) {
+                evt.preventDefault();
+                try { first.focus(); } catch (_) {}
+            }
+        }
+
         function closeDialog() {
+            try { overlay.removeEventListener('keydown', onOverlayKeydown, true); } catch (_) {}
             overlay.remove();
+            if (previousFocus && previousFocus.isConnected !== false) {
+                try { previousFocus.focus(); } catch (_) {}
+            }
         }
 
         copyBtn.addEventListener('click', function() {
@@ -161,6 +204,7 @@
         overlay.addEventListener('click', function(evt) {
             if (evt.target === overlay) closeDialog();
         });
+        overlay.addEventListener('keydown', onOverlayKeydown, true);
 
         actions.appendChild(copyBtn);
         actions.appendChild(closeBtn);

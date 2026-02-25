@@ -68,6 +68,17 @@
     return true;
   }
 
+  function rollbackRuntimeBootstrap(globalObj, meta) {
+    const target = getGlobal(globalObj);
+    target.__MLF_RUNTIME_BOOTSTRAPPED__ = false;
+    resetRuntimeBootFlags(target);
+    setBootInfo(target, Object.assign({
+      runtimeScriptsLoaded: false,
+      runtimeReady: false
+    }, meta || {}));
+    return target.__MLF_RUNTIME_BOOT_INFO__;
+  }
+
   function defaultFailureHandler(globalObj, err) {
     const target = getGlobal(globalObj);
     try {
@@ -141,7 +152,7 @@
       }
       return meta;
     } catch (err) {
-      setBootInfo(globalObj, {
+      rollbackRuntimeBootstrap(globalObj, {
         bootPath: cfg.bootPath || 'unknown',
         runtimeError: String(err && err.message ? err.message : err),
         runtimeReady: false
@@ -158,6 +169,7 @@
   return Object.freeze({
     READY_EVENTS,
     beginRuntimeBootstrap,
+    rollbackRuntimeBootstrap,
     markRuntimeScriptsLoaded,
     markRuntimeReady,
     runRuntimeBoot,

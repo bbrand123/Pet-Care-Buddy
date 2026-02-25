@@ -15,6 +15,7 @@
     });
     const EVENT_BATCH_SIZE = 30;
     const FLUSH_INTERVAL_MS = 5 * 60 * 1000;
+    const PERSIST_DEBOUNCE_MS = 240;
     const MAX_QUEUE = 1000;
     const MAX_BACKOFF_MS = 60 * 60 * 1000;
     const ACTIVITY_EVENTS = new Set([
@@ -29,6 +30,8 @@
     let _queue = null;
     let _meta = null;
     let _flushTimer = null;
+    let _persistTimer = null;
+    let _persistPending = false;
     let _watchersInstalled = false;
 
     function isObject(value) {
@@ -142,9 +145,45 @@
         return _meta;
     }
 
-    function persistQueueAndMeta() {
+    function writeQueueAndMetaNow() {
         writeJson(STORAGE_KEYS.queue, ensureQueue());
         writeJson(STORAGE_KEYS.meta, ensureMeta());
+    }
+
+    function clearPersistTimer() {
+        if (!_persistTimer) return;
+        try { clearTimeout(_persistTimer); } catch (_) {}
+        _persistTimer = null;
+    }
+
+    function flushPendingPersistence() {
+        clearPersistTimer();
+        if (!_persistPending) return false;
+        _persistPending = false;
+        writeQueueAndMetaNow();
+        return true;
+    }
+
+    function persistQueueAndMeta(options) {
+        const opts = (options && typeof options === 'object') ? options : {};
+        if (opts.debounce) {
+            _persistPending = true;
+            if (_persistTimer) return true;
+            _persistTimer = setTimeout(function onPersistTimer() {
+                _persistTimer = null;
+                if (!_persistPending) return;
+                _persistPending = false;
+                writeQueueAndMetaNow();
+            }, PERSIST_DEBOUNCE_MS);
+            if (_persistTimer && typeof _persistTimer.unref === 'function') {
+                _persistTimer.unref();
+            }
+            return true;
+        }
+        _persistPending = false;
+        clearPersistTimer();
+        writeQueueAndMetaNow();
+        return true;
     }
 
     function inferPlayerId(payload) {
@@ -172,7 +211,7 @@
         if (queue.length > MAX_QUEUE) {
             queue.splice(0, queue.length - MAX_QUEUE);
         }
-        persistQueueAndMeta();
+        persistQueueAndMeta({ debounce: true });
         maybeScheduleFlush();
         return record;
     }
@@ -236,6 +275,9 @@
     }
 
     async function flush(options) {
+        if (options && options.flushPendingPersistence) {
+            flushPendingPersistence();
+        }
         const queue = ensureQueue();
         const meta = ensureMeta();
         if (queue.length === 0) return { ok: true, sent: 0, skipped: true };
@@ -266,10 +308,12 @@
 
     function maybeScheduleFlush() {
         if (_flushTimer) return;
+        if (ensureQueue().length === 0) return;
         _flushTimer = setTimeout(function onFlushTick() {
             _flushTimer = null;
-            flush().catch(function noop() {});
-            maybeScheduleFlush();
+            Promise.resolve(flush()).catch(function noop() {}).finally(function maybeRescheduleFlush() {
+                if (ensureQueue().length > 0) maybeScheduleFlush();
+            });
         }, FLUSH_INTERVAL_MS);
         if (_flushTimer && typeof _flushTimer.unref === 'function') {
             _flushTimer.unref();
@@ -325,7 +369,7 @@
         const currentTs = now();
         const lastSeen = Number(meta.lastSeenAt) || 0;
         meta.lastSeenAt = currentTs;
-        persistQueueAndMeta();
+        persistQueueAndMeta({ debounce: true });
         if (!lastSeen) return null;
         const awayDays = Math.floor((currentTs - lastSeen) / 86400000);
         if (awayDays >= 1) {
@@ -358,7 +402,7 @@
                     const key = 'expedition:' + toDateString(endAt);
                     if (meta.expeditionReadyKey === key) return;
                     meta.expeditionReadyKey = key;
-                    persistQueueAndMeta();
+                    persistQueueAndMeta({ debounce: true });
                     emit('expedition_ready', { endAt });
                 });
             }
@@ -372,13 +416,13 @@
         if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
             document.addEventListener('visibilitychange', function onVisibilityChange() {
                 if (document.visibilityState === 'hidden') {
-                    flush({ force: true }).catch(function noop() {});
+                    flush({ force: true, flushPendingPersistence: true }).catch(function noop() {});
                 }
             });
         }
         if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
             window.addEventListener('pagehide', function onPageHide() {
-                flush({ force: true }).catch(function noop() {});
+                flush({ force: true, flushPendingPersistence: true }).catch(function noop() {});
             });
         }
     }
@@ -400,6 +444,17 @@
         recordReminderOptIn,
         recordReminderFired,
         recordJourneyOpen,
-        recordComebackIfNeeded
+        recordComebackIfNeeded,
+        __debug: Object.freeze({
+            flushPendingPersistence,
+            getTimerState() {
+                return {
+                    hasFlushTimer: !!_flushTimer,
+                    hasPersistTimer: !!_persistTimer,
+                    persistPending: !!_persistPending,
+                    queueLength: ensureQueue().length
+                };
+            }
+        })
     });
 });

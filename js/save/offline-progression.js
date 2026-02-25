@@ -74,7 +74,13 @@
             const simResult = householdStateApi.simulateHouseholdToNowOnState(state, nowMs, options.householdOptions || null) || null;
             result.path = 'household';
             result.meta.household = simResult && simResult.meta ? simResult.meta : null;
-            result.changed = true;
+            const householdMeta = result.meta.household || {};
+            const householdChanged = !!(
+                householdMeta.changed
+                || (Number(householdMeta.appliedElapsedMs) > 0)
+                || (Number(householdMeta.steps) > 0)
+            );
+            result.changed = !!(result.changed || householdChanged);
         } else if (OfflineSimulation && typeof OfflineSimulation.applyNeedsOfflineSimulation === 'function') {
             const needsResult = OfflineSimulation.applyNeedsOfflineSimulation(state, Object.assign({}, options, { now: nowMs }));
             result.path = 'legacy';

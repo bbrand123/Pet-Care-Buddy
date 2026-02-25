@@ -185,7 +185,9 @@ struct GameWebView: UIViewRepresentable {
         private let notificationFeedback = UINotificationFeedbackGenerator()
         private var lifecycleObserversInstalled = false
         private var pendingLifecycleSaveRequests: [String: PendingLifecycleSaveRequest] = [:]
-        private let lifecycleSaveTimeoutMs = 1800
+        private var completedLifecycleSaveResponses: [String: LifecycleSaveResponse] = [:]
+        private let lifecycleSaveTimeoutMs: Int
+        private let lifecycleSaveLateCompletionRetentionMs = 12_000
         private let lifecycleSaveQueue = DispatchQueue.main
         private var lastLifecycleSaveTriggerAt = Date.distantPast
         private var pendingNotificationDeepLink: [String: Any]?
@@ -193,8 +195,27 @@ struct GameWebView: UIViewRepresentable {
         init(isLoading: Binding<Bool>, loadFailure: Binding<WebViewLoadFailureState?>) {
             _isLoading = isLoading
             _loadFailure = loadFailure
+            lifecycleSaveTimeoutMs = Self.resolveLifecycleSaveTimeoutMs()
             super.init()
             prepareHaptics()
+        }
+
+        private static func resolveLifecycleSaveTimeoutMs() -> Int {
+            let defaultTimeoutMs = 3500
+            let minTimeoutMs = 1500
+            let maxTimeoutMs = 15_000
+
+            let userDefaultsValue = UserDefaults.standard.integer(forKey: "MLFLifecycleSaveTimeoutMs")
+            if userDefaultsValue > 0 {
+                return max(minTimeoutMs, min(maxTimeoutMs, userDefaultsValue))
+            }
+            if let bundleValue = Bundle.main.object(forInfoDictionaryKey: "MLFLifecycleSaveTimeoutMs") as? NSNumber {
+                let value = bundleValue.intValue
+                if value > 0 {
+                    return max(minTimeoutMs, min(maxTimeoutMs, value))
+                }
+            }
+            return defaultTimeoutMs
         }
 
         deinit {
@@ -487,12 +508,19 @@ struct GameWebView: UIViewRepresentable {
             """
             webView.evaluateJavaScript(script) { [weak self] result, error in
                 guard let self else { return }
-                if error == nil {
-                    self.pendingNotificationDeepLink = nil
+                guard error == nil else {
+                    self.pendingNotificationDeepLink = payload
+                    _ = result
                     return
                 }
-                self.pendingNotificationDeepLink = payload
-                _ = result
+                let handled = (result as? Bool)
+                    ?? (result as? NSNumber)?.boolValue
+                    ?? false
+                if handled {
+                    self.pendingNotificationDeepLink = nil
+                } else {
+                    self.pendingNotificationDeepLink = payload
+                }
             }
         }
 
@@ -580,6 +608,7 @@ struct GameWebView: UIViewRepresentable {
         private func handleLifecycleSaveCallback(_ message: WKScriptMessage) {
             guard let body = message.body as? [String: Any] else { return }
             guard let requestId = body["requestId"] as? String, !requestId.isEmpty else { return }
+            let hadPendingRequest = pendingLifecycleSaveRequests[requestId] != nil
 
             let ok = (body["ok"] as? Bool) ?? false
             let reason = (body["reason"] as? String) ?? (pendingLifecycleSaveRequests[requestId]?.reason ?? "native-lifecycle")
@@ -605,6 +634,10 @@ struct GameWebView: UIViewRepresentable {
                 errorMessage: errorMessage,
                 meta: body
             )
+            if !hadPendingRequest {
+                handleLateLifecycleSaveCompletion(response)
+                return
+            }
             completeLifecycleSaveRequest(requestId: requestId, with: response)
         }
 
@@ -612,7 +645,70 @@ struct GameWebView: UIViewRepresentable {
         private func completeLifecycleSaveRequest(requestId: String, with response: LifecycleSaveResponse) {
             guard let pending = pendingLifecycleSaveRequests.removeValue(forKey: requestId) else { return }
             pending.timeoutWorkItem.cancel()
+            rememberLifecycleSaveResponse(response)
             pending.completion(response)
+        }
+
+        @MainActor
+        private func rememberLifecycleSaveResponse(_ response: LifecycleSaveResponse) {
+            completedLifecycleSaveResponses[response.requestId] = response
+            let requestId = response.requestId
+            let retentionMs = lifecycleSaveLateCompletionRetentionMs
+            lifecycleSaveQueue.asyncAfter(deadline: .now() + .milliseconds(retentionMs)) { [weak self] in
+                guard let self else { return }
+                self.completedLifecycleSaveResponses.removeValue(forKey: requestId)
+            }
+        }
+
+        @MainActor
+        private func handleLateLifecycleSaveCompletion(_ response: LifecycleSaveResponse) {
+            let prior = completedLifecycleSaveResponses[response.requestId]
+            rememberLifecycleSaveResponse(response)
+            guard let prior, prior.timedOut else { return }
+            guard let webView else { return }
+            var meta: [String: Any] = [
+                "requestId": response.requestId,
+                "reason": response.reason,
+                "timedOutAtNative": true,
+                "lateCompletionOk": response.ok
+            ]
+            if let timeoutDurationMs = prior.durationMs {
+                meta["timeoutDurationMs"] = timeoutDurationMs
+            }
+            if let callbackDurationMs = response.durationMs {
+                meta["callbackDurationMs"] = callbackDurationMs
+            }
+            if let errorCode = response.errorCode {
+                meta["errorCode"] = errorCode
+            }
+            if let errorMessage = response.errorMessage {
+                meta["errorMessage"] = errorMessage
+            }
+            let entry: [String: Any] = [
+                "category": "NATIVE",
+                "level": response.ok ? "info" : "warning",
+                "message": response.ok
+                    ? "Lifecycle save completed after native timeout."
+                    : "Lifecycle save callback arrived after native timeout with failure.",
+                "meta": meta
+            ]
+            guard
+                JSONSerialization.isValidJSONObject(entry),
+                let data = try? JSONSerialization.data(withJSONObject: entry),
+                let json = String(data: data, encoding: .utf8)
+            else {
+                return
+            }
+            let script = """
+            (function() {
+              try {
+                if (window.MLFDiagnostics && typeof window.MLFDiagnostics.push === 'function') {
+                  window.MLFDiagnostics.push(\(json));
+                }
+              } catch (_) {}
+            })();
+            """
+            webView.evaluateJavaScript(script, completionHandler: nil)
         }
 
         private func lifecycleSaveInvocationScript(requestId: String, reason: String) -> String {

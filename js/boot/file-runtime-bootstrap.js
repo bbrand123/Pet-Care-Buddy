@@ -3,14 +3,42 @@
 
     if (global.__MLF_RUNTIME_BOOTSTRAPPED__) return;
 
-    function loadScript(url) {
+    var DEFAULT_SCRIPT_LOAD_TIMEOUT_MS = 8000;
+
+    function getScriptLoadTimeoutMs() {
+        var raw = Number(global.__MLF_FILE_BOOT_SCRIPT_TIMEOUT_MS__);
+        if (Number.isFinite(raw) && raw >= 0) return Math.floor(raw);
+        return DEFAULT_SCRIPT_LOAD_TIMEOUT_MS;
+    }
+
+    function loadScript(url, options) {
+        var opts = options || {};
+        var timeoutMs = Number.isFinite(Number(opts.timeoutMs)) ? Math.max(0, Math.floor(Number(opts.timeoutMs))) : getScriptLoadTimeoutMs();
         return new Promise(function(resolve, reject) {
             var s = document.createElement('script');
+            var settled = false;
+            var timerId = null;
+            function finish(ok, err) {
+                if (settled) return;
+                settled = true;
+                if (timerId != null) {
+                    try { clearTimeout(timerId); } catch (_) {}
+                    timerId = null;
+                }
+                if (ok) resolve();
+                else reject(err || new Error('Failed to load ' + url));
+            }
             s.async = false;
             s.src = url;
-            s.onload = function() { resolve(); };
-            s.onerror = function() { reject(new Error('Failed to load ' + url)); };
+            s.onload = function() { finish(true); };
+            s.onerror = function() { finish(false, new Error('Failed to load ' + url)); };
             document.head.appendChild(s);
+            if (timeoutMs > 0) {
+                timerId = setTimeout(function() {
+                    try { if (typeof s.remove === 'function') s.remove(); } catch (_) {}
+                    finish(false, new Error('Timed out loading ' + url));
+                }, timeoutMs);
+            }
         });
     }
 
@@ -33,13 +61,13 @@
         }
         list.forEach(function(path) {
             chain = chain.then(function() {
-                var href = resolveRuntimeScriptUrl(path);
-                if (loaded.has(href)) return;
-                return loadScript(href).then(function() { loaded.add(href); });
+                    var href = resolveRuntimeScriptUrl(path);
+                    if (loaded.has(href)) return;
+                    return loadScript(href).then(function() { loaded.add(href); });
+                });
             });
-        });
-        return chain;
-    }
+            return chain;
+        }
 
     function ensureSharedBootModulesLoaded() {
         return loadScript('js/boot/runtime-manifest-shared.js')

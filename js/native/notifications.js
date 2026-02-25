@@ -90,25 +90,35 @@
         return true;
     }
 
+    function invokeIfFunction(fn, args) {
+        if (typeof fn !== 'function') return false;
+        try {
+            fn.apply(null, Array.isArray(args) ? args : []);
+            return true;
+        } catch (_) {
+            return false;
+        }
+    }
+
     function openRoute(route) {
         const normalized = String(route || '').replace(/^#?\/?/, '').toLowerCase();
         if (!normalized) return false;
         if (normalized === 'streak') {
-            if (typeof showStreakModal === 'function') showStreakModal();
-            return true;
+            return invokeIfFunction(typeof showStreakModal === 'function' ? showStreakModal : null, []);
         }
         if (normalized === 'journey') {
-            if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') Journey.trackJourneyOpen();
-            if (typeof showJourneyModal === 'function') showJourneyModal();
-            return true;
+            if (typeof Journey !== 'undefined' && Journey && typeof Journey.trackJourneyOpen === 'function') {
+                invokeIfFunction(Journey.trackJourneyOpen, []);
+            }
+            return invokeIfFunction(typeof showJourneyModal === 'function' ? showJourneyModal : null, []);
         }
         if (normalized === 'explore' || normalized === 'expedition') {
-            if (typeof showExplorationModal === 'function') showExplorationModal();
-            return true;
+            return invokeIfFunction(typeof showExplorationModal === 'function' ? showExplorationModal : null, []);
         }
         if (normalized === 'garden') {
-            if (typeof switchRoom === 'function') switchRoom('garden');
-            if (typeof renderPetPhase === 'function') renderPetPhase();
+            const switched = invokeIfFunction(typeof switchRoom === 'function' ? switchRoom : null, ['garden']);
+            if (!switched) return false;
+            if (typeof renderPetPhase === 'function') invokeIfFunction(renderPetPhase, []);
             return true;
         }
         return false;
@@ -119,8 +129,13 @@
         const route = typeof data.route === 'string' ? data.route : '';
         const reminderType = typeof data.reminderType === 'string' ? data.reminderType : 'generic';
         const opened = openRoute(route);
-        if (typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.recordReminderFired === 'function') {
+        if (opened && typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.recordReminderFired === 'function') {
             MLFRetentionTelemetry.recordReminderFired(reminderType, route);
+        } else if (!opened && typeof MLFRetentionTelemetry !== 'undefined' && MLFRetentionTelemetry && typeof MLFRetentionTelemetry.emit === 'function') {
+            MLFRetentionTelemetry.emit('reminder_deeplink_unhandled', {
+                reminderType,
+                deepLink: route
+            });
         }
         return opened;
     }

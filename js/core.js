@@ -449,6 +449,9 @@
         let _hapticGlobalLastAt = 0;
         let _globalUiHapticsBound = false;
         let _modalHapticObserver = null;
+        let _modalHapticLastOverlayCount = 0;
+        let _modalHapticRecountQueued = false;
+        let _modalHapticObserverSuppressUntil = 0;
 
         function postNativeHaptic(payload) {
             try {
@@ -509,6 +512,55 @@
             }
         }
 
+        function isModalLikeOverlayNode(node) {
+            if (!node || node.nodeType !== 1) return false;
+            if (node.matches && node.matches('[role="dialog"], [role="alertdialog"], .settings-overlay, .daily-overlay, .rewards-hub-overlay, .minigame-menu-overlay')) {
+                return true;
+            }
+            if (node.querySelector && node.querySelector('[role="dialog"], [role="alertdialog"], .settings-overlay, .daily-overlay, .rewards-hub-overlay, .minigame-menu-overlay')) {
+                return true;
+            }
+            return false;
+        }
+
+        function mutationTouchesModalOverlays(mutations) {
+            if (!Array.isArray(mutations) && !(mutations && typeof mutations.length === 'number')) return false;
+            for (let i = 0; i < mutations.length; i++) {
+                const mutation = mutations[i];
+                if (!mutation) continue;
+                const added = mutation.addedNodes || [];
+                for (let j = 0; j < added.length; j++) {
+                    if (isModalLikeOverlayNode(added[j])) return true;
+                }
+                const removed = mutation.removedNodes || [];
+                for (let j = 0; j < removed.length; j++) {
+                    if (isModalLikeOverlayNode(removed[j])) return true;
+                }
+            }
+            return false;
+        }
+
+        function queueModalHapticOverlayRecount() {
+            if (_modalHapticRecountQueued) return;
+            _modalHapticRecountQueued = true;
+            const schedule = (typeof requestAnimationFrame === 'function')
+                ? requestAnimationFrame
+                : function (cb) { return setTimeout(cb, 16); };
+            schedule(function () {
+                _modalHapticRecountQueued = false;
+                const nextCount = countOpenModalLikeOverlays();
+                const now = Date.now();
+                const canTrigger = now >= _modalHapticObserverSuppressUntil;
+                if (canTrigger && nextCount > _modalHapticLastOverlayCount) triggerUiHaptic('modalOpen');
+                else if (canTrigger && nextCount < _modalHapticLastOverlayCount) triggerUiHaptic('modalClose');
+                _modalHapticLastOverlayCount = nextCount;
+            });
+        }
+
+        function suppressObserverModalHapticsBriefly() {
+            _modalHapticObserverSuppressUntil = Date.now() + 260;
+        }
+
         function setupGlobalUiHapticCoverage() {
             if (_globalUiHapticsBound || typeof document === 'undefined') return;
             _globalUiHapticsBound = true;
@@ -518,10 +570,12 @@
                 if (!target) return;
 
                 if (target.matches('[aria-haspopup="dialog"], #minigames-btn, #settings-btn, #daily-btn, #rewards-btn, #explore-btn, #journey-btn')) {
+                    suppressObserverModalHapticsBriefly();
                     triggerUiHaptic('modalOpen');
                     return;
                 }
                 if (target.matches('.settings-close, .daily-close, .rewards-hub-close, .minigame-close-btn, [data-summary-close], [id$=\"-close\"], [aria-label^=\"Close \"]')) {
+                    suppressObserverModalHapticsBriefly();
                     triggerUiHaptic('modalClose');
                     return;
                 }
@@ -535,12 +589,10 @@
             }, true);
 
             if (typeof MutationObserver === 'function' && document.body) {
-                let lastCount = countOpenModalLikeOverlays();
-                _modalHapticObserver = new MutationObserver(function () {
-                    const nextCount = countOpenModalLikeOverlays();
-                    if (nextCount > lastCount) triggerUiHaptic('modalOpen');
-                    else if (nextCount < lastCount) triggerUiHaptic('modalClose');
-                    lastCount = nextCount;
+                _modalHapticLastOverlayCount = countOpenModalLikeOverlays();
+                _modalHapticObserver = new MutationObserver(function (mutations) {
+                    if (!mutationTouchesModalOverlays(mutations)) return;
+                    queueModalHapticOverlayRecount();
                 });
                 _modalHapticObserver.observe(document.body, { childList: true, subtree: true });
             }
@@ -1723,9 +1775,40 @@
                             _needsSaveAfterLoad = true;
                         }
                     }
+                    if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.normalizeLoadedState === 'function') {
+                        MLFCanonicalGameState.normalizeLoadedState(parsed, {
+                            now: nowMs,
+                            ensureHouseholdState: ensureHouseholdStateForRuntime,
+                            resetRuntimeTransientState: true,
+                            preserveOfflineChanges: true
+                        });
+                    } else {
+	                        // Reset session-local transient state (legacy fallback)
+	                        parsed._sessionMinigameCount = 0;
+	                        parsed._minigameRewardSession = null;
+	                        parsed._careActionTimestamps = [];
+	                        if (parsed.security && parsed.security.coinGainSession) parsed.security.coinGainSession.earned = 0;
+	                        if (parsed.security && parsed.security.coinGainMinute) {
+	                            parsed.security.coinGainMinute.windowStart = 0;
+	                            parsed.security.coinGainMinute.earned = 0;
+	                        }
+	                    }
                     if (_needsSaveAfterLoad) {
                         try {
-                            const migrated = JSON.stringify(parsed);
+                            const migratedState = (typeof MLFCanonicalGameState !== 'undefined'
+                                && MLFCanonicalGameState
+                                && typeof MLFCanonicalGameState.stripTransientState === 'function')
+                                ? MLFCanonicalGameState.stripTransientState(parsed)
+                                : (function legacyLoadedSaveClone() {
+                                    const clone = JSON.parse(JSON.stringify(parsed));
+                                    delete clone._offlineChanges;
+                                    delete clone._hadOfflineChangesOnLoad;
+                                    delete clone._sessionMinigameCount;
+                                    delete clone._minigameRewardSession;
+                                    delete clone._careActionTimestamps;
+                                    return clone;
+                                })();
+                            const migrated = JSON.stringify(migratedState);
                             if (_mlfPlatformAdapters && _mlfPlatformAdapters.storage) _mlfPlatformAdapters.storage.setItem(STORAGE_KEYS.gameSave, migrated);
                             else localStorage.setItem(STORAGE_KEYS.gameSave, migrated);
                             _lastSavedStorageSnapshot = migrated;
@@ -1744,24 +1827,6 @@
                             if (_corePersistenceCoordinator && typeof _corePersistenceCoordinator.markSaveSnapshot === 'function') {
                                 _corePersistenceCoordinator.markSaveSnapshot(saved);
                             }
-	                    }
-	                    if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.normalizeLoadedState === 'function') {
-	                        MLFCanonicalGameState.normalizeLoadedState(parsed, {
-	                            now: nowMs,
-	                            ensureHouseholdState: ensureHouseholdStateForRuntime,
-	                            resetRuntimeTransientState: true,
-                                preserveOfflineChanges: true
-	                        });
-	                    } else {
-	                        // Reset session-local transient state (legacy fallback)
-	                        parsed._sessionMinigameCount = 0;
-	                        parsed._minigameRewardSession = null;
-	                        parsed._careActionTimestamps = [];
-	                        if (parsed.security && parsed.security.coinGainSession) parsed.security.coinGainSession.earned = 0;
-	                        if (parsed.security && parsed.security.coinGainMinute) {
-	                            parsed.security.coinGainMinute.windowStart = 0;
-	                            parsed.security.coinGainMinute.earned = 0;
-	                        }
 	                    }
 
                     return parsed;
@@ -2287,6 +2352,8 @@
                 return { resumed: true, hadSave: !!saved };
             } finally {
                 startDecayTimer();
+                if (typeof startGardenGrowTimer === 'function') startGardenGrowTimer();
+                if (typeof startIdleAnimations === 'function') startIdleAnimations();
                 _petPhaseTimersRunning = true;
             }
         }

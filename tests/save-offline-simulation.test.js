@@ -94,3 +94,31 @@ test('applyOfflineSimulation sets timeOfDay through injected function', () => {
     assert.equal(result.now, 123);
     assert.equal(save.timeOfDay, 'night');
 });
+
+test('applyGardenOfflineGrowth repairs malformed plot numeric fields and avoids NaN corruption', () => {
+    const now = 20 * 60000;
+    const save = {
+        season: 'spring',
+        garden: {
+            lastGrowTick: now - (2 * 60000),
+            plots: [
+                { cropId: 'carrot', stage: 'oops', growTicks: NaN, watered: 'yes' },
+                { cropId: 'carrot', stage: 0, growTicks: 0, watered: false },
+                { cropId: 'unknown', stage: NaN, growTicks: NaN, watered: null }
+            ]
+        }
+    };
+
+    const result = OfflineSim.applyGardenOfflineGrowth(save, {
+        now,
+        seasons: { spring: { gardenGrowthMultiplier: 1 } },
+        gardenCrops: { carrot: { growTime: 2 } }
+    });
+
+    assert.equal(result.changed, true);
+    assert.equal(save.garden.plots[0].growTicks, 3);
+    assert.equal(Number.isFinite(save.garden.plots[0].stage), true);
+    assert.equal(save.garden.plots[0].watered, false);
+    assert.equal(Number.isFinite(save.garden.plots[2].growTicks), true);
+    assert.equal(Number.isFinite(save.garden.plots[2].stage), true);
+});

@@ -47,6 +47,7 @@
             overlay.setAttribute('role', 'alertdialog');
             overlay.setAttribute('aria-modal', 'true');
             overlay.setAttribute('aria-label', 'Save data corrupted');
+            overlay.setAttribute('tabindex', '-1');
         }
         overlay.innerHTML = buildRecoveryDialogHTML();
 
@@ -54,6 +55,57 @@
             return { shown: false, reason: 'no-body' };
         }
         documentRef.body.appendChild(overlay);
+        const previousFocus = documentRef.activeElement && typeof documentRef.activeElement.focus === 'function'
+            ? documentRef.activeElement
+            : null;
+
+        function getFocusableElements() {
+            if (!overlay || !overlay.querySelectorAll) return [];
+            return Array.from(overlay.querySelectorAll(
+                'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+            )).filter((el) => !!(el && typeof el.focus === 'function'));
+        }
+
+        function restoreFocus() {
+            if (previousFocus && previousFocus.isConnected !== false) {
+                try { previousFocus.focus(); } catch (_) {}
+            }
+        }
+
+        function closeOverlay() {
+            try { overlay.removeEventListener('keydown', onOverlayKeydown, true); } catch (_) {}
+            if (typeof overlay.remove === 'function') {
+                overlay.remove();
+            }
+            restoreFocus();
+        }
+
+        function onOverlayKeydown(evt) {
+            if (!evt) return;
+            if (evt.key === 'Escape') {
+                evt.preventDefault();
+                closeOverlay();
+                safeCall(opts.onDismiss);
+                return;
+            }
+            if (evt.key !== 'Tab') return;
+            const focusable = getFocusableElements();
+            if (focusable.length === 0) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            const active = documentRef.activeElement;
+            if (evt.shiftKey) {
+                if (active === first || !overlay.contains(active)) {
+                    evt.preventDefault();
+                    try { last.focus(); } catch (e) {}
+                }
+                return;
+            }
+            if (active === last || !overlay.contains(active)) {
+                evt.preventDefault();
+                try { first.focus(); } catch (e) {}
+            }
+        }
 
         const diagnostics = opts.diagnostics;
         if (diagnostics && typeof diagnostics.error === 'function') {
@@ -93,9 +145,7 @@
                 } catch (e) {}
                 safeCall(opts.onStartFreshReset);
                 safeCall(opts.suppressUnloadAutosaveForReload);
-                if (typeof overlay.remove === 'function') {
-                    overlay.remove();
-                }
+                closeOverlay();
                 const reloadLocation = opts.reloadLocation || (typeof location !== 'undefined' ? location : null);
                 if (reloadLocation && typeof reloadLocation.reload === 'function') {
                     reloadLocation.reload();
@@ -108,16 +158,23 @@
             : null;
         if (dismissBtn && typeof dismissBtn.addEventListener === 'function') {
             dismissBtn.addEventListener('click', function onDismiss() {
-                if (typeof overlay.remove === 'function') {
-                    overlay.remove();
-                }
+                closeOverlay();
                 safeCall(opts.onDismiss);
             });
+        }
+
+        if (typeof overlay.addEventListener === 'function') {
+            overlay.addEventListener('keydown', onOverlayKeydown, true);
         }
 
         if (typeof opts.announce === 'function') {
             opts.announce('Save data may be corrupted. A recovery dialog is available.', true);
         }
+
+        try {
+            const initialFocus = dismissBtn || exportBtn || freshBtn || overlay;
+            if (initialFocus && typeof initialFocus.focus === 'function') initialFocus.focus();
+        } catch (e) {}
 
         return { shown: true, overlayId: overlay.id };
     }

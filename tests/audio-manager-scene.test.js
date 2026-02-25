@@ -66,7 +66,10 @@ function createSandbox() {
         listeners[type] = listeners[type] || [];
         listeners[type].push(fn);
     };
-    sandbox.window.removeEventListener = function () {};
+    sandbox.window.removeEventListener = function (type, fn) {
+        if (!listeners[type]) return;
+        listeners[type] = listeners[type].filter((entry) => entry !== fn);
+    };
     sandbox.window.dispatchEvent = function () { return true; };
     sandbox.window.matchMedia = function () { return { matches: false }; };
     sandbox.window.Audio = sandbox.Audio;
@@ -130,4 +133,23 @@ test('audio manager accessibility legend includes upgraded gameplay status cues'
     assert.ok(ids.has('statusImportant'));
     assert.ok(ids.has('simonPad'));
     assert.ok(ids.has('rhythmBeatAccent'));
+});
+
+test('audio manager unlock is idempotent and removes first-interaction listeners after success', async () => {
+    const sandbox = createSandbox();
+    const { GameAudio } = sandbox;
+    let loadCalls = 0;
+    sandbox.Audio.prototype.load = function () { loadCalls += 1; };
+
+    await GameAudio.init();
+    assert.ok((sandbox.listeners.pointerdown || []).length > 0);
+    assert.equal(sandbox.listeners.pagehide, undefined);
+
+    await GameAudio.unlock();
+    const afterFirstUnlockLoads = loadCalls;
+    assert.equal((sandbox.listeners.pointerdown || []).length, 0);
+    assert.equal((sandbox.listeners.touchstart || []).length, 0);
+
+    await GameAudio.unlock();
+    assert.equal(loadCalls, afterFirstUnlockLoads);
 });

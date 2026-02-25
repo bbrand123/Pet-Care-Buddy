@@ -156,3 +156,77 @@ test('file-protocol bootstrap smoke test emits shared ready signals and loads ru
     const manifestRuntimeCount = sandbox.MLFRuntimeManifest.RUNTIME_SCRIPT_FILES.length;
     assert.equal(runtimeScriptsLoaded.length, manifestRuntimeCount);
 });
+
+test('file-protocol bootstrap times out stalled script loads and dismisses splash', async () => {
+    const repoRoot = path.resolve(__dirname, '..');
+    const fileBootstrapSrc = fs.readFileSync(path.join(repoRoot, 'js/boot/file-runtime-bootstrap.js'), 'utf8');
+    const errors = [];
+    const timeouts = [];
+    let nextTimerId = 1;
+    let splashDismissed = 0;
+
+    const sandbox = {
+        console: {
+            log() {},
+            info() {},
+            warn() {},
+            error(...args) { errors.push(args.map(String).join(' ')); }
+        },
+        URL,
+        Promise,
+        Date,
+        Math,
+        JSON,
+        Object,
+        String,
+        Number,
+        Error,
+        __MLF_FILE_BOOT_SCRIPT_TIMEOUT_MS__: 5,
+        dismissSplashScreen() { splashDismissed += 1; },
+        setTimeout(fn, ms) {
+            const id = nextTimerId++;
+            timeouts.push({ id, fn, ms, cleared: false });
+            return id;
+        },
+        clearTimeout(id) {
+            const timer = timeouts.find((t) => t.id === id);
+            if (timer) timer.cleared = true;
+        }
+    };
+    sandbox.window = sandbox;
+    sandbox.globalThis = sandbox;
+    sandbox.document = {
+        baseURI: 'file:///App/Web/index.html',
+        head: {
+            appendChild() {
+                // Intentionally stall: no onload/onerror.
+            }
+        },
+        createElement(tagName) {
+            return {
+                tagName,
+                async: true,
+                src: '',
+                onload: null,
+                onerror: null,
+                remove() {}
+            };
+        }
+    };
+
+    const context = vm.createContext(sandbox);
+    vm.runInContext(fileBootstrapSrc, context, { filename: 'file-runtime-bootstrap.js' });
+
+    const firstTimeout = timeouts.find((t) => !t.cleared);
+    assert.ok(firstTimeout, 'expected script timeout to be scheduled');
+    firstTimeout.cleared = true;
+    firstTimeout.fn();
+
+    for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+    }
+
+    assert.equal(splashDismissed, 1);
+    assert.equal(errors.some((line) => line.includes('timed out') || line.includes('Timed out')), true);
+    assert.equal(sandbox.__MLF_RUNTIME_READY__ === true, false);
+});

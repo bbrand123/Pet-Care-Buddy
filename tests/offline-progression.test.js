@@ -55,3 +55,26 @@ test('offline progression falls back to legacy needs path when household simulat
     assert.equal(save.pet.hunger < 100, true);
     assert.equal(save._offlineChanges.minutes, 20);
 });
+
+test('offline progression household path does not mark changed for no-op simulator result', () => {
+    const now = 10 * 60000;
+    const save = {
+        lastUpdate: now,
+        pet: { hunger: 80, cleanliness: 80, happiness: 80, energy: 80 },
+        pets: [{ id: 1, hunger: 80, cleanliness: 80, happiness: 80, energy: 80 }],
+        activePetIndex: 0,
+        garden: { lastGrowTick: now, plots: [] }
+    };
+
+    const result = OfflineProgression.applyOfflineProgression(save, {
+        now,
+        householdStateApi: {
+            simulateHouseholdToNowOnState() {
+                return { meta: { steps: 0, appliedElapsedMs: 0, skipped: true } };
+            }
+        }
+    });
+
+    assert.equal(result.path, 'household');
+    assert.equal(result.changed, false);
+});

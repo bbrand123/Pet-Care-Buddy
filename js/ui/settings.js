@@ -1013,8 +1013,36 @@
                 updateScrollFadeIndicators();
             }
         }, true);
-        const _scrollFadeObserver = new MutationObserver(() => { requestAnimationFrame(updateScrollFadeIndicators); });
-        _scrollFadeObserver.observe(document.body, { childList: true, subtree: true });
+        if (typeof MutationObserver === 'function' && document.body) {
+            let _scrollFadeRefreshQueued = false;
+            const queueScrollFadeRefresh = () => {
+                if (_scrollFadeRefreshQueued) return;
+                _scrollFadeRefreshQueued = true;
+                requestAnimationFrame(() => {
+                    _scrollFadeRefreshQueued = false;
+                    updateScrollFadeIndicators();
+                });
+            };
+            const _scrollFadeObserver = new MutationObserver((mutations) => {
+                for (const mutation of mutations || []) {
+                    const added = mutation && mutation.addedNodes ? mutation.addedNodes : [];
+                    const removed = mutation && mutation.removedNodes ? mutation.removedNodes : [];
+                    for (const node of added) {
+                        if (node && node.nodeType === 1 && node.querySelector && (node.matches('.actions-scroll-wrap, .actions-row') || node.querySelector('.actions-scroll-wrap, .actions-row'))) {
+                            queueScrollFadeRefresh();
+                            return;
+                        }
+                    }
+                    for (const node of removed) {
+                        if (node && node.nodeType === 1 && node.querySelector && (node.matches('.actions-scroll-wrap, .actions-row') || node.querySelector('.actions-scroll-wrap, .actions-row'))) {
+                            queueScrollFadeRefresh();
+                            return;
+                        }
+                    }
+                }
+            });
+            _scrollFadeObserver.observe(document.body, { childList: true, subtree: true });
+        }
 
         // ==================== C28: TOOLTIP VIEWPORT CLAMPING ====================
         document.addEventListener('mouseover', (e) => {

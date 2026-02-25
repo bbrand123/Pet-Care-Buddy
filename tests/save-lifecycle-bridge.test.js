@@ -85,3 +85,20 @@ test('bridge reports lifecycle save failures to native callback transport', asyn
     assert.equal(nativePosts[0].ok, false);
     assert.equal(String(nativePosts[0].error.message).includes('disk full'), true);
 });
+
+test('bridge does not debounce immediate retry after failed lifecycle save', async () => {
+    LifecycleBridge._resetForTests();
+    let callCount = 0;
+    LifecycleBridge.configure({ debounceMs: 1000 });
+    LifecycleBridge.setSaveHandler(() => {
+        callCount += 1;
+        if (callCount === 1) throw new Error('first failure');
+        return { ok: true };
+    });
+
+    await LifecycleBridge.saveNowForLifecycle('background');
+    const retry = await LifecycleBridge.saveNowForLifecycle('background');
+
+    assert.equal(callCount, 2);
+    assert.equal(retry.ok, true);
+});

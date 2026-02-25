@@ -26,6 +26,42 @@
         return !!value && typeof value === 'object' && !Array.isArray(value);
     }
 
+    function normalizeFiniteInt(value, fallback, min, max) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return fallback;
+        const rounded = Math.floor(n);
+        return clampFallback(rounded, min, max);
+    }
+
+    function normalizeGardenPlotForOfflineGrowth(plot) {
+        if (!isObject(plot)) return { ok: false, repaired: false };
+        let repaired = false;
+
+        const nextGrowTicks = normalizeFiniteInt(plot.growTicks, 0, 0, Number.MAX_SAFE_INTEGER);
+        if (plot.growTicks !== nextGrowTicks) {
+            plot.growTicks = nextGrowTicks;
+            repaired = true;
+        }
+
+        const nextStage = normalizeFiniteInt(plot.stage, 0, 0, 3);
+        if (plot.stage !== nextStage) {
+            plot.stage = nextStage;
+            repaired = true;
+        }
+
+        const nextWatered = !!plot.watered;
+        if (plot.watered !== nextWatered) {
+            plot.watered = nextWatered;
+            repaired = true;
+        }
+
+        if (plot.cropId == null) return { ok: false, repaired };
+        plot.cropId = String(plot.cropId);
+        if (!plot.cropId) return { ok: false, repaired: true };
+
+        return { ok: true, repaired };
+    }
+
     function applyGardenOfflineGrowth(save, deps) {
         if (!isObject(save) || !isObject(save.garden)) {
             return { changed: false, gardenTicksPassed: 0 };
@@ -50,12 +86,17 @@
         const season = save.season || getCurrentSeason();
         const growthMult = seasons[season] ? seasons[season].gardenGrowthMultiplier : 1;
 
+        let repairedPlots = 0;
         for (let i = 0; i < save.garden.plots.length; i++) {
             const plot = save.garden.plots[i];
-            if (!plot || !plot.cropId || plot.stage >= 3) continue;
+            const normalizedPlot = normalizeGardenPlotForOfflineGrowth(plot);
+            if (normalizedPlot.repaired) repairedPlots++;
+            if (!normalizedPlot.ok || !plot.cropId || plot.stage >= 3) continue;
             const crop = gardenCrops[plot.cropId];
             if (!crop) continue;
-            const effectiveGrowTime = Math.max(1, Math.round(crop.growTime / growthMult));
+            const cropGrowTime = Number(crop.growTime);
+            if (!Number.isFinite(cropGrowTime) || cropGrowTime <= 0) continue;
+            const effectiveGrowTime = Math.max(1, Math.round(cropGrowTime / growthMult));
             const firstTickValue = plot.watered ? 2 : 1;
             plot.growTicks += firstTickValue + (gardenTicksPassed - 1);
             plot.watered = false;
@@ -64,7 +105,7 @@
         }
 
         save.garden.lastGrowTick = now;
-        return { changed: true, gardenTicksPassed };
+        return { changed: true, gardenTicksPassed, repairedPlots };
     }
 
     function applyNeedsOfflineSimulation(save, deps) {

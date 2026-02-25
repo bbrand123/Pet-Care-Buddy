@@ -21,8 +21,18 @@
             if (started) return false;
             if (!canBoot()) return false;
             started = true;
-            if (typeof opts.onBoot === 'function') {
-                opts.onBoot();
+            try {
+                if (typeof opts.onBoot === 'function') {
+                    const result = opts.onBoot();
+                    if (result && typeof result.then === 'function') {
+                        Promise.resolve(result).catch(function rollbackAsyncBootFailure() {
+                            started = false;
+                        });
+                    }
+                }
+            } catch (err) {
+                started = false;
+                throw err;
             }
             return true;
         }

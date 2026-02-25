@@ -80,6 +80,9 @@
     let currentRoom = null;
     let currentAudioPreset = safeRead('myLittleFriend_audioPreset', 'standard');
     let pausedForBackground = false;
+    let unlockInFlightPromise = null;
+    let unlockListenerHandler = null;
+    const UNLOCK_LISTENER_CAPTURE = true;
 
     let audioCtx = null;
     let webAudioGains = null;
@@ -662,15 +665,30 @@
     }
 
     function bindUnlockListeners() {
-        if (listenersBound || typeof window === 'undefined' || typeof document === 'undefined') return;
+        if (listenersBound || unlocked || typeof window === 'undefined' || typeof document === 'undefined') return;
         listenersBound = true;
         const onFirstInteraction = () => {
+            if (destroyed || unlocked || unlockInFlightPromise) return;
             unlock().catch(() => {});
         };
-        const opts = { passive: true, capture: true };
+        unlockListenerHandler = onFirstInteraction;
+        const opts = { passive: true, capture: UNLOCK_LISTENER_CAPTURE };
         ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((evt) => {
             window.addEventListener(evt, onFirstInteraction, opts);
         });
+    }
+
+    function unbindUnlockListeners() {
+        if (!listenersBound || typeof window === 'undefined' || !unlockListenerHandler) {
+            listenersBound = false;
+            unlockListenerHandler = null;
+            return;
+        }
+        ['pointerdown', 'touchstart', 'mousedown', 'keydown'].forEach((evt) => {
+            try { window.removeEventListener(evt, unlockListenerHandler, UNLOCK_LISTENER_CAPTURE); } catch (err) {}
+        });
+        listenersBound = false;
+        unlockListenerHandler = null;
     }
 
     function bindLifecycleListeners() {
@@ -712,20 +730,37 @@
 
     async function unlock() {
         if (destroyed) return false;
-        await ensureManifest();
-        ensureAudioContext();
-        if (audioCtx && audioCtx.state === 'suspended') {
-            try { await audioCtx.resume(); } catch (err) { warnDebug('AudioContext resume failed', err); }
+        if (unlocked) {
+            ensureAudioContext();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch (err) { warnDebug('AudioContext resume failed', err); }
+            }
+            return true;
         }
-        unlocked = true;
-        preloadConfiguredSounds();
-        // Prime key audio elements (best-effort for mobile WebViews)
-        baseAudioCache.forEach((audio) => {
-            try { audio.load(); } catch (err) {}
-        });
-        if (currentRoom) enterRoom(currentRoom);
-        logDebug('Audio unlocked');
-        return true;
+        if (unlockInFlightPromise) return unlockInFlightPromise;
+        unlockInFlightPromise = (async () => {
+            await ensureManifest();
+            ensureAudioContext();
+            if (audioCtx && audioCtx.state === 'suspended') {
+                try { await audioCtx.resume(); } catch (err) { warnDebug('AudioContext resume failed', err); }
+            }
+            if (unlocked) return true;
+            unlocked = true;
+            preloadConfiguredSounds();
+            // Prime key audio elements (best-effort for mobile WebViews)
+            baseAudioCache.forEach((audio) => {
+                try { audio.load(); } catch (err) {}
+            });
+            unbindUnlockListeners();
+            if (currentRoom) enterRoom(currentRoom);
+            logDebug('Audio unlocked');
+            return true;
+        })();
+        try {
+            return await unlockInFlightPromise;
+        } finally {
+            unlockInFlightPromise = null;
+        }
     }
 
     async function init() {
@@ -1991,6 +2026,8 @@
 
     function destroy() {
         destroyed = true;
+        unlockInFlightPromise = null;
+        unbindUnlockListeners();
         clearSceneRefreshTimer();
         Array.from(mixDuckTimers.values()).forEach((timerId) => { try { clearTimeout(timerId); } catch (err) {} });
         mixDuckTimers.clear();
@@ -2147,7 +2184,7 @@
 
     if (typeof window !== 'undefined') {
         window.GameAudio = api;
-        window.addEventListener('pagehide', function () {
+        window.addEventListener('unload', function () {
             try { api.destroy(); } catch (err) {}
         });
     }

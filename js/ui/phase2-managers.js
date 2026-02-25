@@ -1296,7 +1296,8 @@
                     });
                 });
             });
-            observer.observe(document.body, { childList: true, subtree: true });
+            observer.observe(document.body, { childList: true, subtree: false });
+            document.querySelectorAll('.settings-overlay').forEach(injectSettingsSection);
         }
 
         return { patchShowSettingsModal, observeSettingsOverlay, injectSettingsSection, syncQualityUi };

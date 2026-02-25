@@ -129,7 +129,10 @@
             return state.inFlightPromise.then((result) => Object.assign({}, result, { coalesced: true, reason: normalizedReason }));
         }
 
-        if (!force && state.lastCompletedResult && (startedAt - state.lastCompletedAt) < state.debounceMs) {
+        if (!force
+            && state.lastCompletedResult
+            && state.lastCompletedResult.ok === true
+            && (startedAt - state.lastCompletedAt) < state.debounceMs) {
             return Promise.resolve(Object.assign({}, state.lastCompletedResult, {
                 debounced: true,
                 reason: normalizedReason
@@ -160,8 +163,10 @@
                 error: normalizeError(err)
             }))
             .then((result) => {
-                state.lastCompletedAt = nowMs();
-                state.lastCompletedResult = result;
+                if (result && result.ok) {
+                    state.lastCompletedAt = nowMs();
+                    state.lastCompletedResult = result;
+                }
                 state.inFlightPromise = null;
                 if (result.ok) {
                     pushDiagnostic('info', 'Lifecycle save completed.', {

@@ -75,6 +75,21 @@
         return merged;
     }
 
+    function mergeLegacyIntoCanonicalHouseholdPet(pet, canonicalRecord, state) {
+        if (!isObject(canonicalRecord)) return buildPetRecordFromLegacy(pet, canonicalRecord, state);
+        const merged = buildPetRecordFromLegacy(pet, canonicalRecord, state);
+        merged.id = String(pet.id);
+        merged.needs = deepClone(isObject(canonicalRecord.needs) ? canonicalRecord.needs : (merged.needs || {}));
+        merged.hunger = normalizeNeed(merged.needs.hunger, merged.hunger);
+        merged.energy = normalizeNeed(merged.needs.energy, merged.energy);
+        merged.happiness = normalizeNeed(merged.needs.fun, merged.happiness);
+        merged.cleanliness = normalizeNeed(merged.needs.hygiene, merged.cleanliness);
+        if (isObject(canonicalRecord.location)) merged.location = deepClone(canonicalRecord.location);
+        if (isObject(canonicalRecord.schedule)) merged.schedule = deepClone(canonicalRecord.schedule);
+        if (typeof canonicalRecord.mood === 'string') merged.mood = canonicalRecord.mood;
+        return merged;
+    }
+
     function convertLegacyRelationshipsToHousehold(state, existingHouseholdRelationships, nowMs) {
         const out = isObject(existingHouseholdRelationships) ? deepClone(existingHouseholdRelationships) : {};
         const legacy = isObject(state && state.relationships) ? state.relationships : {};
@@ -106,9 +121,12 @@
         if (!isObject(state)) return state;
         const opts = isObject(options) ? options : {};
         const preferHousehold = opts.preferHousehold !== false;
+        const hasExplicitLegacyPetsArray = Array.isArray(state.pets);
         const now = Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now();
         const existingHousehold = isObject(state.household) ? state.household : {};
         const pets = getLegacyPets(state);
+        const retainHouseholdOnlyPets = opts.retainHouseholdOnlyPets === true
+            || (!hasExplicitLegacyPetsArray && pets.length === 0);
         const petsById = {};
         const existingPetsById = isObject(existingHousehold.petsById) ? existingHousehold.petsById : {};
 
@@ -116,13 +134,13 @@
             if (!isObject(pet) || pet.id == null) return;
             const id = String(pet.id);
             if (preferHousehold && isObject(existingPetsById[id])) {
-                petsById[id] = deepClone(existingPetsById[id]);
+                petsById[id] = mergeLegacyIntoCanonicalHouseholdPet(pet, existingPetsById[id], state);
                 return;
             }
             petsById[id] = buildPetRecordFromLegacy(pet, existingPetsById[id], state);
         });
 
-        if (isObject(existingHousehold.petsById)) {
+        if (retainHouseholdOnlyPets && isObject(existingHousehold.petsById)) {
             Object.keys(existingHousehold.petsById).forEach((id) => {
                 if (petsById[id]) return;
                 if (!isObject(existingHousehold.petsById[id])) return;
@@ -242,7 +260,10 @@
     }
 
     function ensureHouseholdState(state, nowMs, options) {
-        syncLegacyToHousehold(state, nowMs, Object.assign({ preferHousehold: true }, options || null));
+        syncLegacyToHousehold(state, nowMs, Object.assign({
+            preferHousehold: true,
+            retainHouseholdOnlyPets: false
+        }, options || null));
         if (HouseholdSimulator && typeof HouseholdSimulator.normalizeHousehold === 'function' && isObject(state.household)) {
             state.household = HouseholdSimulator.normalizeHousehold(state.household, Number.isFinite(Number(nowMs)) ? Number(nowMs) : Date.now());
         }
