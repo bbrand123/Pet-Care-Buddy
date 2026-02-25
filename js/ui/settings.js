@@ -1105,13 +1105,12 @@
                     && localStorage.getItem(firstRunDefaultsKey) === 'true'
                     && localStorage.getItem(STORAGE_KEYS.soundEnabled) === 'false'
                     && localStorage.getItem(STORAGE_KEYS.musicEnabled) === 'false'
-                    && localStorage.getItem(STORAGE_KEYS.calmMode) === 'true'
-                    && localStorage.getItem(STORAGE_KEYS.srVerbosity) === 'brief';
+                    // Old first-run defaults also disabled sample pack; use that as
+                    // a stronger signature than user-facing accessibility prefs.
+                    && localStorage.getItem(STORAGE_KEYS.samplePackEnabled) === 'false';
                 if (shouldRepairFirstRunMutedAudio) {
                     localStorage.setItem(STORAGE_KEYS.soundEnabled, 'true');
                     localStorage.setItem(STORAGE_KEYS.musicEnabled, 'true');
-                    localStorage.setItem(firstRunAudioRepairKey, 'true');
-                } else if (localStorage.getItem(firstRunAudioRepairKey) !== 'true') {
                     localStorage.setItem(firstRunAudioRepairKey, 'true');
                 }
 	                const size = localStorage.getItem(STORAGE_KEYS.textSize);

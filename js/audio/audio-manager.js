@@ -876,7 +876,6 @@
 
     function canPlayChannel(channel, opts) {
         if (destroyed) return false;
-        if (!state.samplePackEnabled && (channel === 'sfx' || channel === 'ui')) return false;
         if (opts && opts.ignoreMute) return true;
         return effectiveChannelVolume(channel) > 0;
     }
