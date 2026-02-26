@@ -56,9 +56,10 @@
                 : `Fishing started${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Reel in when the bobber enters the fish zone.`);
         }
 
+        const MAX_FISHING_ZONE_SIZE = 70; // P2-43: cap zone size to prevent unbounded growth
         function randomizeFishingZone() {
             if (!fishingState) return;
-            fishingState.zoneSize = Math.max(18, fishingState.zoneSize + (Math.random() * 7 - 3.5));
+            fishingState.zoneSize = Math.min(MAX_FISHING_ZONE_SIZE, Math.max(18, fishingState.zoneSize + (Math.random() * 7 - 3.5)));
             fishingState.zoneStart = Math.max(4, Math.min(100 - fishingState.zoneSize - 4, Math.random() * (100 - fishingState.zoneSize - 8)));
         }
 

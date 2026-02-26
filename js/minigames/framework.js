@@ -276,10 +276,10 @@
                     if (!rec || !rec.target || typeof rec.target.removeEventListener !== 'function') continue;
                     try { rec.target.removeEventListener(rec.type, rec.handler, rec.options); } catch (e) {}
                 }
-                if (tracker.escapeHandler && typeof popModalEscape === 'function') {
-                    popModalEscape(tracker.escapeHandler);
-                    tracker.escapeHandler = null;
-                }
+                const _escHandler = tracker.escapeHandler || (state && state._escapeHandler) || null;
+                tracker.escapeHandler = null;
+                if (state) state._escapeHandler = null;
+                if (_escHandler && typeof popModalEscape === 'function') popModalEscape(_escHandler);
                 while (tracker.audioStops.length > 0) {
                     const stopFn = tracker.audioStops.pop();
                     try { stopFn(); } catch (e) {}
@@ -294,10 +294,7 @@
                 clearTimeout(state.timeoutId);
                 state.timeoutId = null;
             }
-            if (state._escapeHandler && typeof popModalEscape === 'function') {
-                popModalEscape(state._escapeHandler);
-            }
-            state._escapeHandler = null;
+            // _escapeHandler already cleared above in tracker block
 
             let overlay = tracker && tracker.overlay && tracker.overlay.isConnected ? tracker.overlay : null;
             if (!overlay) {
@@ -356,7 +353,7 @@
             overlay.innerHTML = `
                 <div class="modal-content" style="max-width:280px;text-align:center;">
                     <p style="margin-bottom:16px;font-weight:600;">Quit this game?</p>
-                    <p style="margin-bottom:16px;font-size:0.9rem;color:var(--color-text-secondary);">Your current score of ${latestScore} will be kept.</p>
+                    <p style="margin-bottom:16px;font-size:0.9rem;color:var(--color-text-secondary);">Your current ${options.scoreLabel || 'score'} of ${latestScore} will be kept.</p>
                     <div style="display:flex;gap:10px;justify-content:center;">
                         <button id="exit-cancel" style="padding:var(--btn-pad-md);border:1px solid #ccc;border-radius:var(--radius-sm);background:white;cursor:pointer;font-weight:600;">Keep Playing</button>
                         <button id="exit-confirm" style="padding:var(--btn-pad-md);border:none;border-radius:var(--radius-sm);background:var(--color-primary);color:white;cursor:pointer;font-weight:600;">Quit</button>

@@ -30,15 +30,14 @@
         }
 
         function startMatchingGame() {
+            const existingOverlay = document.querySelector('.matching-game-overlay');
+            if (existingOverlay) { existingOverlay.remove(); }
             if (!gameState.pet) {
                 if (typeof showToast === 'function') {
                     showToast('You need a pet to play this game.', '#FFA726');
                 }
                 return;
             }
-
-            const existing = document.querySelector('.matching-game-overlay');
-            if (existing) existing.remove();
 
             const matchDiff = getMinigameDifficulty('matching');
             const deckPool = getPackedMatchingDeckPool(MATCHING_ITEMS);
@@ -327,6 +326,15 @@
 
             incrementMinigamePlayCount('matching', matchingState ? matchingState.matchesFound : 0);
 
+            // Track high score for any completed game (P2-41)
+            if (matchingState) {
+                const matchScore = matchingState.matchesFound === matchingState.totalPairs
+                    ? Math.max(1, Math.round(matchingState.totalPairs * 100 / Math.max(1, matchingState.moves)))
+                    : 0;
+                const partialScore = matchScore > 0 ? matchScore : Math.max(0, Math.round(matchingState.matchesFound * 50 / Math.max(1, matchingState.moves)));
+                if (typeof updateMinigameHighScore === 'function') updateMinigameHighScore('matching', partialScore);
+            }
+
             // Apply rewards based on performance
             if (matchingState && matchingState.matchesFound > 0 && gameState.pet) {
                 const happinessBonus = Math.min(matchingState.matchesFound * 5, 30);
@@ -339,10 +347,12 @@
                 const matchScore = matchingState.matchesFound === matchingState.totalPairs
                     ? Math.max(1, Math.round(matchingState.totalPairs * 100 / matchingState.moves))
                     : 0;
+                // P2-41: Track high score for partial games too (partial score based on pairs found)
+                const partialScore = matchScore > 0 ? matchScore : Math.max(0, Math.round(matchingState.matchesFound * 50 / Math.max(1, matchingState.moves)));
                 const coinBasis = Math.max(matchingState.matchesFound * 8, Math.round(matchScore / 5));
                 const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins('matching', coinBasis) : 0;
                 const previousBest = Number((gameState.minigameHighScores || {}).matching || 0);
-                const isNewBest = matchScore > 0 && updateMinigameHighScore('matching', matchScore);
+                const isNewBest = partialScore > 0 && typeof updateMinigameHighScore === 'function' && updateMinigameHighScore('matching', partialScore);
                 const bestMsg = isNewBest ? ' New best!' : '';
 
                 updateNeedDisplays();

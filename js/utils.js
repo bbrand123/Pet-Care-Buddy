@@ -22,9 +22,9 @@ function clamp(value, min, max) {
 function getPetDisplayName(pet) {
     if (!pet) return 'Pet';
     const raw = pet.name
-        || (getAllPetTypeData(pet.type) || {}).name
+        || ((typeof getAllPetTypeData === 'function' ? getAllPetTypeData(pet.type) : null) || {}).name
         || 'Pet';
-    return escapeHTML(raw);
+    return (typeof escapeHTML === 'function') ? escapeHTML(raw) : raw.replace(/[&<>"']/g, function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});
 }
 
 /**

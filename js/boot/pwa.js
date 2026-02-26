@@ -19,12 +19,16 @@ function removeBanner(selector) {
   if (existing) existing.remove();
 }
 
+function _escBanner(s) {
+  return String(s || '').replace(/[&<>"']/g, function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];});
+}
+
 function buildUpdateBanner(config) {
   const banner = document.createElement('div');
   banner.className = config.className;
   banner.setAttribute('role', 'status');
   banner.setAttribute('aria-live', 'polite');
-  banner.innerHTML = `<span class="offline-banner-message">${config.message}</span><span class="offline-banner-actions"><button type="button" class="offline-banner-action" data-banner-action="refresh">${config.refreshLabel}</button><button type="button" class="offline-banner-dismiss" data-banner-action="dismiss" aria-label="Dismiss update banner">${config.dismissLabel}</button></span>`;
+  banner.innerHTML = `<span class="offline-banner-message">${_escBanner(config.message)}</span><span class="offline-banner-actions"><button type="button" class="offline-banner-action" data-banner-action="refresh">${_escBanner(config.refreshLabel)}</button><button type="button" class="offline-banner-dismiss" data-banner-action="dismiss" aria-label="Dismiss update banner">${_escBanner(config.dismissLabel)}</button></span>`;
   banner.querySelector('[data-banner-action="refresh"]')?.addEventListener('click', () => location.reload());
   banner.querySelector('[data-banner-action="dismiss"]')?.addEventListener('click', () => banner.remove());
   return banner;

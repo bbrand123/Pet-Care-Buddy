@@ -18,15 +18,14 @@
         let coloringState = null;
 
         function startColoringGame() {
+            const existingOverlay = document.querySelector('.coloring-game-overlay');
+            if (existingOverlay) { existingOverlay.remove(); }
             if (!gameState.pet) {
                 if (typeof showToast === 'function') {
                     showToast('You need a pet to play this game.', '#FFA726');
                 }
                 return;
             }
-
-            const existing = document.querySelector('.coloring-game-overlay');
-            if (existing) existing.remove();
             const ruleModifier = getMinigameRuleModifier('coloring');
             const templatePool = getPackedColoringTemplatePool();
             const selectedTemplate = getMiniGameContentSelection('coloring', 'templates', templatePool, {
@@ -41,6 +40,10 @@
                 template: selectedTemplate,
                 ruleModifier
             };
+            // P2-50: Register with runtime tracker for consistent cleanup
+            if (typeof initMiniGameRuntimeTracking === 'function') {
+                initMiniGameRuntimeTracking(coloringState, { overlaySelector: '.coloring-game-overlay' });
+            }
 
             renderColoringGame();
             announce(`Coloring time! Template: ${selectedTemplate.name || 'Classic Scene'}${ruleModifier && ruleModifier.name ? ` (${ruleModifier.name})` : ''}. Pick a color and click or tap parts of the picture to color them!`);
@@ -440,13 +443,21 @@
         }
 
         function endColoringGame() {
-            dismissMiniGameExitDialog();
-            if (coloringState && coloringState._escapeHandler) {
-                popModalEscape(coloringState._escapeHandler);
+            if (!coloringState) {
+                dismissMiniGameExitDialog();
+                return;
             }
-
-            const overlay = document.querySelector('.coloring-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            if (coloringState._ending) return;
+            coloringState._ending = true;
+            // P2-50: Use runtime tracker for consistent cleanup
+            if (typeof teardownMiniGameRuntime === 'function') {
+                teardownMiniGameRuntime(coloringState, { overlaySelector: '.coloring-game-overlay' });
+            } else {
+                dismissMiniGameExitDialog();
+                if (coloringState._escapeHandler) popModalEscape(coloringState._escapeHandler);
+                const overlay = document.querySelector('.coloring-game-overlay');
+                if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
+            }
 
             // Apply rewards based on regions colored
             if (coloringState && coloringState.regionsColored.size > 0 && gameState.pet) {

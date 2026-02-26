@@ -107,15 +107,14 @@
         }
 
         function startSimonSaysGame() {
+            const existingOverlay = document.querySelector('.simonsays-game-overlay');
+            if (existingOverlay) { existingOverlay.remove(); }
             if (!gameState.pet) {
                 if (typeof showToast === 'function') {
                     showToast('You need a pet to play this game.', '#FFA726');
                 }
                 return;
             }
-
-            const existing = document.querySelector('.simonsays-game-overlay');
-            if (existing) existing.remove();
 
             const simonDiff = getMinigameDifficulty('simonsays');
             simonState = {
@@ -130,6 +129,10 @@
                 difficulty: simonDiff,
                 active: true
             };
+            // P2-50: Register with runtime tracker for consistent cleanup
+            if (typeof initMiniGameRuntimeTracking === 'function') {
+                initMiniGameRuntimeTracking(simonState, { overlaySelector: '.simonsays-game-overlay' });
+            }
             if (typeof GameAudio !== 'undefined' && typeof GameAudio.setGameplayAudioState === 'function') {
                 GameAudio.setGameplayAudioState({ active: true, minigame: 'simonsays', intensity: 0.16, timeOfDay: gameState.timeOfDay || null });
             }
@@ -403,18 +406,18 @@
             }
             if (simonState._ending) return;
             simonState._ending = true;
-            dismissMiniGameExitDialog();
-
-            if (simonState && simonState.playbackTimer) clearTimeout(simonState.playbackTimer);
-            if (simonState && simonState._autoEndTimeout) clearTimeout(simonState._autoEndTimeout);
-            if (simonState && simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
-
-            if (simonState && simonState._escapeHandler) {
-                popModalEscape(simonState._escapeHandler);
+            // P2-50: Use runtime tracker for consistent cleanup
+            if (typeof teardownMiniGameRuntime === 'function') {
+                teardownMiniGameRuntime(simonState, { overlaySelector: '.simonsays-game-overlay' });
+            } else {
+                dismissMiniGameExitDialog();
+                if (simonState.playbackTimer) clearTimeout(simonState.playbackTimer);
+                if (simonState._autoEndTimeout) clearTimeout(simonState._autoEndTimeout);
+                if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
+                if (simonState._escapeHandler) popModalEscape(simonState._escapeHandler);
+                const overlay = document.querySelector('.simonsays-game-overlay');
+                if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
             }
-
-            const overlay = document.querySelector('.simonsays-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
 
             incrementMinigamePlayCount('simonsays', simonState ? simonState.score : 0);
 

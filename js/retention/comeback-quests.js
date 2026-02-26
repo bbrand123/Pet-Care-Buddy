@@ -225,18 +225,13 @@
         quest.progress = Math.min(clampInt(quest.target, 1), clampInt(quest.progress, 0) + add);
         if (quest.progress >= clampInt(quest.target, 1)) {
             quest.status = 'completed';
-            quest.completedAt = Date.now();
-            const rewardResult = grantQuestReward(quest);
-            quest.claimedAt = Date.now();
-            if (typeof root.showToast === 'function') {
-                const parts = [];
-                if (rewardResult.tokens > 0) parts.push(`+${rewardResult.tokens} Journey Tokens`);
-                if (rewardResult.coins > 0) parts.push(`+${rewardResult.coins} coins`);
-                if (rewardResult.bondXp > 0) parts.push(`+${rewardResult.bondXp} Bond XP`);
-                try { root.showToast(`✨ Comeback quest complete${parts.length ? ` (${parts.join(' · ')})` : ''}`, '#81C784'); } catch (_) {}
-            }
-            if (root.MLFRetentionRewardEffects && typeof root.MLFRetentionRewardEffects.playRewardMoment === 'function') {
-                try { root.MLFRetentionRewardEffects.playRewardMoment('comebackComplete'); } catch (_) {}
+            if (!quest.readyToClaim) {
+                quest.readyToClaim = true;
+                quest.completedAt = Date.now();
+                // Don't auto-claim; let the user claim from the UI
+                if (typeof root.showToast === 'function') {
+                    try { root.showToast('Comeback quest complete! Claim your reward!', '#4CAF50'); } catch (_) {}
+                }
             }
         }
         if (typeof root.saveGame === 'function') {

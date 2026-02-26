@@ -110,8 +110,11 @@
             }
             const next = [];
             racingState.obstacles.forEach((obs) => {
+                const prevY = obs.y;
                 obs.y += racingState.speed;
-                const collided = obs.lane === racingState.lane && obs.y > 74 && obs.y < 92;
+                // P2-42: Swept collision — check if obstacle passed through player Y range this step
+                const collided = obs.lane === racingState.lane
+                    && prevY < 92 && obs.y > 74;
                 if (collided) {
                     racingState.lives -= 1;
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.hit);

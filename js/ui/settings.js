@@ -108,9 +108,10 @@
         }
 
 	        function showSettingsModal() {
+            const _safeGet = (key, fallback) => { try { return localStorage.getItem(key); } catch(e) { return fallback; } };
             const existing = document.querySelector('.settings-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof popModalEscape === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -133,13 +134,13 @@
                     const raw = document.documentElement.getAttribute('data-cosmetic-theme') || 'default';
                     return COSMETIC_THEME_DEFINITIONS[raw] ? raw : 'default';
                 })();
-            const hapticEnabled = !(localStorage.getItem(STORAGE_KEYS.hapticOff) === 'true');
-            const ttsEnabled = !(localStorage.getItem(STORAGE_KEYS.ttsOff) === 'true');
+            const hapticEnabled = !(_safeGet(STORAGE_KEYS.hapticOff, null) === 'true');
+            const ttsEnabled = !(_safeGet(STORAGE_KEYS.ttsOff, null) === 'true');
             const reducedMotionEnabled = document.documentElement.getAttribute('data-reduced-motion') === 'true';
-            const calmModeEnabled = document.body.classList.contains('calm-mode') || localStorage.getItem(STORAGE_KEYS.calmMode) === 'true';
+            const calmModeEnabled = document.body.classList.contains('calm-mode') || _safeGet(STORAGE_KEYS.calmMode, null) === 'true';
             const soundCueCaptionsEnabled = (typeof GameAudio !== 'undefined' && typeof GameAudio.getSoundCueCaptionsEnabled === 'function')
                 ? GameAudio.getSoundCueCaptionsEnabled()
-                : localStorage.getItem(STORAGE_KEYS.soundCueCaptions) === 'true';
+                : _safeGet(STORAGE_KEYS.soundCueCaptions, null) === 'true';
             const soundCueLegend = (typeof GameAudio !== 'undefined' && typeof GameAudio.getAccessibilityCueLegend === 'function')
                 ? GameAudio.getAccessibilityCueLegend()
                 : [
@@ -147,7 +148,7 @@
                     { id: 'error', label: 'Error', description: 'Plays when an action is unavailable.' },
                     { id: 'reward', label: 'Reward', description: 'Plays when you earn something.' }
                 ];
-            const srVerbosityDetailed = (localStorage.getItem(STORAGE_KEYS.srVerbosity) === 'detailed');
+            const srVerbosityDetailed = (_safeGet(STORAGE_KEYS.srVerbosity, null) === 'detailed');
 	            const remindersEnabled = !!(gameState.reminders && gameState.reminders.enabled);
 	            const autoFreezeEnabled = (typeof getStreakProtectionStatus === 'function')
 	                ? !!getStreakProtectionStatus().autoUseFreeze
@@ -598,7 +599,7 @@
                     }
                     const captionsOn = (typeof GameAudio.getSoundCueCaptionsEnabled === 'function')
                         ? GameAudio.getSoundCueCaptionsEnabled()
-                        : localStorage.getItem(STORAGE_KEYS.soundCueCaptions) === 'true';
+                        : _safeGet(STORAGE_KEYS.soundCueCaptions, null) === 'true';
                     const label = result.label || cue.label || 'Sound cue';
                     if (!captionsOn) {
                         showToast(`${label} cue played.`, '#4ECDC4', { announce: true });
@@ -1082,6 +1083,7 @@
 
         // ==================== TEXT SIZE RESTORE (Item 30) ====================
         (function restoreTextSize() {
+            const _safeGet = (key, fallback) => { try { return localStorage.getItem(key); } catch(e) { return fallback; } };
             try {
                 const firstRunDefaultsKey = STORAGE_KEYS.firstRunA11yDefaults;
                 const firstRunAudioRepairKey = 'myLittleFriend_firstRunAudioDefaultsRepairV2';
@@ -1089,12 +1091,12 @@
                 const shouldApplyFirstRunDefaults = !hasSaveData && localStorage.getItem(firstRunDefaultsKey) !== 'true';
                 if (shouldApplyFirstRunDefaults) {
                     if (localStorage.getItem(STORAGE_KEYS.reducedMotion) === null) localStorage.setItem(STORAGE_KEYS.reducedMotion, 'true');
-                    if (localStorage.getItem(STORAGE_KEYS.srVerbosity) === null) localStorage.setItem(STORAGE_KEYS.srVerbosity, 'brief');
+                    if (_safeGet(STORAGE_KEYS.srVerbosity, null) === null) localStorage.setItem(STORAGE_KEYS.srVerbosity, 'brief');
                     // Keep audio on by default; autoplay/unlock is still gated by first interaction.
                     if (localStorage.getItem(STORAGE_KEYS.soundEnabled) === null) localStorage.setItem(STORAGE_KEYS.soundEnabled, 'true');
                     if (localStorage.getItem(STORAGE_KEYS.musicEnabled) === null) localStorage.setItem(STORAGE_KEYS.musicEnabled, 'true');
                     if (localStorage.getItem(STORAGE_KEYS.samplePackEnabled) === null) localStorage.setItem(STORAGE_KEYS.samplePackEnabled, 'false');
-                    if (localStorage.getItem(STORAGE_KEYS.calmMode) === null) localStorage.setItem(STORAGE_KEYS.calmMode, 'true');
+                    if (_safeGet(STORAGE_KEYS.calmMode, null) === null) localStorage.setItem(STORAGE_KEYS.calmMode, 'true');
                     if (localStorage.getItem(STORAGE_KEYS.coachChecklistMinimized) === null) localStorage.setItem(STORAGE_KEYS.coachChecklistMinimized, 'true');
                     localStorage.setItem(firstRunDefaultsKey, 'true');
                 }
@@ -1121,7 +1123,7 @@
                     }
 	                const reducedMotion = localStorage.getItem(STORAGE_KEYS.reducedMotion);
                 if (reducedMotion === 'true') document.documentElement.setAttribute('data-reduced-motion', 'true');
-                const calmMode = localStorage.getItem(STORAGE_KEYS.calmMode) === 'true';
+                const calmMode = _safeGet(STORAGE_KEYS.calmMode, null) === 'true';
                 document.documentElement.setAttribute('data-calm-mode', calmMode ? 'true' : 'false');
                 if (document.body) document.body.classList.toggle('calm-mode', calmMode);
                 // D29: Restore high-contrast mode

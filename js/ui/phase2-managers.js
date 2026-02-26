@@ -1408,36 +1408,40 @@
     }
 
     function initPhase2Polish() {
-        ToastSystemEnhancer.init();
-        GestureManager.attach();
-        SettingsPolishEnhancer.patchShowSettingsModal();
-        SettingsPolishEnhancer.observeSettingsOverlay();
-        AssetPopinPolish.observe();
-        patchModalManager();
-        patchRoomSwitchFeedback();
-        bindGlobalFeedbackTap();
-        installReducedMotionWatchers();
-        installVisualViewportInsetsWatcher();
+        try {
+            ToastSystemEnhancer.init();
+            GestureManager.attach();
+            SettingsPolishEnhancer.patchShowSettingsModal();
+            SettingsPolishEnhancer.observeSettingsOverlay();
+            AssetPopinPolish.observe();
+            patchModalManager();
+            patchRoomSwitchFeedback();
+            bindGlobalFeedbackTap();
+            installReducedMotionWatchers();
+            installVisualViewportInsetsWatcher();
 
-        document.documentElement.classList.add('phase2-polish-ready');
+            document.documentElement.classList.add('phase2-polish-ready');
 
-        if (window.Phase2AssetPreloader && typeof Phase2AssetPreloader.onProgress === 'function') {
-            Phase2AssetPreloader.onProgress((evt) => {
-                if (evt && evt.kind === 'ready') {
-                    QualityManager.sampleFrames(900);
-                }
+            if (window.Phase2AssetPreloader && typeof Phase2AssetPreloader.onProgress === 'function') {
+                Phase2AssetPreloader.onProgress((evt) => {
+                    if (evt && evt.kind === 'ready') {
+                        QualityManager.sampleFrames(900);
+                    }
+                });
+            }
+
+            // Style/feedback uplift for any already-mounted UI.
+            document.querySelectorAll('.toast').forEach((el) => {
+                const text = (el.querySelector('.toast-text') && el.querySelector('.toast-text').textContent) || el.textContent || '';
+                UIFeedbackManager.feedbackForToast({ message: text, color: '#90A4AE' }, el);
             });
+            document.querySelectorAll(`${OVERLAY_SELECTOR}, .reward-card-pop`).forEach((el) => {
+                if (el.matches('.reward-card-pop')) UIFeedbackManager.rewardMoment(el);
+                else GameTransitions.enter(el, 'overlay');
+            });
+        } catch (e) {
+            console.error('[phase2-managers] initPhase2Polish error:', e);
         }
-
-        // Style/feedback uplift for any already-mounted UI.
-        document.querySelectorAll('.toast').forEach((el) => {
-            const text = (el.querySelector('.toast-text') && el.querySelector('.toast-text').textContent) || el.textContent || '';
-            UIFeedbackManager.feedbackForToast({ message: text, color: '#90A4AE' }, el);
-        });
-        document.querySelectorAll(`${OVERLAY_SELECTOR}, .reward-card-pop`).forEach((el) => {
-            if (el.matches('.reward-card-pop')) UIFeedbackManager.rewardMoment(el);
-            else GameTransitions.enter(el, 'overlay');
-        });
     }
 
     if (document.readyState === 'loading') {

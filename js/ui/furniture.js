@@ -238,6 +238,7 @@
                 closeFurniture();
             });
 
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) closeFurniture(); });
             pushModalEscape(closeFurniture);
         }
 

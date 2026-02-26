@@ -20,7 +20,7 @@
         return item;
     }
 
-    function resolvePoolItemId(item, idKey, index) {
+    function resolvePoolItemId(item, idKey, index, sourceHint) {
         if (item && typeof item === 'object') {
             if (item[idKey]) return toId(item[idKey]);
             if (item.id) return toId(item.id);
@@ -28,7 +28,7 @@
             if (item.name) return toId(item.name);
         }
         if (typeof item === 'string' || typeof item === 'number') return toId(item);
-        return `item_${index}`;
+        return sourceHint ? `${sourceHint}_item_${index}` : `item_${index}`;
     }
 
     function ensureGlobalObject(targetGlobal, name, fallback) {
@@ -41,18 +41,18 @@
         return targetGlobal[name];
     }
 
-    function upsertArrayById(targetArr, incomingItems, idKey) {
+    function upsertArrayById(targetArr, incomingItems, idKey, sourcePrefix) {
         const key = idKey || 'id';
         const byId = Object.create(null);
         targetArr.forEach((item, idx) => {
-            const id = resolvePoolItemId(item, key, idx);
+            const id = resolvePoolItemId(item, key, idx, sourcePrefix);
             byId[id] = idx;
             if (isObject(item) && !item[key]) item[key] = id;
         });
         incomingItems.forEach((item, idx) => {
             if (!isObject(item)) return;
             const next = Object.assign({}, item);
-            const id = resolvePoolItemId(next, key, idx);
+            const id = resolvePoolItemId(next, key, idx, sourcePrefix);
             next[key] = id;
             if (typeof byId[id] === 'number') targetArr[byId[id]] = Object.assign({}, targetArr[byId[id]], next);
             else {
@@ -110,6 +110,10 @@
                         asArray(g.DAILY_FIXED_TASKS).forEach((t) => g.DAILY_TASKS.push(t));
                         asArray(g.DAILY_MODE_TASKS).forEach((t) => g.DAILY_TASKS.push(t));
                         asArray(g.DAILY_WILDCARD_TASKS).forEach((t) => g.DAILY_TASKS.push(t));
+                        // Include seasonal daily tasks so they are not silently omitted (P2-65)
+                        if (isObject(g.DAILY_SEASONAL_TASKS)) {
+                            Object.values(g.DAILY_SEASONAL_TASKS).forEach((t) => { if (t) g.DAILY_TASKS.push(t); });
+                        }
                     }
                 }
             },

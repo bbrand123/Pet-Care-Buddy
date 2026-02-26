@@ -49,7 +49,7 @@
 
     function parseDateString(dateStr) {
         if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
-        const dt = new Date(dateStr + 'T00:00:00');
+        const dt = new Date(dateStr + 'T12:00:00Z');
         if (Number.isNaN(dt.getTime())) return null;
         return dt;
     }

@@ -143,7 +143,11 @@
             const score = wins + championBonus;
             const overlay = document.querySelector('.tournament-game-overlay');
             if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
-            if (tournamentState && tournamentState._escapeHandler) popModalEscape(tournamentState._escapeHandler);
+            // P2-49: Escape handler is popped via safeTournamentPopEscape in exit paths; direct pop only if handler still active
+            if (tournamentState && tournamentState._escapeHandler && typeof popModalEscape === 'function') {
+                popModalEscape(tournamentState._escapeHandler);
+                tournamentState._escapeHandler = null;
+            }
 
             finalizeExpandedMiniGame({
                 gameId: 'tournament',
@@ -204,7 +208,13 @@
                 showToast('You need a pet to enter tournaments.', '#FFA726');
                 return;
             }
-            tournamentState = getTournamentState();
+            // P2-48: Work on a local copy during the active session so transient fields
+            // (ruleModifier, UI state) are not written to persistent storage mid-round.
+            const _persistedTournament = getTournamentState();
+            tournamentState = Object.assign({}, _persistedTournament, {
+                lastBracket: JSON.parse(JSON.stringify(_persistedTournament.lastBracket || [])),
+                leaderboard: JSON.parse(JSON.stringify(_persistedTournament.leaderboard || []))
+            });
             tournamentState.ruleModifier = getMinigameRuleModifier('tournament');
             const existing = document.querySelector('.tournament-game-overlay');
             if (existing) existing.remove();
@@ -242,9 +252,18 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            // P2-49: Guard against double popModalEscape across multiple exit paths
+            let _tournamentEscapePopped = false;
+            function safeTournamentPopEscape() {
+                if (_tournamentEscapePopped) return;
+                _tournamentEscapePopped = true;
+                if (tournamentState && tournamentState._escapeHandler && typeof popModalEscape === 'function') {
+                    popModalEscape(tournamentState._escapeHandler);
+                }
+            }
             overlay.querySelector('#tour-next').addEventListener('click', resolveTournamentRound);
             overlay.querySelector('#tour-done').addEventListener('click', () => {
-                if (tournamentState && tournamentState._escapeHandler) popModalEscape(tournamentState._escapeHandler);
+                safeTournamentPopEscape();
                 const root = document.querySelector('.tournament-game-overlay');
                 if (root) { root.innerHTML = ''; root.remove(); }
                 tournamentState = null;
@@ -252,7 +271,7 @@
             });
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
-                    if (tournamentState && tournamentState._escapeHandler) popModalEscape(tournamentState._escapeHandler);
+                    safeTournamentPopEscape();
                     const root = document.querySelector('.tournament-game-overlay');
                     if (root) { root.innerHTML = ''; root.remove(); }
                     tournamentState = null;
@@ -260,6 +279,7 @@
                 }
             });
             function tournamentEscapeHandler() {
+                safeTournamentPopEscape();
                 const root = document.querySelector('.tournament-game-overlay');
                 if (root) { root.innerHTML = ''; root.remove(); }
                 tournamentState = null;

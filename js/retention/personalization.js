@@ -144,14 +144,12 @@
         const style = profile.style;
         base.playerStyle = style;
         if (style === 'collector') {
-            base.body = 'Your pet notices how you fill the home with little treasures. A quick rewards check or collection moment will feel meaningful.';
+            // For non-care-focused styles, adjust CTA/tone without replacing the context-sensitive body
             if (!base.ctaLabel || base.actionType === 'journey') base.ctaLabel = 'See keepsakes';
         } else if (style === 'explorer') {
             if (base.actionType === 'journey') base.actionType = 'explore';
-            base.body = 'Your pet knows you for finding new corners of the world together. One short explore trip would fit today\'s mood.';
             if (!base.ctaLabel || base.ctaLabel === 'Open Journey') base.ctaLabel = 'Explore';
         } else if (style === 'breeder') {
-            base.body = 'You tend the whole household with patience. A social check-in can help the home feel connected again.';
             if (base.actionType === 'journey') base.actionType = 'social';
         } else if (style === 'care-focused') {
             base.body = 'Your pet relaxes fastest when you start with a gentle care routine. One loving loop is enough to brighten the room.';

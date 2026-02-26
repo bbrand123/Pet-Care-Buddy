@@ -114,8 +114,8 @@
 	            const suspiciousMult = (isSuspiciousEconomyState(state) && shouldApplySuspiciousRewardPenalty(reason)) ? getSuspiciousRewardMultiplier() : 1;
 	            let finalAmount = Math.max(0, Math.floor(amount * minuteMult * sessionMult * suspiciousMult));
 	            if (amount > 0 && finalAmount <= 0 && (minuteMult < 1 || sessionMult < 1 || suspiciousMult < 1)) finalAmount = 1;
-	            sec.coinGainMinute.earned += finalAmount;
-	            sec.coinGainSession.earned += finalAmount;
+	            sec.coinGainMinute.earned += amount;
+	            sec.coinGainSession.earned += amount;
 	            if (minuteMult < 0.999 || sessionMult < 0.999) {
 	                showEconomyHardeningToast('rate-limit', 'High coin gain rate detected: rewards are in diminishing mode.', '#90A4AE');
 	            }
@@ -457,7 +457,7 @@
 	                if ((repayment.repaid || 0) > 0) msg += ` • ${repayment.repaid} paid toward storage fee debt`;
 	                if (withheldByGuards > 0) msg += ` • ${withheldByGuards} withheld`;
 	                showToast(msg, '#FFD700');
-	            } else if ((repayment.repaid || 0) > 0 && typeof showToast === 'function') {
+	            } else if (!opts.silent && (repayment.repaid || 0) > 0 && typeof showToast === 'function') {
 	                showToast(`🧾 ${repayment.repaid} coins auto-paid toward storage fee debt.`, '#90A4AE');
 	            }
 	            return {

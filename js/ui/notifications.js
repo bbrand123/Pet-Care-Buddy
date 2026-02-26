@@ -51,7 +51,11 @@
 
         function showNotificationHistory() {
             const existing = document.querySelector('.notif-history-overlay');
-            if (existing) { existing.remove(); return; }
+            if (existing) {
+                if (typeof existing._closeHistory === 'function') existing._closeHistory();
+                else existing.remove();
+                return;
+            }
 
             const overlay = document.createElement('div');
             overlay.className = 'notif-history-overlay modal-overlay';
@@ -86,6 +90,7 @@
             overlay.querySelector('#notif-history-close').addEventListener('click', closeHistory);
             overlay.addEventListener('click', (e) => { if (e.target === overlay) closeHistory(); });
             pushModalEscape(closeHistory);
+            overlay._closeHistory = closeHistory;
             trapFocus(overlay);
             overlay.querySelector('#notif-history-close').focus();
         }

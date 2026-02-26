@@ -47,7 +47,7 @@
         function generateCookingRecipe() {
             if (!cookingState) {
                 const picks = shuffleArray([...COOKING_INGREDIENTS]).slice(0, 3);
-                return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id), rewardProfile: { specialFood: 1 } };
+                return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id).filter((id) => id != null && id !== ''), rewardProfile: { specialFood: 1 } };
             }
             const allRecipes = Array.isArray(cookingState.recipes) ? cookingState.recipes : [];
             const taggedRecipes = cookingState.dailySpecialTag
@@ -65,7 +65,7 @@
                 ? cookingState.ingredientCatalog
                 : COOKING_INGREDIENTS;
             const picks = shuffleArray([...fallbackPool]).slice(0, 3);
-            return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id), rewardProfile: { specialFood: 1 } };
+            return { id: 'fallback_recipe', name: 'Classic Mix', ingredients: picks.map((item) => item.id).filter((id) => id != null && id !== ''), rewardProfile: { specialFood: 1 } };
         }
 
         function renderCookingGame() {

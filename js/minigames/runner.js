@@ -149,7 +149,8 @@
             teardownMiniGameRuntime(finalState, { overlaySelector: '.runner-game-overlay' });
 
             const score = finalState.score;
-            if (score > 0 || completed) {
+            const MIN_MEANINGFUL_RUNNER_SCORE = 10; // P2-45: require meaningful gameplay before granting rewards
+            if ((score >= MIN_MEANINGFUL_RUNNER_SCORE || completed) && score > 0) {
                 finalizeExpandedMiniGame({
                     gameId: 'runner',
                     gameName: 'Endless Runner',

@@ -369,15 +369,27 @@
         getPackItems('loot', (item) => item && item.kind === 'biomeLootTable').forEach((item) => {
             const biomeId = toId(item.biomeId);
             if (!biomeId) return;
-            tables[biomeId] = {
-                biomeId,
-                entries: asArray(item.entries).map((entry) => ({
+            if (!tables[biomeId]) {
+                tables[biomeId] = { biomeId, entries: [] };
+            }
+            // Merge entries rather than overwrite, so v2 packs can extend v1 (P2-72)
+            const existingIds = new Set(tables[biomeId].entries.map((e) => e.id));
+            asArray(item.entries).forEach((entry) => {
+                const entryObj = {
                     id: toId(entry && (entry.id || entry.lootId)),
                     weight: Math.max(0, Number(entry && entry.weight) || 0),
                     min: Math.max(1, Math.floor(Number(entry && entry.min) || 1)),
                     max: Math.max(1, Math.floor(Number(entry && entry.max) || (entry && entry.min) || 1))
-                })).filter((entry) => entry.id)
-            };
+                };
+                if (!entryObj.id) return;
+                if (existingIds.has(entryObj.id)) {
+                    const idx = tables[biomeId].entries.findIndex((e) => e.id === entryObj.id);
+                    if (idx >= 0) tables[biomeId].entries[idx] = entryObj;
+                } else {
+                    existingIds.add(entryObj.id);
+                    tables[biomeId].entries.push(entryObj);
+                }
+            });
         });
         return tables;
     }

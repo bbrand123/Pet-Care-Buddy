@@ -49,8 +49,10 @@
 
     function cloneForEvent(value) {
         if (!isObject(value)) return value;
-        if (Array.isArray(value)) return value.slice();
-        return Object.assign({}, value);
+        try { return JSON.parse(JSON.stringify(value)); } catch (e) {
+            if (Array.isArray(value)) return value.slice();
+            return Object.assign({}, value);
+        }
     }
 
     function jsonCloneForSave(value, options) {
@@ -164,7 +166,7 @@
                     Object.keys(target).forEach((key) => { delete target[key]; });
                     Object.assign(target, next);
                     this._proxyCache = new WeakMap();
-                    if (!this._state) this._state = this._createProxy(target, '');
+                    this._state = this._createProxy(target, '');
                 } finally {
                     this._suspendEventsDepth--;
                 }

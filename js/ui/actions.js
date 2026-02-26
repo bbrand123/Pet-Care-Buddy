@@ -98,7 +98,10 @@
             overlay.innerHTML = html;
             document.body.appendChild(overlay);
 
+            let _pickerClosed = false;
             function closePicker() {
+                if (_pickerClosed) return;
+                _pickerClosed = true;
                 popModalEscape(closePicker);
                 overlay.remove();
                 const fallback = document.querySelector(`.favorite-slot[data-fav-idx="${slotIdx}"]`);
@@ -378,17 +381,23 @@
                 </div>
             `;
             document.body.appendChild(overlay);
-            overlay.querySelector('#welcome-back-close').addEventListener('click', () => {
+
+            function _closeWelcomeBack() {
+                if (typeof popModalEscape === 'function') popModalEscape(_closeWelcomeBack);
                 overlay.classList.add('modal-closing');
-                setTimeout(() => overlay.remove(), 220);
-            });
+                setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 220);
+                if (_wbAutoDismissTimer) { clearTimeout(_wbAutoDismissTimer); _wbAutoDismissTimer = null; }
+            }
+            let _wbAutoDismissTimer = null;
+
+            overlay.querySelector('#welcome-back-close').addEventListener('click', _closeWelcomeBack);
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) _closeWelcomeBack(); });
+            if (typeof pushModalEscape === 'function') pushModalEscape(_closeWelcomeBack);
+            if (typeof trapFocus === 'function') trapFocus(overlay);
+            const _wbCloseBtn = overlay.querySelector('#welcome-back-close');
+            if (_wbCloseBtn) _wbCloseBtn.focus();
             // Auto-dismiss after 8 seconds
-            setTimeout(() => {
-                if (overlay.parentNode) {
-                    overlay.classList.add('modal-closing');
-                    setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 220);
-                }
-            }, 8000);
+            _wbAutoDismissTimer = setTimeout(() => _closeWelcomeBack(), 8000);
         }
 
         // Color name helper for VoiceOver accessibility
@@ -601,7 +610,18 @@
             };
 
             document.addEventListener('click', dispatch, true);
-            document.addEventListener('touchend', dispatch, { passive: false, capture: true });
+            document.addEventListener('touchend', (event) => {
+                // Only dispatch touchend if this element will NOT generate a click event
+                // We mark handled touches to prevent the subsequent click from double-firing
+                const target = event && event.target;
+                if (target && target instanceof Element) {
+                    const el = target.closest('.room-btn, #room-coming-toggle, #new-pet-btn, #codex-btn, #stats-btn, #furniture-btn, #sound-toggle-btn, #achievements-btn, #daily-btn, #rewards-btn, #explore-btn, #economy-btn, .action-btn, .favorite-slot, .fav-remove, .pet-selector-btn, .room-nav-icon, #pet-selector-area');
+                    if (el) {
+                        event.preventDefault();
+                        dispatch(event);
+                    }
+                }
+            }, { passive: false, capture: true });
         }
 
         function setCareActionsSkipLinkVisible(isVisible) {

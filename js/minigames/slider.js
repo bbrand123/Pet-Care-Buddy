@@ -78,10 +78,10 @@
             const grid = overlay.querySelector('#slider-grid');
             bindMiniGameEvent(sliderState, grid, 'keydown', handleSliderKeyDown);
             bindMiniGameEvent(sliderState, overlay, 'click', (e) => {
-                if (e.target === overlay) requestMiniGameExit(sliderState ? sliderState.moves : 0, () => endSliderGame(false, false));
+                if (e.target === overlay) requestMiniGameExit(sliderState ? sliderState.moves : 0, () => endSliderGame(false, false), { scoreLabel: 'moves' });
             });
             function sliderEscapeHandler() {
-                requestMiniGameExit(sliderState ? sliderState.moves : 0, () => endSliderGame(false, false));
+                requestMiniGameExit(sliderState ? sliderState.moves : 0, () => endSliderGame(false, false), { scoreLabel: 'moves' });
             }
             registerMiniGameEscapeHandler(sliderState, sliderEscapeHandler);
             trapFocus(overlay);
@@ -130,9 +130,12 @@
                 return `<button type="button" class="slider-tile" data-idx="${idx}" ${style} aria-label="Tile ${value}"></button>`;
             }).join('');
             grid.innerHTML = tilesHTML;
+            // P2-46: Use direct addEventListener on freshly-created tile buttons (grid.innerHTML
+            // is rebuilt each call, so old nodes are discarded). Using bindMiniGameEvent here
+            // would accumulate stale listener records in the tracker on every UI refresh.
             grid.querySelectorAll('.slider-tile').forEach((btn) => {
                 const idx = Number(btn.getAttribute('data-idx'));
-                bindMiniGameEvent(sliderState, btn, 'click', () => moveSliderTile(idx));
+                btn.addEventListener('click', () => moveSliderTile(idx), { once: true });
             });
             const movesEl = document.getElementById('slider-moves');
             if (movesEl) movesEl.textContent = `Moves: ${sliderState.moves}`;

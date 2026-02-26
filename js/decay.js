@@ -266,7 +266,9 @@
                             } else {
                                 MLFHouseholdState.ensureHouseholdState(gameState, nowMs, { preferHousehold: false });
                             }
-                        } catch (_) {}
+                        } catch (e) {
+                            console.error('[decay] Household tick error:', e);
+                        }
                     }
 
                     // Apply passive decay to non-active pets (gentler rate)
@@ -291,24 +293,8 @@
                             applyStageVarianceDecay(p, pStage);
                             applyTimedNeglectPressure(p, pStage, pStageBalance);
 
-                            // Track neglect for non-active pets (reuse per-pet tick counter)
-                            const pid = p.id;
-                            if (pid != null) {
-                                if (!_neglectTickCounters[pid]) _neglectTickCounters[pid] = 0;
-                                _neglectTickCounters[pid]++;
-                                if (_neglectTickCounters[pid] >= 10) {
-                                    _neglectTickCounters[pid] = 0;
-                                    const neglectThreshold = pStageBalance.neglectThreshold || 20;
-                                    const neglected = p.hunger < neglectThreshold || p.cleanliness < neglectThreshold || p.happiness < neglectThreshold || p.energy < neglectThreshold;
-                                    if (neglected) {
-                                        p.neglectCount = adjustNeglectCount(p.neglectCount, pStageBalance.neglectGainMultiplier || 1, 'up');
-                                    } else if ((p.neglectCount || 0) > 0) {
-                                        p.neglectCount = adjustNeglectCount(p.neglectCount, pStageBalance.neglectRecoveryMultiplier || 1, 'down');
-                                    }
-                                }
-                            }
-
                             // Keep care quality current for inactive pets as their stats drift.
+                            // updateCareHistory already calls applyDeterministicNeglectCount internally (P2-68)
                             updateCareHistory(p);
                         });
                     }
@@ -371,7 +357,7 @@
                         }
                         // Re-render to update seasonal decorations
                         renderPetPhase();
-                        return; // renderPetPhase will handle the rest
+                        // Don't return early - fall through to care tracking and save (P2-70)
                     }
 
                     // Tick breeding eggs once per minute, independent of the 30s decay loop

@@ -144,6 +144,9 @@
             }
 
             function renderEconomyModal() {
+                const _getAuctionSlotLabel = typeof getAuctionSlotLabel === 'function'
+                    ? getAuctionSlotLabel
+                    : (slotId) => ({ slotA: 'Slot A', slotB: 'Slot B', slotC: 'Slot C' }[slotId] || String(slotId || 'Slot'));
                 if (typeof ensureEconomyState === 'function') ensureEconomyState();
                 const balance = (typeof getCoinBalance === 'function') ? getCoinBalance() : 0;
                 syncEconomyHudDisplay();
@@ -340,7 +343,7 @@
                     const mine = listing.sellerSlot === auction.slotId;
                     return `
                         <li>
-                            <span>${listing.emoji} ${escapeHTML(listing.name)} x${listing.quantity} · ${listing.price}🪙 · ${getAuctionSlotLabel(listing.sellerSlot)}</span>
+                            <span>${listing.emoji} ${escapeHTML(listing.name)} x${listing.quantity} · ${listing.price}🪙 · ${_getAuctionSlotLabel(listing.sellerSlot)}</span>
                             <button class="modal-btn ${mine ? '' : 'confirm'}" data-auction-action="${mine ? 'cancel' : 'buy'}:${listing.id}">${mine ? 'Cancel' : 'Buy'}</button>
                         </li>
                     `;
@@ -406,7 +409,7 @@
                             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
                                 <label for="auction-slot-select">Active Slot</label>
                                 <select id="auction-slot-select" class="explore-duration-select">
-                                    ${ECONOMY_AUCTION_SLOTS.map((slotId) => `<option value="${slotId}" ${slotId === auction.slotId ? 'selected' : ''}>${getAuctionSlotLabel(slotId)}</option>`).join('')}
+                                    ${ECONOMY_AUCTION_SLOTS.map((slotId) => `<option value="${slotId}" ${slotId === auction.slotId ? 'selected' : ''}>${_getAuctionSlotLabel(slotId)}</option>`).join('')}
                                 </select>
                                 <button class="modal-btn confirm" id="auction-claim-btn">Claim ${auction.myWallet || 0}🪙</button>
                             </div>

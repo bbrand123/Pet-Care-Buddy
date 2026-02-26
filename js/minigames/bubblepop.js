@@ -28,6 +28,10 @@
                 difficulty: bubbleDiff,
                 active: true
             };
+            // P2-50: Register with runtime tracker for consistent cleanup
+            if (typeof initMiniGameRuntimeTracking === 'function') {
+                initMiniGameRuntimeTracking(bubblePopState, { overlaySelector: '.bubblepop-game-overlay' });
+            }
 
             renderBubblePopGame();
             startBubblePopTimer();
@@ -369,24 +373,20 @@
             }
             if (bubblePopState._ending) return;
             bubblePopState._ending = true;
-            dismissMiniGameExitDialog();
-
-            if (bubblePopState && bubblePopState.timerInterval) clearInterval(bubblePopState.timerInterval);
-            if (bubblePopState && bubblePopState.spawnInterval) clearInterval(bubblePopState.spawnInterval);
-            if (bubblePopState && bubblePopState._autoEndTimeout) clearTimeout(bubblePopState._autoEndTimeout);
-            if (bubblePopState && bubblePopState._initialSpawnTimers) {
-                bubblePopState._initialSpawnTimers.forEach(id => clearTimeout(id));
+            // P2-50: Use runtime tracker for consistent cleanup
+            if (typeof teardownMiniGameRuntime === 'function') {
+                teardownMiniGameRuntime(bubblePopState, { overlaySelector: '.bubblepop-game-overlay' });
+            } else {
+                dismissMiniGameExitDialog();
+                if (bubblePopState.timerInterval) clearInterval(bubblePopState.timerInterval);
+                if (bubblePopState.spawnInterval) clearInterval(bubblePopState.spawnInterval);
+                if (bubblePopState._autoEndTimeout) clearTimeout(bubblePopState._autoEndTimeout);
+                if (bubblePopState._initialSpawnTimers) bubblePopState._initialSpawnTimers.forEach(id => clearTimeout(id));
+                if (bubblePopState._bubbleRemovalTimers) bubblePopState._bubbleRemovalTimers.forEach(id => clearTimeout(id));
+                if (bubblePopState._escapeHandler) popModalEscape(bubblePopState._escapeHandler);
+                const overlay = document.querySelector('.bubblepop-game-overlay');
+                if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
             }
-            if (bubblePopState && bubblePopState._bubbleRemovalTimers) {
-                bubblePopState._bubbleRemovalTimers.forEach(id => clearTimeout(id));
-            }
-
-            if (bubblePopState && bubblePopState._escapeHandler) {
-                popModalEscape(bubblePopState._escapeHandler);
-            }
-
-            const overlay = document.querySelector('.bubblepop-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
 
             incrementMinigamePlayCount('bubblepop', bubblePopState ? bubblePopState.score : 0);
 

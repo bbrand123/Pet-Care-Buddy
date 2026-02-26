@@ -846,7 +846,9 @@
                 showSpeechBubble();
                 scheduleSpeechBubble();
             }, delay);
-            idleAnimTimers.push(_speechBubbleTimer);
+            if (typeof idleAnimTimers !== 'undefined' && Array.isArray(idleAnimTimers)) {
+                idleAnimTimers.push(_speechBubbleTimer);
+            }
         }
 
         function stopSpeechBubble() {
@@ -1001,7 +1003,9 @@
                 showPetCommentary();
                 schedulePetCommentary();
             }, delay);
-            idleAnimTimers.push(_petCommentaryTimer);
+            if (typeof idleAnimTimers !== 'undefined' && Array.isArray(idleAnimTimers)) {
+                idleAnimTimers.push(_petCommentaryTimer);
+            }
         }
 
         function showPetCommentary() {

@@ -211,6 +211,7 @@
         // Replaces static pet with subtle living animations
 
         let idleAnimTimers = [];
+        let _idleAnimRunning = false;
 
         function removeIdleTimer(id) {
             const idx = idleAnimTimers.indexOf(id);
@@ -222,6 +223,7 @@
         }
 
         function stopIdleAnimations() {
+            _idleAnimRunning = false;
             idleAnimTimers.forEach(id => clearTimeout(id));
             idleAnimTimers = [];
             stopSpeechBubble();
@@ -231,7 +233,9 @@
 
         function startIdleAnimations() {
             stopIdleAnimations();
+            _idleAnimRunning = false;
             if (gameState.phase !== 'pet' || !gameState.pet) return;
+            _idleAnimRunning = true;
 
             scheduleBlink();
             scheduleTwitch();
@@ -253,7 +257,7 @@
                 if (!petContainer) return;
 
                 // Skip if an action animation is playing to avoid flash
-                if (actionAnimating) { scheduleBlink(); return; }
+                if (typeof actionAnimating !== 'undefined' && actionAnimating) { scheduleBlink(); return; }
 
                 petContainer.classList.add('idle-blink');
                 setTimeout(() => {
@@ -274,7 +278,7 @@
                 if (!petContainer) return;
 
                 // Skip if an action animation is playing to avoid flash
-                if (actionAnimating) { scheduleTwitch(); return; }
+                if (typeof actionAnimating !== 'undefined' && actionAnimating) { scheduleTwitch(); return; }
 
                 petContainer.classList.add('idle-twitch');
                 setTimeout(() => {
@@ -342,7 +346,7 @@
             const timerId = setTimeout(() => {
                 removeIdleTimer(timerId);
                 if (gameState.phase !== 'pet' || !gameState.pet) return;
-                if (actionAnimating) { scheduleNeedBasedAnim(); return; }
+                if (typeof actionAnimating !== 'undefined' && actionAnimating) { scheduleNeedBasedAnim(); return; }
 
                 const pet = gameState.pet;
                 const petContainer = document.getElementById('pet-container');
@@ -407,7 +411,7 @@
             const timerId = setTimeout(() => {
                 removeIdleTimer(timerId);
                 if (gameState.phase !== 'pet' || !gameState.pet) return;
-                if (actionAnimating) { scheduleSpeciesIdleAnim(); return; }
+                if (typeof actionAnimating !== 'undefined' && actionAnimating) { scheduleSpeciesIdleAnim(); return; }
 
                 const pet = gameState.pet;
                 const petContainer = document.getElementById('pet-container');

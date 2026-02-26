@@ -183,17 +183,22 @@
             const rel = normalizeRelationship(rels[key]);
             const otherId = key.split('|').find((part) => part !== id);
             if (!otherId) return;
-            if (!bestFriend || rel.affinity > bestFriend.affinity || (rel.affinity === bestFriend.affinity && rel.familiarity > bestFriend.familiarity)) {
-                bestFriend = { petId: otherId, affinity: rel.affinity, familiarity: rel.familiarity, tags: rel.tags.slice() };
+            if (rel.affinity >= FRIEND_AFFINITY) {
+                if (!bestFriend || rel.affinity > bestFriend.affinity || (rel.affinity === bestFriend.affinity && rel.familiarity > bestFriend.familiarity)) {
+                    bestFriend = { petId: otherId, affinity: rel.affinity, familiarity: rel.familiarity, tags: rel.tags.slice() };
+                }
             }
-            if (!rival || rel.affinity < rival.affinity || (rel.affinity === rival.affinity && rel.familiarity > rival.familiarity)) {
-                rival = { petId: otherId, affinity: rel.affinity, familiarity: rel.familiarity, tags: rel.tags.slice() };
+            if (rel.affinity <= RIVAL_AFFINITY) {
+                if (!rival || rel.affinity < rival.affinity || (rel.affinity === rival.affinity && rel.familiarity > rival.familiarity)) {
+                    rival = { petId: otherId, affinity: rel.affinity, familiarity: rel.familiarity, tags: rel.tags.slice() };
+                }
             }
         });
         return { bestFriend, rival };
     }
 
     function detectRetentionBeats(previousRel, nextRel, petA, petB) {
+        if (!previousRel) return [];
         const before = normalizeRelationship(previousRel);
         const after = normalizeRelationship(nextRel);
         const beats = [];

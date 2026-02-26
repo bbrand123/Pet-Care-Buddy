@@ -11,6 +11,8 @@
 const ModalManager = {
     /** @private Stack of open modal descriptors */
     _stack: [],
+    /** @private Set of modal IDs currently being closed (re-entrancy guard) */
+    _closing: new Set(),
 
     /**
      * Open a modal with standardized lifecycle management.
@@ -46,7 +48,10 @@ const ModalManager = {
         if (config.ariaLabel) {
             overlay.setAttribute('aria-label', config.ariaLabel);
         }
-        overlay.innerHTML = config.content || '';
+        var rawContent = config.content || '';
+        // Strip script tags and inline event handlers for defense-in-depth
+        rawContent = rawContent.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/\son\w+\s*=/gi, ' data-removed-handler=');
+        overlay.innerHTML = rawContent;
 
         var self = this;
         var returnFocus = config.returnFocus || document.activeElement;
@@ -103,6 +108,7 @@ const ModalManager = {
      * @param {string} id - Modal identifier
      */
     close(id) {
+        if (this._closing.has(id)) return;
         var idx = -1;
         for (var i = 0; i < this._stack.length; i++) {
             if (this._stack[i].id === id) {
@@ -111,6 +117,7 @@ const ModalManager = {
             }
         }
         if (idx === -1) return;
+        this._closing.add(id);
 
         var descriptor = this._stack.splice(idx, 1)[0];
 
@@ -119,7 +126,9 @@ const ModalManager = {
             popModalEscape(descriptor.closeHandler);
         }
 
+        var self2 = this;
         var finalizeClose = function finalizeClose() {
+            self2._closing.delete(id);
             if (typeof MLFUiHooks !== 'undefined' && MLFUiHooks && typeof MLFUiHooks.emit === 'function') {
                 MLFUiHooks.emit('overlay:closed', { element: descriptor.overlay, overlayId: id, source: 'ModalManager.close' });
                 MLFUiHooks.emit('modal:closed', { element: descriptor.overlay, modalId: id, source: 'ModalManager.close' });

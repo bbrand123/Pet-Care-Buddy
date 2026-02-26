@@ -216,8 +216,8 @@
     }
 
     function tickPet(pet, context, dtMs, nowMs) {
+        const prevMood = (pet && typeof pet.mood === 'string') ? pet.mood : null;
         const nextPet = normalizePetRecord(pet, nowMs);
-        const prevPet = normalizePetRecord(pet, nowMs);
         const options = (context && context.options) || {};
         const activePetId = context && context.activePetId != null ? String(context.activePetId) : null;
         const isActive = activePetId != null && String(nextPet.id) === activePetId;
@@ -244,13 +244,14 @@
                 at: nowMs
             });
         }
-        if ((prevPet.mood !== nextPet.mood) && (nextPet.mood === 'sad' || nextPet.mood === 'happy')) {
+        const _prevMoodForShift = prevMood || computeMoodFromNeeds(nextPet);
+        if ((_prevMoodForShift !== nextPet.mood) && (nextPet.mood === 'sad' || nextPet.mood === 'happy')) {
             events.push({
                 type: 'mood-shift',
                 petId: String(nextPet.id),
                 petName: nextPet.name || 'Pet',
                 mood: nextPet.mood,
-                previousMood: prevPet.mood || 'neutral',
+                previousMood: _prevMoodForShift || 'neutral',
                 at: nowMs
             });
         }
@@ -298,9 +299,10 @@
         const petIds = sortedPetIds(next.petsById);
         const socialEvents = [];
         const retentionBeats = [];
+        const snapshotPetsById = Object.assign({}, next.petsById);
         const tickContext = {
             activePetId: next.activePetId,
-            petsById: next.petsById,
+            petsById: snapshotPetsById,
             relationships: next.relationships,
             options: options || {}
         };
@@ -350,9 +352,10 @@
         const petIds = sortedPetIds(household.petsById);
         const socialEvents = [];
         const retentionBeats = [];
+        const snapshotPetsById = Object.assign({}, household.petsById);
         const tickContext = {
             activePetId: household.activePetId,
-            petsById: household.petsById,
+            petsById: snapshotPetsById,
             relationships: household.relationships,
             options: options || {}
         };

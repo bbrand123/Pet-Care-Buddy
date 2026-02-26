@@ -32,8 +32,10 @@
 
             let selectedDurationId = (Array.isArray(EXPEDITION_DURATIONS) && EXPEDITION_DURATIONS[0]) ? EXPEDITION_DURATIONS[0].id : 'scout';
             let expeditionCountdownTimer = null;
+            let _expeditionTimerGeneration = 0;
 
             function clearExpeditionCountdownTimer() {
+                _expeditionTimerGeneration++;
                 if (expeditionCountdownTimer) {
                     clearTimeout(expeditionCountdownTimer);
                     expeditionCountdownTimer = null;
@@ -42,7 +44,9 @@
 
             function scheduleExpeditionCountdown() {
                 clearExpeditionCountdownTimer();
+                const myGeneration = _expeditionTimerGeneration;
                 expeditionCountdownTimer = setTimeout(() => {
+                    if (_expeditionTimerGeneration !== myGeneration) return; // stale, don't reschedule
                     if (!document.body.contains(overlay)) {
                         clearExpeditionCountdownTimer();
                         return;
@@ -399,7 +403,9 @@
                 if (expedition && !expeditionReady) {
                     scheduleExpeditionCountdown();
                 } else if (dungeon && dungeon.active && dungeonCooldownRemaining > 0) {
+                    const _dungeonGen = _expeditionTimerGeneration;
                     expeditionCountdownTimer = setTimeout(() => {
+                        if (_expeditionTimerGeneration !== _dungeonGen) return;
                         if (!document.body.contains(overlay)) return;
                         renderExplorationModal();
                     }, 1000);

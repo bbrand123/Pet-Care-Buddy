@@ -127,6 +127,9 @@
         const petsToDecay = Array.isArray(save.pets) && save.pets.length > 0
             ? save.pets
             : (save.pet ? [save.pet] : []);
+        const safePetIndex = (Array.isArray(save.pets) && save.pets.length > 0)
+            ? Math.max(0, Math.min(save.pets.length - 1, typeof save.activePetIndex === 'number' ? save.activePetIndex : 0))
+            : 0;
         let activeOldStats = null;
 
         petsToDecay.forEach(function decayPet(p, idx) {
@@ -137,9 +140,9 @@
                 happiness: p.happiness,
                 energy: p.energy
             };
-            if (idx === save.activePetIndex) activeOldStats = oldStats;
+            if (idx === safePetIndex) activeOldStats = oldStats;
 
-            const isActive = idx === save.activePetIndex;
+            const isActive = idx === safePetIndex;
             const rateMult = isActive ? 1 : 0.5;
 
             const trait = p.personality && personalityTraits[p.personality];
@@ -185,7 +188,7 @@
         });
 
         if (Array.isArray(save.pets) && save.pets.length > 0) {
-            save.pet = save.pets[save.activePetIndex] || save.pets[0] || save.pet;
+            save.pet = save.pets[safePetIndex] || save.pets[0] || save.pet;
         }
 
         if (minutesPassed >= OFFLINE_SUMMARY_MINUTES_THRESHOLD && save.pet && activeOldStats) {

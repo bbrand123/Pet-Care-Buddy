@@ -4,6 +4,8 @@
 	        const FETCH_GAME_TIME_LIMIT_MS = 30000;
 
         function startFetchGame() {
+            const existingOverlay = document.querySelector('.fetch-game-overlay');
+            if (existingOverlay) { existingOverlay.remove(); }
             if (!gameState.pet) {
                 if (typeof showToast === 'function') {
                     showToast('You need a pet to play this game.', '#FFA726');
@@ -25,6 +27,10 @@
 	                _timeouts: [],
 	                _intervals: []
 	            };
+            // P2-50: Register with runtime tracker for consistent cleanup
+            if (typeof initMiniGameRuntimeTracking === 'function') {
+                initMiniGameRuntimeTracking(fetchState, { overlaySelector: '.fetch-game-overlay' });
+            }
 
             renderFetchGame();
             announce('Fetch game started! Click the field or press Enter to throw the ball!');
@@ -306,24 +312,25 @@
         }
 
 	        function endFetchGame(endReason) {
+            if (!fetchState) {
+                dismissMiniGameExitDialog();
+                return;
+            }
+            if (fetchState._ending) return;
+            fetchState._ending = true;
+            // P2-50: Use runtime tracker for consistent cleanup
+            if (typeof teardownMiniGameRuntime === 'function') {
+                teardownMiniGameRuntime(fetchState, { overlaySelector: '.fetch-game-overlay' });
+            } else {
 	            dismissMiniGameExitDialog();
-            if (fetchState && fetchState._escapeHandler) {
-                popModalEscape(fetchState._escapeHandler);
+                if (fetchState._escapeHandler) popModalEscape(fetchState._escapeHandler);
+	            if (fetchState._timeouts) fetchState._timeouts.forEach(id => clearTimeout(id));
+	            if (fetchState._intervals) fetchState._intervals.forEach(id => clearInterval(id));
+                const overlay = document.querySelector('.fetch-game-overlay');
+                if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
             }
-            if (fetchState) {
-                fetchState._ended = true;
-            }
-	            if (fetchState && fetchState._timeouts) {
-	                fetchState._timeouts.forEach(id => clearTimeout(id));
-	            }
-	            if (fetchState && fetchState._intervals) {
-	                fetchState._intervals.forEach(id => clearInterval(id));
-	            }
 
-            const overlay = document.querySelector('.fetch-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
-
-            incrementMinigamePlayCount('fetch', fetchState ? fetchState.score : 0);
+            if ((fetchState ? fetchState.score : 0) > 0 && typeof incrementMinigamePlayCount === 'function') incrementMinigamePlayCount('fetch', fetchState.score);
 
             // Apply rewards based on score
             if (fetchState && fetchState.score > 0 && gameState.pet) {

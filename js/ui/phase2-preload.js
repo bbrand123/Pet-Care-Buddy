@@ -169,10 +169,11 @@
     }
 
     function patchSplashDismiss() {
-        if (splashDismissPatched) return;
-        splashDismissPatched = true;
+        if (splashDismissPatched || window._mlfSplashDismissPatched) return;
         const originalDismiss = typeof window.dismissSplashScreen === 'function' ? window.dismissSplashScreen.bind(window) : null;
         if (!originalDismiss) return;
+        splashDismissPatched = true;
+        window._mlfSplashDismissPatched = true;
 
         window.dismissSplashScreen = function patchedDismissSplashScreen(options) {
             if (PRELOAD_STATE.ready) {

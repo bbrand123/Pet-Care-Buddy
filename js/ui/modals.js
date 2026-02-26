@@ -111,8 +111,6 @@
                 popModalEscape(closeModal);
                 animateModalClose(modal, () => {
                     document.querySelectorAll('.confetti-container').forEach(c => c.remove());
-                    const confettiStyleEl = document.getElementById('confetti-style');
-                    if (confettiStyleEl) confettiStyleEl.remove();
                     if (returnFocusEl && document.contains(returnFocusEl) && typeof returnFocusEl.focus === 'function') {
                         returnFocusEl.focus();
                     } else {
@@ -192,8 +190,6 @@
                 animateModalClose(modal, () => {
                     // Remove confetti before re-rendering
                     document.querySelectorAll('.confetti-container').forEach(c => c.remove());
-                    const confettiStyleEl = document.getElementById('confetti-style');
-                    if (confettiStyleEl) confettiStyleEl.remove();
                     // Re-render to show evolved appearance
                     if (typeof renderPetPhase === 'function') {
                         renderPetPhase();
@@ -312,10 +308,7 @@
             document.body.appendChild(container);
             setTimeout(() => {
                 if (container.parentNode) container.remove();
-                if (!document.querySelector('.confetti-container')) {
-                    const confettiStyleEl = document.getElementById('confetti-style');
-                    if (confettiStyleEl) confettiStyleEl.remove();
-                }
+                // Note: intentionally keep confetti-style element; it is idempotent and shared
             }, 5200);
         }
 

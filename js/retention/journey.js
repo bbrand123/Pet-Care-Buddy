@@ -161,8 +161,9 @@
 
     function parseDateOnly(dateStr) {
         if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
-        const dt = new Date(dateStr + 'T00:00:00');
-        return Number.isNaN(dt.getTime()) ? null : dt;
+        const dt = new Date(dateStr + 'T12:00:00Z');
+        if (Number.isNaN(dt.getTime())) return null;
+        return dt;
     }
 
     function diffDays(dateA, dateB) {
@@ -341,13 +342,13 @@
         if (!record) return null;
         const { day, chapter, entry, journeyState, state } = record;
         const backlogDrip = applyBacklogDripOnLogin(record);
+        markObjectiveCompletions(record);
         const objectives = (Array.isArray(chapter.objectives) ? chapter.objectives : []).map((objective) => computeObjectiveProgress(state, entry, objective));
         const completeCount = objectives.filter((item) => item.done).length;
         const nextObjective = objectives.find((item) => !item.done) || null;
         const nextReward = nextObjective
             ? { type: 'objective', label: '+' + (nextObjective.tokenReward || 0) + ' Journey Tokens', tokens: nextObjective.tokenReward || 0 }
             : summarizeChapterReward(chapter);
-        markObjectiveCompletions(record);
         if (record._journeyMutated && typeof root.saveGame === 'function') {
             try { root.saveGame({ silentIndicator: true, source: 'retention-journey-auto' }); } catch (_) {}
         }
@@ -751,6 +752,10 @@
     function adminSeedJourneyTokenStoreWeek(weekKey, items) {
         const tokenStore = getTokenStoreState();
         if (!tokenStore) return { ok: false, reason: 'state-unavailable' };
+        if (!tokenStore || !tokenStore.admin) {
+            console.warn('[journey] adminSeedJourneyTokenStoreWeek: tokenStore.admin not available');
+            return;
+        }
         const key = typeof weekKey === 'string' && weekKey ? weekKey : getWeekKey();
         tokenStore.admin.weeklyStock[key] = Array.isArray(items) ? items.filter(Boolean).map((entry) => Object.assign({}, entry)) : [];
         delete tokenStore.weeks[key];
@@ -760,6 +765,10 @@
     function adminSeedJourneyLimitedRewards(items) {
         const tokenStore = getTokenStoreState();
         if (!tokenStore) return { ok: false, reason: 'state-unavailable' };
+        if (!tokenStore || !tokenStore.admin) {
+            console.warn('[journey] adminSeedJourneyLimitedRewards: tokenStore.admin not available');
+            return;
+        }
         tokenStore.admin.limitedRewards = Array.isArray(items) ? items.filter(Boolean).map((entry) => Object.assign({}, entry)) : [];
         const currentKey = getWeekKey();
         delete tokenStore.weeks[currentKey];

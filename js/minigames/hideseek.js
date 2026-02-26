@@ -20,6 +20,8 @@
         const HIDESEEK_TREATS = ['🍪', '🦴', '🧀', '🥕', '🍎', '🐟'];
 
         function startHideSeekGame() {
+            const existingOverlay = document.querySelector('.hideseek-game-overlay');
+            if (existingOverlay) { existingOverlay.remove(); }
             if (!gameState.pet) {
                 if (typeof showToast === 'function') {
                     showToast('You need a pet to play this game.', '#FFA726');
@@ -66,6 +68,10 @@
                 difficulty: hideSeekDiff,
                 phase: 'playing' // 'playing', 'finished'
             };
+            // P2-50: Register with runtime tracker for consistent cleanup
+            if (typeof initMiniGameRuntimeTracking === 'function') {
+                initMiniGameRuntimeTracking(hideSeekState, { overlaySelector: '.hideseek-game-overlay' });
+            }
 
             renderHideSeekGame();
             startHideSeekTimer();
@@ -368,21 +374,17 @@
             }
             if (hideSeekState._ending) return;
             hideSeekState._ending = true;
-            dismissMiniGameExitDialog();
-
-            if (hideSeekState && hideSeekState._escapeHandler) {
-                popModalEscape(hideSeekState._escapeHandler);
+            // P2-50: Use runtime tracker for consistent cleanup
+            if (typeof teardownMiniGameRuntime === 'function') {
+                teardownMiniGameRuntime(hideSeekState, { overlaySelector: '.hideseek-game-overlay' });
+            } else {
+                dismissMiniGameExitDialog();
+                if (hideSeekState._escapeHandler) popModalEscape(hideSeekState._escapeHandler);
+                if (hideSeekState.timerId) clearInterval(hideSeekState.timerId);
+                if (hideSeekState._autoEndTimeout) clearTimeout(hideSeekState._autoEndTimeout);
+                const overlay = document.querySelector('.hideseek-game-overlay');
+                if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
             }
-
-            if (hideSeekState && hideSeekState.timerId) {
-                clearInterval(hideSeekState.timerId);
-            }
-            if (hideSeekState && hideSeekState._autoEndTimeout) {
-                clearTimeout(hideSeekState._autoEndTimeout);
-            }
-
-            const overlay = document.querySelector('.hideseek-game-overlay');
-            if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
 
             incrementMinigamePlayCount('hideseek', hideSeekState ? hideSeekState.treatsFound : 0);
 

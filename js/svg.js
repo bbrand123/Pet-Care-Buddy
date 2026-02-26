@@ -102,6 +102,12 @@
             return '#888888';
         }
 
+        // Sanitize attribute string values to prevent SVG injection
+        function sanitizeAttr(val) {
+            if (val === null || val === undefined) return '';
+            return String(val).replace(/[<>"'&]/g, '');
+        }
+
         // Apply care variant effects to color
         function applyCareVariant(color, variant, isEvolved) {
             if (!color) return color;
@@ -154,7 +160,12 @@
 
         function generateEggSVG(crackLevel, eggType) {
             const eggData = EGG_TYPES[eggType] || EGG_TYPES['furry'];
-            const colors = eggData.colors;
+            const rawColors = eggData.colors;
+            const colors = {
+                base: sanitizeColor(rawColors.base),
+                accent: sanitizeColor(rawColors.accent),
+                shine: sanitizeColor(rawColors.shine)
+            };
 
             const cracks = [];
             if (crackLevel >= 1) {
@@ -213,7 +224,7 @@
             const eggGradId = 'eggGradient' + uid;
             const eggShineId = 'eggShine' + uid;
             return `
-                <svg class="egg-svg" viewBox="0 0 100 130" role="img" aria-label="${eggData.description}. Tap to help it hatch!">
+                <svg class="egg-svg" viewBox="0 0 100 130" role="img" aria-label="${sanitizeAttr(eggData.description)}. Tap to help it hatch!">
                     <defs>
                         <linearGradient id="${eggGradId}" x1="0%" y1="0%" x2="100%" y2="100%">
                             <stop offset="0%" style="stop-color:${colors.shine}"/>

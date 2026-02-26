@@ -54,7 +54,7 @@
 
     function getCurrentHour(nowMs) {
         if (!Number.isFinite(nowMs)) return 12;
-        return new Date(nowMs).getHours();
+        return new Date(nowMs).getUTCHours();
     }
 
     function pickSocialTarget(pet, householdContext) {
@@ -76,7 +76,8 @@
             if (rel && Number.isFinite(Number(rel.familiarity))) score += Number(rel.familiarity) * 0.03;
             if (rel && Number.isFinite(Number(rel.affinity))) score += Number(rel.affinity) * 0.02;
             score += clamp((100 - getNeed(candidate, 'fun', 50)) * 0.02, 0, 2);
-            if (!best || score > best.score || (score === best.score && String(candidateId) < String(best.petId))) {
+            score += (Math.random() - 0.5) * 0.5;
+            if (!best || score > best.score) {
                 best = { petId: String(candidateId), score };
             }
         });
@@ -133,7 +134,8 @@
             return makeActivity('play', nowMs);
         }
 
-        if (petCount > 1 && hygiene > 15) {
+        const socialHygieneMin = thresholds.social != null ? Math.max(15, thresholds.social) : 15;
+        if (petCount > 1 && hygiene > socialHygieneMin) {
             const targetPetId = pickSocialTarget(pet, householdContext);
             if (targetPetId) return makeActivity('socialize', nowMs, { targetPetId });
         }

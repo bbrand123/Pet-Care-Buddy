@@ -74,6 +74,7 @@
     let initPromise = null;
     let listenersBound = false;
     let lifecycleListenersBound = false;
+    let _visibilityChangeHandler = null;
     let unlocked = false;
     let destroyed = false;
     let audioSupported = true;
@@ -696,7 +697,7 @@
     function bindLifecycleListeners() {
         if (lifecycleListenersBound || typeof document === 'undefined' || typeof window === 'undefined') return;
         lifecycleListenersBound = true;
-        const onVisibilityChange = () => {
+        _visibilityChangeHandler = () => {
             if (destroyed) return;
             if (document.hidden) {
                 pausedForBackground = true;
@@ -726,8 +727,8 @@
                 refreshSceneAudio({ reason: 'foreground', restartLoops: true });
             }
         };
-        document.addEventListener('visibilitychange', onVisibilityChange, true);
-        window.addEventListener('pageshow', onVisibilityChange, true);
+        document.addEventListener('visibilitychange', _visibilityChangeHandler, true);
+        window.addEventListener('pageshow', _visibilityChangeHandler, true);
     }
 
     async function unlock() {
@@ -1669,13 +1670,14 @@
         gain.connect(dest);
         osc.start(now);
         osc.stop(now + duration);
-        if (opts.harmonic && Number(opts.harmonic.frequency || 0) > 0) {
+        if (opts.harmonic && Number(opts.harmonic.frequency || 0) > 0 && !(opts._harmonicDepth >= 1)) {
             try {
                 playMiniGameTone(Object.assign({}, opts.harmonic, {
                     bus: requestedBus || 'gameplay',
                     duration,
                     gain: peakGain * clamp(Number(opts.harmonic.gainMultiplier) || 0.45, 0.05, 1),
-                    caption: null
+                    caption: null,
+                    _harmonicDepth: (opts._harmonicDepth || 0) + 1
                 }));
             } catch (err) {}
         }
@@ -2035,6 +2037,12 @@
         destroyed = true;
         unlockInFlightPromise = null;
         unbindUnlockListeners();
+        if (typeof document !== 'undefined' && _visibilityChangeHandler) {
+            document.removeEventListener('visibilitychange', _visibilityChangeHandler, true);
+            if (typeof window !== 'undefined') window.removeEventListener('pageshow', _visibilityChangeHandler, true);
+            _visibilityChangeHandler = null;
+        }
+        lifecycleListenersBound = false;
         clearSceneRefreshTimer();
         Array.from(mixDuckTimers.values()).forEach((timerId) => { try { clearTimeout(timerId); } catch (err) {} });
         mixDuckTimers.clear();

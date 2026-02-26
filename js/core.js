@@ -1241,6 +1241,10 @@
             const recent = _announceRecentByKey.get(key) || 0;
             if (now - recent < options.dedupeMs) return;
             _announceRecentByKey.set(key, now);
+            if (_announceRecentByKey.size > 200) {
+                const cutoff = now - 30000;
+                _announceRecentByKey.forEach((ts, k) => { if (ts < cutoff) _announceRecentByKey.delete(k); });
+            }
             if (assertive) {
                 _assertiveQueue.push({
                     message: plainMessage,
@@ -2165,21 +2169,16 @@
             if (gameState.pets) {
                 const p1 = gameState.pets.find(p => p && p.id === pet1Id);
                 const p2 = gameState.pets.find(p => p && p.id === pet2Id);
-                if (p1) {
-                    adjustedPoints *= getPersonalityRelationshipModifier(p1);
-                    if (p1.growthStage === 'elder') adjustedPoints *= ELDER_CONFIG.wisdomRelationshipBonus;
-                }
-                if (p2) {
-                    adjustedPoints *= getPersonalityRelationshipModifier(p2);
-                    if (p2.growthStage === 'elder') adjustedPoints *= ELDER_CONFIG.wisdomRelationshipBonus;
-                }
-                // Average the two modifiers if both applied, preserving elder bonus
                 if (p1 && p2) {
                     const avgPersonalityMod = (getPersonalityRelationshipModifier(p1) + getPersonalityRelationshipModifier(p2)) / 2;
-                    let elderMod = 1;
-                    if (p1.growthStage === 'elder') elderMod *= ELDER_CONFIG.wisdomRelationshipBonus;
-                    if (p2.growthStage === 'elder') elderMod *= ELDER_CONFIG.wisdomRelationshipBonus;
+                    const elderMod = (p1.growthStage === 'elder' || p2.growthStage === 'elder') ? ELDER_CONFIG.wisdomRelationshipBonus : 1;
                     adjustedPoints = points * avgPersonalityMod * elderMod;
+                } else if (p1) {
+                    adjustedPoints *= getPersonalityRelationshipModifier(p1);
+                    if (p1.growthStage === 'elder') adjustedPoints *= ELDER_CONFIG.wisdomRelationshipBonus;
+                } else if (p2) {
+                    adjustedPoints *= getPersonalityRelationshipModifier(p2);
+                    if (p2.growthStage === 'elder') adjustedPoints *= ELDER_CONFIG.wisdomRelationshipBonus;
                 }
             }
             rel.points = clamp(rel.points + Math.round(adjustedPoints), 0, 300);
@@ -2188,6 +2187,9 @@
 
             // Return level change info
             if (prevLevel !== newLevel) {
+                if (typeof RELATIONSHIP_ORDER === 'undefined' || !Array.isArray(RELATIONSHIP_ORDER)) {
+                    return { changed: true, from: prevLevel, to: newLevel, improved: false };
+                }
                 const prevIdx = RELATIONSHIP_ORDER.indexOf(prevLevel);
                 const newIdx = RELATIONSHIP_ORDER.indexOf(newLevel);
                 return {
@@ -2367,6 +2369,11 @@
                     updateWellnessBar();
                     if (typeof updateRoomNavBadge === 'function') updateRoomNavBadge();
                     if (gameState.currentRoom === 'garden') renderGardenUI();
+
+                    // Emit state:replaced for listeners that need it when StateManager is unavailable
+                    if (typeof EventBus !== 'undefined' && EventBus && typeof EventBus.emit === 'function') {
+                        try { EventBus.emit('state:replaced', { type: 'replace', path: '', reason: 'visibility-resume-fallback' }); } catch (e) {}
+                    }
 
                     saveGame();
                 }
@@ -2672,11 +2679,12 @@
         }
 
         // Dismiss the splash/loading screen after init completes
+        const _splashScreenShownAt = (typeof performance !== 'undefined') ? performance.now() : Date.now();
         function dismissSplash() {
             const splash = document.getElementById('splash-screen');
             if (!splash) return;
             const minShowTime = 800;
-            const elapsed = performance.now();
+            const elapsed = (typeof performance !== 'undefined') ? (performance.now() - _splashScreenShownAt) : minShowTime;
             const remaining = Math.max(0, minShowTime - elapsed);
             setTimeout(() => {
                 splash.style.opacity = '0';
