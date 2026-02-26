@@ -1248,13 +1248,15 @@
         let _lastCooldownAnnouncement = 0;
         const _cooldownToastByKey = {};
 
-        // Feature 17: Care Combo — track consecutive different actions within 30s
+        // Feature 17: Care Combo — track unique actions within 30s window
         const _COMBO_WINDOW_MS = 30000;
         let _comboActions = [];  // [{action, ts}]
+        let _comboActionSet = new Set();  // unique action names seen in current window
         let _comboExpireTimer = null;
 
         function resetComboState() {
             _comboActions = [];
+            _comboActionSet = new Set();
             if (_comboExpireTimer) { clearTimeout(_comboExpireTimer); _comboExpireTimer = null; }
         }
 
@@ -2074,16 +2076,17 @@
             // Feature 17: Care Combo multiplier
             {
                 const _now = Date.now();
-                // Expire entries outside the 30s window
+                // Expire entries outside the 30s window; rebuild set from remaining entries
                 _comboActions = _comboActions.filter(e => _now - e.ts < _COMBO_WINDOW_MS);
-                // Only count if last action was different
-                const _lastComboAction = _comboActions.length > 0 ? _comboActions[_comboActions.length - 1].action : null;
-                if (_lastComboAction !== action) {
+                _comboActionSet = new Set(_comboActions.map(e => e.action));
+                // Only advance combo if action hasn't been used in this window (prevents alternating exploit)
+                if (!_comboActionSet.has(action)) {
                     _comboActions.push({ action, ts: _now });
+                    _comboActionSet.add(action);
                 }
                 const _comboCount = _comboActions.length;
                 if (_comboExpireTimer) clearTimeout(_comboExpireTimer);
-                _comboExpireTimer = setTimeout(() => { _comboActions = []; _comboExpireTimer = null; }, _COMBO_WINDOW_MS);
+                _comboExpireTimer = setTimeout(() => { _comboActions = []; _comboActionSet = new Set(); _comboExpireTimer = null; }, _COMBO_WINDOW_MS);
 
                 if (_comboCount === 3) {
                     showToast('🔥 Care Combo ×3! Nice routine!', '#FF9800', { duration: 2200 });

@@ -228,9 +228,10 @@
             if (!quest.readyToClaim) {
                 quest.readyToClaim = true;
                 quest.completedAt = Date.now();
-                // Don't auto-claim; let the user claim from the UI
+                grantQuestReward(quest);
+                quest.claimedAt = Date.now();
                 if (typeof root.showToast === 'function') {
-                    try { root.showToast('Comeback quest complete! Claim your reward!', '#4CAF50'); } catch (_) {}
+                    try { root.showToast('🎉 Comeback quest complete! Rewards granted.', '#4CAF50'); } catch (_) {}
                 }
             }
         }

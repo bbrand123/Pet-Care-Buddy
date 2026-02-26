@@ -30,6 +30,7 @@
         let _critBubbleInterval = null;
 
         const CRIT_BUBBLE_THRESHOLD = 25;
+        const STRESS_BUBBLE_THRESHOLD = 45; // Fix 8: softer warning before critical level
         const CRIT_BUBBLE_DISMISS_MS = 4000;
 
         const CRITICAL_NEED_TEXTS = {
@@ -50,7 +51,7 @@
 
         function _showNextCritBubble() {
             if (_critBubbleActive || _critBubbleQueue.length === 0) return;
-            const { statKey, text, petContainer } = _critBubbleQueue.shift();
+            const { statKey, text, petContainer, bubbleClass } = _critBubbleQueue.shift();
             const container = petContainer || document.querySelector('.pet-container');
             if (!container) return;
 
@@ -58,7 +59,7 @@
             container.querySelectorAll('.pet-critical-bubble').forEach(b => b.remove());
 
             const bubble = document.createElement('div');
-            bubble.className = 'pet-critical-bubble';
+            bubble.className = bubbleClass || 'pet-critical-bubble';
             bubble.setAttribute('aria-live', 'polite');
             bubble.setAttribute('aria-label', text);
             bubble.textContent = text;
@@ -88,16 +89,22 @@
         function _checkCriticalNeeds() {
             if (typeof gameState === 'undefined' || !gameState || !gameState.pet || gameState.phase !== 'pet') return;
             const pet = gameState.pet;
+            const petName = pet.name || 'Your pet';
             const personality = (pet.personality || 'playful');
             const container = document.querySelector('.pet-container');
             if (!container) return;
 
-            // Collect critical stats, sorted by priority
+            // Collect critical stats (below CRIT threshold), sorted by priority
             const crits = ['hunger', 'happiness', 'energy', 'cleanliness']
                 .filter(s => typeof pet[s] === 'number' && pet[s] < CRIT_BUBBLE_THRESHOLD)
                 .sort((a, b) => (STAT_PRIORITY[b] || 0) - (STAT_PRIORITY[a] || 0));
 
-            if (crits.length === 0) {
+            // Fix 8: Collect stressed stats (below STRESS threshold but not critical)
+            const stressed = ['hunger', 'happiness', 'energy', 'cleanliness']
+                .filter(s => typeof pet[s] === 'number' && pet[s] >= CRIT_BUBBLE_THRESHOLD && pet[s] < STRESS_BUBBLE_THRESHOLD)
+                .sort((a, b) => (STAT_PRIORITY[b] || 0) - (STAT_PRIORITY[a] || 0));
+
+            if (crits.length === 0 && stressed.length === 0) {
                 // If stat recovered, dismiss current bubble
                 if (_critBubbleActive && container) {
                     const bubble = container.querySelector('.pet-critical-bubble');
@@ -106,17 +113,32 @@
                 return;
             }
 
-            // Only queue the most-critical stat (don't spam)
-            const topStat = crits[0];
-            // Avoid re-queuing the same stat that's already displayed or queued
-            const alreadyQueued = _critBubbleQueue.some(q => q.statKey === topStat);
-            const currentBubble = container.querySelector('.pet-critical-bubble');
-            if (alreadyQueued || (currentBubble && _critBubbleActive)) return;
+            // Critical takes priority — show only critical if any exist
+            if (crits.length > 0) {
+                const topStat = crits[0];
+                const alreadyQueued = _critBubbleQueue.some(q => q.statKey === topStat);
+                const currentBubble = container.querySelector('.pet-critical-bubble');
+                if (alreadyQueued || (currentBubble && _critBubbleActive)) return;
+                _critBubbleQueue.push({
+                    statKey: topStat,
+                    text: _getCritBubbleText(topStat, personality),
+                    petContainer: container
+                });
+                _showNextCritBubble();
+                return;
+            }
 
+            // Fix 8: Show stress bubble (yellow, gentler) when no critical stats
+            const topStressed = stressed[0];
+            const alreadyStressQueued = _critBubbleQueue.some(q => q.statKey === topStressed && q.isStress);
+            const currentBubble = container.querySelector('.pet-critical-bubble');
+            if (alreadyStressQueued || (currentBubble && _critBubbleActive)) return;
             _critBubbleQueue.push({
-                statKey: topStat,
-                text: _getCritBubbleText(topStat, personality),
-                petContainer: container
+                statKey: topStressed,
+                text: `${petName} seems stressed\u2026`,
+                petContainer: container,
+                isStress: true,
+                bubbleClass: 'pet-critical-bubble pet-stress-bubble'
             });
             _showNextCritBubble();
         }

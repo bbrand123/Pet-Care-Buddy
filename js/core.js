@@ -45,7 +45,10 @@
 	                    lastFee: 0,
 	                    lastBreakdown: null,
 	                    unpaidFeeDebt: 0
-	                }
+	                },
+	                // Daily harvest coin cap (Fix 2: prevent passive garden farming exploit)
+	                harvestCoinsToday: 0,
+	                harvestCoinsDayKey: ''
 	            };
 	        }
 

@@ -119,8 +119,9 @@ const ECONOMY_BALANCE = {
     // Rec 8: Per-slot auction listing cap
     auctionPerSlotListingCap: 12,
     // Rec 11: Coin decay — daily tax on balances above threshold
-    coinDecayThreshold: 1000,
-    coinDecayRate: 0.005
+    coinDecayThreshold: 600,          // was 1000 — Fix 9: lower onset for meaningful pressure
+    coinDecayRate: 0.018,             // was 0.005 — Fix 9: 1.8% daily instead of 0.5%
+    coinDecayProtectedWallet: 350     // was 450 (implicit threshold*0.45) — Fix 9
 };
 
 const ECONOMY_SHOP_ITEMS = {
@@ -379,7 +380,7 @@ const CRAFTED_ITEMS = {
         name: 'Glow Tonic',
         emoji: '🧴',
         category: 'medicine',
-        effects: { hunger: 10, cleanliness: 16, happiness: 14, energy: 12 },
+        effects: { hunger: 4, happiness: 12, energy: 10, cleanliness: 4 }, // was: hunger:10, cleanliness:16, happiness:14, energy:12
         description: 'Handmade medicine infused with exploration finds.'
     },
     adventureToy: {
@@ -415,8 +416,8 @@ const CRAFTING_RECIPES = {
         outputType: 'crafted',
         outputId: 'glowTonic',
         outputCount: 1,
-        // Rec 9: Rebalanced from 16 to 34 (closer to 45% of Pet Med Kit's 76 value)
-        craftCost: 34,
+        // Rec 9: Rebalanced from 16 to 34; Fix 5: increased to 50 (focused mood/energy item, not all-stats)
+        craftCost: 50, // was 34
         ingredients: [
             { source: 'crop', id: 'strawberry', count: 1 },
             { source: 'loot', id: 'glowMushroom', count: 1 },
@@ -530,6 +531,29 @@ const PRESTIGE_PURCHASES = {
         cost: 2000,
         maxOwned: 1,
         category: 'cosmetic'
+    },
+    // Fix 10: Repeatable late-game coin sinks
+    vitalityBoost: {
+        id: 'vitalityBoost',
+        name: 'Vitality Boost',
+        emoji: '💪',
+        description: 'All pet stat decay rates reduced by 15% for 24 hours.',
+        cost: 350,
+        maxOwned: null, // unlimited repurchases
+        consumable: true,
+        category: 'boost',
+        activeUntil: null // TODO: wire active effect
+    },
+    luckyDay: {
+        id: 'luckyDay',
+        name: 'Lucky Day',
+        emoji: '🍀',
+        description: 'All coin rewards increased by 20% for the next 60 minutes.',
+        cost: 500,
+        maxOwned: null, // unlimited repurchases
+        consumable: true,
+        category: 'boost',
+        activeUntil: null // TODO: wire active effect
     }
 };
 

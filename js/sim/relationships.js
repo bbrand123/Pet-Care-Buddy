@@ -116,7 +116,8 @@
     function getCooldownMultiplier(lastInteractionAt, nowMs) {
         const now = Number.isFinite(nowMs) ? nowMs : 0;
         const last = Number.isFinite(lastInteractionAt) ? lastInteractionAt : 0;
-        if (last <= 0 || now <= last) return 0.25;
+        if (last <= 0) return 1; // first-ever interaction — no cooldown penalty
+        if (now <= last) return 0.25; // rapid re-interaction within same tick
         const delta = now - last;
         if (delta >= 10 * 60 * 1000) return 1;
         return clamp(0.25 + (delta / (10 * 60 * 1000)) * 0.75, 0.25, 1);
@@ -187,7 +188,7 @@
         }
 
         if (sinceLast > 24 * 60 * 60 * 1000 && affinity !== 0) {
-            const affinityRelaxPerHour = 0.25;
+            const affinityRelaxPerHour = 0.8; // was 0.25 — Fix 12: friendship now expires in ~50h without interaction
             const shift = (dt / 3600000) * affinityRelaxPerHour;
             if (affinity > 0) affinity = Math.max(0, affinity - shift);
             else affinity = Math.min(0, affinity + shift);
@@ -288,7 +289,7 @@
         if (hasSibling) return { moodBonus: 3, careMultiplier: 1.06, label: 'Siblings', icon: '\u{1F46B}' };
         if (hasMentor) return { moodBonus: 2, careMultiplier: 1.10, label: 'Mentoring', icon: '\u{1F4DA}' };
         if (hasFriend) return { moodBonus: 4, careMultiplier: 1.08, label: 'Best Friends', icon: '\u{1F49B}' };
-        if (hasRival) return { moodBonus: 0, careMultiplier: 1.04, label: 'Rivals', icon: '\u2694\uFE0F' };
+        if (hasRival) return { moodBonus: 0, careMultiplier: 0.96, label: 'Rivals', icon: '\u2694\uFE0F' }; // was 1.04 — rivals now impose a 4% care penalty
         if (affinity >= DUO_BONUS_AFFINITY) return { moodBonus: 2, careMultiplier: 1.03, label: 'Good Friends', icon: '\u{1F91D}' };
         return null;
     }

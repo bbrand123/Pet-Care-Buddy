@@ -178,7 +178,7 @@
             // bottom-out permanently during long offline periods.
             hy += 0.15 * dtMinutes;
         } else if (activity.type === 'play') {
-            f += 4 * dtMinutes;
+            f += 2 * dtMinutes; // was 4 — Fix 13: offline play gives 50% of active rate to incentivize returning
             e -= 2 * dtMinutes;
             h -= 1.2 * dtMinutes;
             hy -= 0.4 * dtMinutes;
@@ -228,6 +228,10 @@
         const activePetId = context && context.activePetId != null ? String(context.activePetId) : null;
         const isActive = activePetId != null && String(nextPet.id) === activePetId;
 
+        // Capture the pre-activity mood set by normalizePetRecord so mood-shift detection
+        // works even when the original pet record had no stored .mood field.
+        const preEffectMood = nextPet.mood;
+
         chooseNextActivityIfNeeded(nextPet, context, nowMs);
 
         let _duoBonusMult = 1;
@@ -261,7 +265,7 @@
                 at: nowMs
             });
         }
-        const _prevMoodForShift = prevMood || computeMoodFromNeeds(nextPet);
+        const _prevMoodForShift = prevMood || preEffectMood;
         if ((_prevMoodForShift !== nextPet.mood) && (nextPet.mood === 'sad' || nextPet.mood === 'happy')) {
             events.push({
                 type: 'mood-shift',

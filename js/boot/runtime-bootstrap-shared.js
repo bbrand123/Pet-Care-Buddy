@@ -70,8 +70,7 @@
 
   function rollbackRuntimeBootstrap(globalObj, meta) {
     const target = getGlobal(globalObj);
-    // Don't reset bootstrapped flag to prevent double-init on retry (P2-62)
-    // target.__MLF_RUNTIME_BOOTSTRAPPED__ = false; // REMOVED - see P2-62
+    target.__MLF_RUNTIME_BOOTSTRAPPED__ = false; // allow retry after failure
     resetRuntimeBootFlags(target);
     setBootInfo(target, Object.assign({
       runtimeScriptsLoaded: false,

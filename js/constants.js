@@ -3211,7 +3211,7 @@ const REWARD_BUNDLES = {
     streakDay10: { id: 'streakDay10', coins: 110, modifierId: 'focusedTraining', collectible: { type: 'accessory', id: 'sunglasses' } },
     streakDay12: { id: 'streakDay12', coins: 90, modifierId: 'luckyPaws' },
     streakDay14: { id: 'streakDay14', coins: 135, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'heartSticker' } },
-    streakDay21: { id: 'streakDay21', coins: 180, modifierId: 'luckyPaws', collectible: { type: 'accessory', id: 'crown' } },
+    streakDay21: { id: 'streakDay21', coins: 185, modifierId: 'happyHour', collectible: { type: 'accessory', id: 'crown' } }, // Fix 14: 185 coins interpolated, happyHour modifier (consistent with Day 7/14)
     streakDay30: { id: 'streakDay30', coins: 240, modifierId: 'focusedTraining', collectible: { type: 'sticker', id: 'crownSticker' } },
     weeklyArcFinale: { id: 'weeklyArcFinale', coins: 320, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'legendRibbon' } },
     weeklyArcCare: { id: 'weeklyArcCare', coins: 300, modifierId: 'careRush', collectible: { type: 'sticker', id: 'legendRibbon' } },

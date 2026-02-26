@@ -831,6 +831,23 @@
 
         // Track daily completions count (for trophies)
         function trackDailyCompletion() {
+            // Fix 3: Partial completion tier — grant half coin reward for 40–79% completion
+            const _cl = gameState.dailyChecklist;
+            if (_cl && !isDailyComplete() && !_cl._partialRewardGranted) {
+                const _total = Array.isArray(_cl.tasks) ? _cl.tasks.length : 0;
+                const _done = _total > 0 ? _cl.tasks.filter(t => t.done).length : 0;
+                const _ratio = _total > 0 ? _done / _total : 0;
+                if (_ratio >= 0.4 && _ratio < 0.8) {
+                    _cl._partialRewardGranted = true;
+                    const _partialCoins = 48; // ~half of dailyFinish (~96 coins)
+                    if (typeof addCoins === 'function') {
+                        const _earned = addCoins(_partialCoins, 'Daily Tasks (Partial)', true);
+                        if (_earned > 0 && typeof showToast === 'function') {
+                            showToast(`📋 Good progress! +${_earned} coins (partial daily reward)`, '#FFA726');
+                        }
+                    }
+                }
+            }
             if (isDailyComplete()) {
                 // Only count once per day
                 const cl = gameState.dailyChecklist;

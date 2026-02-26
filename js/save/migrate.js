@@ -78,7 +78,7 @@
         SaveSchema.validateSavePayload(payload, { mode: 'pre-migration' });
 
         const cloneInput = !options || options.clone !== false;
-        const working = cloneInput ? deepClonePayload(payload) : payload;
+        let working = cloneInput ? deepClonePayload(payload) : payload;
         const fromVersion = SaveSchema.getSaveSchemaVersion(working);
         const report = {
             fromVersion,

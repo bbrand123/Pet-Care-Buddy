@@ -165,8 +165,7 @@
                 try {
                     Object.keys(target).forEach((key) => { delete target[key]; });
                     Object.assign(target, next);
-                    this._proxyCache = new WeakMap();
-                    this._state = this._createProxy(target, '');
+                    this._proxyCache = new WeakMap(); // clear sub-object proxy cache; root proxy keeps same reference
                 } finally {
                     this._suspendEventsDepth--;
                 }

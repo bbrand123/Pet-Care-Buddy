@@ -13,6 +13,20 @@
             var _dsExisting = document.querySelector('.mg-difficulty-overlay');
             if (_dsExisting) _dsExisting.remove();
 
+            // Fix 4: Gate Hard mode behind Child growth stage
+            var _hardLocked = (typeof gameState !== 'undefined' && gameState && gameState.pet && gameState.pet.growthStage === 'baby');
+            var _hardBtn = _hardLocked
+                ? '<button class="mg-diff-btn mg-diff-btn--locked" data-diff="hard" type="button" disabled aria-label="Hard — locked until Child stage" aria-disabled="true">' +
+                    '<span class="mg-diff-icon" aria-hidden="true">\uD83D\uDD25</span>' +
+                    '<span class="mg-diff-label">Hard</span>' +
+                    '<span class="mg-diff-mult">\uD83D\uDD12 Unlock at Child stage</span>' +
+                  '</button>'
+                : '<button class="mg-diff-btn" data-diff="hard" type="button" aria-label="Hard — 1.3x coins">' +
+                    '<span class="mg-diff-icon" aria-hidden="true">\uD83D\uDD25</span>' +
+                    '<span class="mg-diff-label">Hard</span>' +
+                    '<span class="mg-diff-mult">\u00D71.3 coins</span>' +
+                  '</button>';
+
             var _dsOverlay = document.createElement('div');
             _dsOverlay.className = 'mg-difficulty-overlay';
             _dsOverlay.setAttribute('role', 'dialog');
@@ -32,11 +46,7 @@
                     '<span class="mg-diff-label">Normal</span>' +
                     '<span class="mg-diff-mult">\u00D71.0 coins</span>' +
                   '</button>' +
-                  '<button class="mg-diff-btn" data-diff="hard" type="button" aria-label="Hard — 1.3x coins">' +
-                    '<span class="mg-diff-icon" aria-hidden="true">\uD83D\uDD25</span>' +
-                    '<span class="mg-diff-label">Hard</span>' +
-                    '<span class="mg-diff-mult">\u00D71.3 coins</span>' +
-                  '</button>' +
+                  _hardBtn +
                 '</div>' +
                 '<button class="mg-difficulty-cancel" type="button">Cancel</button>' +
                 '</div>';
@@ -47,7 +57,7 @@
             }
 
             // Highlight the last-used difficulty
-            _dsOverlay.querySelectorAll('.mg-diff-btn').forEach(function(btn) {
+            _dsOverlay.querySelectorAll('.mg-diff-btn:not([disabled])').forEach(function(btn) {
                 var d = btn.getAttribute('data-diff');
                 if (d === _minigameDifficulty) {
                     btn.classList.add('mg-diff-btn--selected');

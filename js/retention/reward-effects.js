@@ -169,7 +169,11 @@
 
     const api = Object.freeze({
         playSequence,
-        playRewardMoment(effectId, options) { return playSequence(effectId, options); },
+        playRewardMoment(effectId, options) {
+            const result = playSequence(effectId, options);
+            // Return true/false; cancel function is an internal implementation detail
+            return typeof result === 'function' ? true : !!result;
+        },
         getPresets() { return EFFECT_PRESETS; }
     });
 

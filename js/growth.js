@@ -219,7 +219,9 @@
                 ? recentHistory.reduce((sum, entry) => sum + (Number(entry.average) || 0), 0) / recentHistory.length
                 : ((Number(pet.hunger) || 0) + (Number(pet.cleanliness) || 0) + (Number(pet.happiness) || 0) + (Number(pet.energy) || 0)) / 4;
             const neglectCount = Number(pet.neglectCount) || 0;
-            const performanceScore = historyAvg - (neglectCount * 3.5);
+            // Fix 7: Cap neglect penalty at 15 events so one bad offline gap doesn't permanently block evolution
+            const cappedNeglect = Math.min(neglectCount, 15);
+            const performanceScore = historyAvg - (cappedNeglect * 3.5); // was: neglectCount * 3.5
 
             // Keep evolution tied to excellent, active care performance instead of passive waiting.
             return performanceScore >= 78 && neglectCount <= 4;

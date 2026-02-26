@@ -1883,6 +1883,10 @@
                     };
 
                     const tipText = careQualityTips[careQuality] || careQualityTips.average;
+                    // Fix 7: Show neglect count / cap so player knows their evolution eligibility
+                    const _neglectCount = Math.max(0, Math.floor(Number(pet.neglectCount) || 0));
+                    const _neglectCap = 15;
+                    const _neglectHTML = `<span class="care-quality-neglect" aria-label="Neglect events: ${_neglectCount} of ${_neglectCap} max">Neglect events: ${_neglectCount} / ${_neglectCap}</span>`;
 
                     return `
                         <div class="care-quality-wrap" aria-label="Care quality and age">
@@ -1893,6 +1897,7 @@
                                         <span class="care-quality-label">Care Quality</span>
                                         <span class="care-quality-value">${qualityData.label}</span>
                                         <span class="care-quality-hint">${qualityData.description}</span>
+                                        ${_neglectHTML}
                                     </div>
                                 </div>
                                 <div class="pet-age-badge" aria-label="Age: ${ageDisplay}. Time since hatching. Pets grow based on both age and care.">

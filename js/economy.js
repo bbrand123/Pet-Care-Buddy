@@ -102,7 +102,7 @@
 	            const minuteMin = Math.max(0.02, Math.min(1, Number(cfg.minuteMinMultiplier) || 0.08));
 	            const sessionSoftCap = Math.max(500, Number(cfg.sessionSoftCap) || 18000);
 	            const sessionFalloff = Math.max(0.00001, Number(cfg.sessionFalloffPerCoin) || 0.0015);
-	            const sessionMin = Math.max(0.05, Math.min(1, Number(cfg.sessionMinMultiplier) || 0.2));
+	            const sessionMin = Math.max(0.05, Math.min(1, Number(cfg.sessionMinMultiplier) || 0.06)); // was 0.2 — Fix 11: post-cap farming nearly pointless
 	            if (!Number.isFinite(sec.coinGainMinute.windowStart) || (now - sec.coinGainMinute.windowStart) >= 60000 || sec.coinGainMinute.windowStart <= 0) {
 	                sec.coinGainMinute.windowStart = now;
 	                sec.coinGainMinute.earned = 0;
@@ -327,6 +327,9 @@
             if (!Number.isFinite(eco.recurringSinks.unpaidDebt)) eco.recurringSinks.unpaidDebt = 0;
             if (eco.recurringSinks.lastBreakdown !== null && typeof eco.recurringSinks.lastBreakdown !== 'object') eco.recurringSinks.lastBreakdown = null;
 	            ensureEconomySecurityState(state);
+	            // Fix 2: Ensure daily harvest coin cap fields exist for older saves
+	            if (typeof eco.harvestCoinsToday !== 'number') eco.harvestCoinsToday = 0;
+	            if (typeof eco.harvestCoinsDayKey !== 'string') eco.harvestCoinsDayKey = '';
 	            // Rec 2: Ensure persistent playerId exists for auction self-trade prevention
             if (!eco.playerId || typeof eco.playerId !== 'string') eco.playerId = generatePlayerId();
             if (typeof eco.auctionIdentityMigrationDone !== 'boolean') eco.auctionIdentityMigrationDone = false;
@@ -1080,12 +1083,22 @@
 	                Math.floor(progress.expeditionCount || 0)
 	            );
 	            const completedDaily = !!(previousChecklist && Array.isArray(previousChecklist.tasks) && previousChecklist.tasks.length > 0 && previousChecklist.tasks.every((task) => task.done));
+	            // Fix 3: Calculate partial completion ratio for middle tier
+	            const _taskTotal = (previousChecklist && Array.isArray(previousChecklist.tasks)) ? previousChecklist.tasks.length : 0;
+	            const _taskDone = _taskTotal > 0 ? previousChecklist.tasks.filter((t) => t.done).length : 0;
+	            const _completionRatio = _taskTotal > 0 ? _taskDone / _taskTotal : 0;
 	            let finalRate = rate;
-	            if (completedDaily) {
+	            if (completedDaily || _completionRatio >= 0.8) {
 	                const dailyReduction = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayDailyCompleteReduction))
 	                    ? ECONOMY_BALANCE.coinDecayDailyCompleteReduction
 	                    : 0.4;
 	                finalRate *= Math.max(0.1, Math.min(1, dailyReduction));
+	            } else if (_completionRatio >= 0.4) {
+	                // Partial tier: 40–79% tasks done → 0.65× decay
+	                const engagedReduction = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayEngagedReduction))
+	                    ? ECONOMY_BALANCE.coinDecayEngagedReduction
+	                    : 0.65;
+	                finalRate *= Math.max(0.1, Math.min(1, engagedReduction));
 	            } else if (engagedActions >= 8) {
 	                const engagedReduction = (typeof ECONOMY_BALANCE !== 'undefined' && Number.isFinite(ECONOMY_BALANCE.coinDecayEngagedReduction))
 	                    ? ECONOMY_BALANCE.coinDecayEngagedReduction
@@ -1776,8 +1789,21 @@
                     economyMultiplier: ecoMult
                 })
                 : Math.max(2, Math.round((3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6)) * ((crop.seasonBonus || []).includes(currentSeason) ? 1.2 : 1.0) * ecoMult));
-            addCoins(payout, 'Harvest', true);
-            return payout;
+            // Fix 2: Daily harvest coin cap of 180 to prevent passive farming exploit
+            const _HARVEST_DAILY_CAP = 180;
+            const eco = ensureEconomyState();
+            const todayKey = typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().slice(0, 10);
+            if (eco.harvestCoinsDayKey !== todayKey) {
+                eco.harvestCoinsToday = 0;
+                eco.harvestCoinsDayKey = todayKey;
+            }
+            const allowed = Math.max(0, _HARVEST_DAILY_CAP - (eco.harvestCoinsToday || 0));
+            const cappedPayout = Math.min(payout, allowed);
+            if (cappedPayout > 0) {
+                eco.harvestCoinsToday = (eco.harvestCoinsToday || 0) + cappedPayout;
+                addCoins(cappedPayout, 'Harvest', true);
+            }
+            return cappedPayout;
         }
 
         function getPityThresholdValue(key, fallbackValue) {
