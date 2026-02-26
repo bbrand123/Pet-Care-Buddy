@@ -1701,6 +1701,18 @@
                 restoreActionButtonsFromCooldown();
             }, ACTION_COOLDOWN_MS);
 
+            // R2: First care action of the day bonus
+            {
+                const _today = new Date().toDateString();
+                if (gameState.lastFirstActionDate !== _today) {
+                    gameState.lastFirstActionDate = _today;
+                    const _bonus = typeof applyCoinGainRateLimits === 'function' ? applyCoinGainRateLimits(5, 'firstActionBonus') : 5;
+                    if (_bonus > 0) gameState.coins = (gameState.coins || 0) + _bonus;
+                    showToast('\u2600\uFE0F First care of the day! +5 coins', '#f9c74f');
+                    if (gameState.pet) gameState.pet.happiness = Math.min(100, (gameState.pet.happiness || 50) + 2);
+                }
+            }
+
             const pet = gameState.pet;
             const petData = (typeof getAllPetTypeData === 'function' ? getAllPetTypeData(pet.type) : null) || PET_TYPES[pet.type] || { emoji: '🐾', name: 'Pet' };
             const petContainer = document.getElementById('pet-container');
@@ -2086,7 +2098,13 @@
                 }
                 const _comboCount = _comboActions.length;
                 if (_comboExpireTimer) clearTimeout(_comboExpireTimer);
-                _comboExpireTimer = setTimeout(() => { _comboActions = []; _comboActionSet = new Set(); _comboExpireTimer = null; }, _COMBO_WINDOW_MS);
+                _comboExpireTimer = setTimeout(() => {
+                    // R9: Record best combo count for daily payout carryover
+                    if (typeof gameState !== 'undefined' && _comboActions.length > 0) {
+                        gameState.sessionBestCombo = Math.max(Number(gameState.sessionBestCombo) || 0, _comboActions.length);
+                    }
+                    _comboActions = []; _comboActionSet = new Set(); _comboExpireTimer = null;
+                }, _COMBO_WINDOW_MS);
 
                 if (_comboCount === 3) {
                     showToast('🔥 Care Combo ×3! Nice routine!', '#FF9800', { duration: 2200 });
@@ -2206,7 +2224,8 @@
                     if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.achievement);
                     if (typeof hapticPattern === 'function') hapticPattern('achievement');
                     setTimeout(() => {
-                        showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700');
+                        const _coinStr = ach.coinsGranted > 0 ? ` +${ach.coinsGranted} coins` : '';
+                        showToast(`${ach.icon} Achievement: ${ach.name}!${_coinStr}`, '#FFD700');
                         queueRewardCard('achievement', ach, '#FFD700');
                     }, 300);
                 });

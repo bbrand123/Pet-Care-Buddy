@@ -1742,6 +1742,16 @@
                             return `<p class="caretaker-title-badge" style="font-size:0.72rem;color:#6D4C41;margin:2px 0 0 0;" title="${titleData.description}">${titleData.emoji} ${titleData.label}${styleStr}</p>`;
                         })()}
                         ${(() => {
+                            // R7: Legacy prestige axis — computed from adultsRaised + eldersRaised*2
+                            const _legacyScore = (gameState.adultsRaised || 0) + ((gameState.eldersRaised || 0) * 2);
+                            let _legacyTitle = '';
+                            if (_legacyScore >= 16) _legacyTitle = '\uD83C\uDFC6 Legend';
+                            else if (_legacyScore >= 10) _legacyTitle = '\uD83C\uDFDB\uFE0F Elder Keeper';
+                            else if (_legacyScore >= 6) _legacyTitle = '\u2B50 Mentor';
+                            else if (_legacyScore >= 3) _legacyTitle = '\uD83C\uDF31 Caretaker';
+                            return _legacyTitle ? `<p class="legacy-prestige-badge" style="font-size:0.68rem;color:#4A148C;margin:2px 0 0 0;" title="Legacy score: ${_legacyScore}">${_legacyTitle}</p>` : '';
+                        })()}
+                        ${(() => {
                             const stage = pet.growthStage || 'baby';
                             const stageData = GROWTH_STAGES[stage];
                             const ageInHours = getPetAge(pet);

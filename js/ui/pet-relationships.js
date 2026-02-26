@@ -262,6 +262,31 @@
                 : [];
             beats.forEach(function(beat) { _handleRelationshipBeat(beat, petsById); });
 
+            // R6: Affinity milestone coin grants
+            {
+                const _prevAffinity = Number((current && current.affinity) || 0);
+                const _newAffinity = Number((result.relationship && result.relationship.affinity) || 0);
+                const _rel = relationships[key];
+                if (!Array.isArray(_rel.milestonesGranted)) _rel.milestonesGranted = [];
+                const _petAName = (petA && petA.name) ? petA.name : 'Pet A';
+                const _petBName = (petB && petB.name) ? petB.name : 'Pet B';
+                const _affinityMilestones = [
+                    { threshold: 60, id: 'affinity_60', coins: 30, toast: '\uD83D\uDCDB ' + _petAName + ' & ' + _petBName + ' are friends! +30 coins' },
+                    { threshold: 120, id: 'affinity_120', coins: 60, toast: '\uD83D\uDC9A Strong bond formed! +60 coins' }
+                ];
+                _affinityMilestones.forEach(function(m) {
+                    if (_prevAffinity < m.threshold && _newAffinity >= m.threshold && !_rel.milestonesGranted.includes(m.id)) {
+                        _rel.milestonesGranted.push(m.id);
+                        if (typeof applyCoinGainRateLimits === 'function') {
+                            const _mCoins = applyCoinGainRateLimits(m.coins, 'affinityMilestone');
+                            if (_mCoins > 0) gameState.coins = (gameState.coins || 0) + _mCoins;
+                        }
+                        if (typeof showToast === 'function') showToast(m.toast, '#81C784');
+                        if (typeof addJournalEntry === 'function') addJournalEntry('\uD83D\uDCDB', _petAName + ' and ' + _petBName + ' reached a new bond level!');
+                    }
+                });
+            }
+
             if (typeof saveGame === 'function') saveGame();
 
             const petBName = (petB && petB.name) ? petB.name : 'Pet';

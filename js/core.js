@@ -224,7 +224,21 @@
             // Weather tracking for micro-stories
             previousWeather: 'sunny',
             // Seasonal event tracking
-            lastSeasonalEventCheck: 0
+            lastSeasonalEventCheck: 0,
+            // R2: First action of day tracking
+            lastFirstActionDate: null,
+            // R3: Minigame win streak (resets on loss)
+            minigameWinStreak: 0,
+            // R5: Rolling 7-day care quality history
+            careQualityHistory: [],
+            // R8: Seasonal passport progress
+            seasonalPassport: { spring: 0, summer: 0, autumn: 0, winter: 0, completedSeasons: [] },
+            // R9: Session best combo for daily payout carryover
+            sessionBestCombo: 0,
+            // R10: Garden plot mastery tracking
+            harvestCounts: {},
+            harvestMasteries: [],
+            harvestMasteryBonuses: {}
         };
 
         if (typeof MLFCanonicalGameState !== 'undefined' && MLFCanonicalGameState && typeof MLFCanonicalGameState.createInitialState === 'function') {
@@ -680,7 +694,8 @@
             if (typeof checkAchievements === 'function') {
                 const newAch = checkAchievements();
                 newAch.forEach(ach => {
-                    setTimeout(() => showToast(`${ach.icon} Achievement: ${ach.name}!`, '#FFD700'), 300);
+                    const _coinStr = ach.coinsGranted > 0 ? ` +${ach.coinsGranted} coins` : '';
+                    setTimeout(() => showToast(`${ach.icon} Achievement: ${ach.name}!${_coinStr}`, '#FFD700'), 300);
                 });
             }
             // Check badges, stickers, trophies after minigame play
@@ -1705,6 +1720,23 @@
                     if (typeof parsed.totalGroomCount !== 'number') parsed.totalGroomCount = 0;
                     if (typeof parsed.totalDailyCompletions !== 'number') parsed.totalDailyCompletions = 0;
                     if (typeof parsed.totalFeedCount !== 'number') parsed.totalFeedCount = 0;
+                    // R2: First action of day
+                    if (parsed.lastFirstActionDate === undefined) parsed.lastFirstActionDate = null;
+                    // R3: Minigame win streak
+                    if (typeof parsed.minigameWinStreak !== 'number') parsed.minigameWinStreak = 0;
+                    // R5: Care quality history
+                    if (!Array.isArray(parsed.careQualityHistory)) parsed.careQualityHistory = [];
+                    // R8: Seasonal passport
+                    if (!parsed.seasonalPassport || typeof parsed.seasonalPassport !== 'object') {
+                        parsed.seasonalPassport = { spring: 0, summer: 0, autumn: 0, winter: 0, completedSeasons: [] };
+                    }
+                    if (!Array.isArray(parsed.seasonalPassport.completedSeasons)) parsed.seasonalPassport.completedSeasons = [];
+                    // R9: Session best combo
+                    if (typeof parsed.sessionBestCombo !== 'number') parsed.sessionBestCombo = 0;
+                    // R10: Garden mastery
+                    if (!parsed.harvestCounts || typeof parsed.harvestCounts !== 'object') parsed.harvestCounts = {};
+                    if (!Array.isArray(parsed.harvestMasteries)) parsed.harvestMasteries = [];
+                    if (!parsed.harvestMasteryBonuses || typeof parsed.harvestMasteryBonuses !== 'object') parsed.harvestMasteryBonuses = {};
 
                     // Add competition state if missing or partial (for existing saves)
                     parsed.competition = normalizeCompetitionState(parsed.competition);

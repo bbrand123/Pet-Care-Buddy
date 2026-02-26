@@ -228,7 +228,10 @@ const STICKERS = {
     moonCrest: { id: 'moonCrest', name: 'Moon Crest', emoji: '🌙', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
     sunCrest: { id: 'sunCrest', name: 'Sun Crest', emoji: '☀️', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
     tideCrest: { id: 'tideCrest', name: 'Tide Crest', emoji: '🌊', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
-    bloomCrest: { id: 'bloomCrest', name: 'Bloom Crest', emoji: '🌸', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' }
+    bloomCrest: { id: 'bloomCrest', name: 'Bloom Crest', emoji: '🌸', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
+    // R4: Streak gap milestone stickers
+    midnightSticker: { id: 'midnightSticker', name: 'Midnight Star', emoji: '🌠', category: 'special', rarity: 'rare', source: '15-day streak reward' },
+    moonSticker: { id: 'moonSticker', name: 'Moon Phase', emoji: '🌕', category: 'special', rarity: 'rare', source: '25-day streak reward' }
 };
 
 const STICKER_RARITIES = {

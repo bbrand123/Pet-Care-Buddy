@@ -260,6 +260,39 @@ const ECONOMY_SHOP_ITEMS = {
             accessoryId: 'springFlowerCrown',
             description: 'A delicate crown of spring blossoms.',
             season: 'spring'
+        },
+        // R8: Seasonal Passport accessories — grant-only, not purchasable
+        springPassportWreath: {
+            id: 'springPassportWreath',
+            name: 'Spring Wreath',
+            emoji: '🌿',
+            accessoryId: 'springPassportWreath',
+            description: 'Earned by completing the Spring Passport.',
+            shopVisible: false
+        },
+        summerPassportShell: {
+            id: 'summerPassportShell',
+            name: 'Summer Shell Necklace',
+            emoji: '🐚',
+            accessoryId: 'summerPassportShell',
+            description: 'Earned by completing the Summer Passport.',
+            shopVisible: false
+        },
+        autumnPassportAcorn: {
+            id: 'autumnPassportAcorn',
+            name: 'Autumn Acorn Pin',
+            emoji: '🌰',
+            accessoryId: 'autumnPassportAcorn',
+            description: 'Earned by completing the Autumn Passport.',
+            shopVisible: false
+        },
+        winterPassportStar: {
+            id: 'winterPassportStar',
+            name: 'Winter Star',
+            emoji: '⭐',
+            accessoryId: 'winterPassportStar',
+            description: 'Earned by completing the Winter Passport.',
+            shopVisible: false
         }
     },
     seeds: {

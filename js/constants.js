@@ -3104,35 +3104,35 @@ function trapFocus(overlay) {
 // ==================== ACHIEVEMENTS ====================
 
 const ACHIEVEMENTS = {
-    firstFeed: { id: 'firstFeed', name: 'First Meal', icon: '🍎', description: 'Feed your pet for the first time', check: (gs) => (gs.pet && (gs.totalFeedCount || 0) >= 1) },
-    firstHarvest: { id: 'firstHarvest', name: 'Green Thumb', icon: '🌱', description: 'Harvest your first crop', check: (gs) => (gs.garden && gs.garden.totalHarvests >= 1) },
-    fiveHarvests: { id: 'fiveHarvests', name: 'Farmer', icon: '🧑‍🌾', description: 'Harvest 5 crops', check: (gs) => (gs.garden && gs.garden.totalHarvests >= 5) },
-    tenCareActions: { id: 'tenCareActions', name: 'Caring Heart', icon: '💝', description: 'Perform 10 care actions', check: (gs) => (gs.pet && gs.pet.careActions >= 10) },
-    fiftyCareActions: { id: 'fiftyCareActions', name: 'Devoted Caretaker', icon: '🏅', description: 'Perform 50 care actions', check: (gs) => (gs.pet && gs.pet.careActions >= 50) },
-    raiseChild: { id: 'raiseChild', name: 'Growing Up', icon: '🌱', description: 'Raise a pet to Child stage', check: (gs) => (gs.pet && gs.pet.growthStage !== 'baby') },
-    raiseAdult: { id: 'raiseAdult', name: 'All Grown Up', icon: '⭐', description: 'Raise a pet to Adult stage', check: (gs) => (gs.pet && ['adult', 'elder'].includes(gs.pet.growthStage)) },
-    excellentCare: { id: 'excellentCare', name: 'Perfect Parent', icon: '🌟', description: 'Reach Excellent care quality', check: (gs) => (gs.pet && gs.pet.careQuality === 'excellent') },
-    evolvePet: { id: 'evolvePet', name: 'Transcendence', icon: '✨', description: 'Evolve a pet to their special form', check: (gs) => (gs.pet && gs.pet.evolutionStage === 'evolved') },
-    unlockMythical: { id: 'unlockMythical', name: 'Mythical Discovery', icon: '🦄', description: 'Unlock a mythical pet type', check: (gs) => (gs.adultsRaised >= 2) },
-    adoptSecondPet: { id: 'adoptSecondPet', name: 'Growing Family', icon: '🏠', description: 'Adopt a second pet', check: (gs) => (gs.pets && gs.pets.length >= 2) },
-    fullFamily: { id: 'fullFamily', name: 'Full House', icon: '👨‍👩‍👧‍👦', description: 'Have 4 pets at once', check: (gs) => (gs.pets && gs.pets.length >= 4) },
-    playMinigame: { id: 'playMinigame', name: 'Game Time', icon: '🎮', description: 'Play your first mini-game', check: (gs) => { const counts = gs.minigamePlayCounts || {}; return Object.values(counts).some(c => c > 0); } },
-    highScore50: { id: 'highScore50', name: 'High Scorer', icon: '🏆', description: 'Score 50+ in any mini-game', check: (gs) => { const scores = gs.minigameHighScores || {}; return Object.values(scores).some(s => s >= 50); } },
-    visitAllRooms: { id: 'visitAllRooms', name: 'Explorer', icon: '🗺️', description: 'Visit all 6 rooms', check: (gs) => { const visited = gs.roomsVisited || {}; return ROOM_IDS.every(r => visited[r]); } },
-    bestFriend: { id: 'bestFriend', name: 'Best Friends', icon: '💖', description: 'Reach Best Friend with any pet pair', check: (gs) => { const rels = gs.relationships || {}; return Object.values(rels).some(r => r.points >= 180); } },
-    nightOwl: { id: 'nightOwl', name: 'Night Owl', icon: '🌙', description: 'Play during nighttime', check: (gs) => (gs.timeOfDay === 'night') },
-    weatherWatcher: { id: 'weatherWatcher', name: 'Weather Watcher', icon: '🌧️', description: 'Experience all 3 weather types', check: (gs) => { const seen = gs.weatherSeen || {}; return seen.sunny && seen.rainy && seen.snowy; } },
-    dailyComplete: { id: 'dailyComplete', name: 'Daily Champion', icon: '📋', description: 'Complete all daily tasks', check: (gs) => { const d = gs.dailyChecklist; return d && d.tasks && d.tasks.every(t => t.done); } },
-    firstBreeding: { id: 'firstBreeding', name: 'Matchmaker', icon: '💕', description: 'Breed two pets for the first time', check: (gs) => (gs.totalBreedings || 0) >= 1 },
-    hatchBreedingEgg: { id: 'hatchBreedingEgg', name: 'Proud Parent', icon: '🥚', description: 'Hatch your first breeding egg', check: (gs) => (gs.totalBreedingHatches || 0) >= 1 },
-    firstHybrid: { id: 'firstHybrid', name: 'Hybrid Discovery', icon: '🧬', description: 'Create a hybrid pet through breeding', check: (gs) => (gs.totalHybridsCreated || 0) >= 1 },
-    firstMutation: { id: 'firstMutation', name: 'Genetic Marvel', icon: '🌈', description: 'Breed a pet with a rare mutation', check: (gs) => (gs.totalMutations || 0) >= 1 },
-    fiveBreedings: { id: 'fiveBreedings', name: 'Master Breeder', icon: '🏅', description: 'Successfully breed 5 times', check: (gs) => (gs.totalBreedings || 0) >= 5 },
+    firstFeed: { id: 'firstFeed', name: 'First Meal', icon: '🍎', description: 'Feed your pet for the first time', coinReward: 20, check: (gs) => (gs.pet && (gs.totalFeedCount || 0) >= 1) },
+    firstHarvest: { id: 'firstHarvest', name: 'Green Thumb', icon: '🌱', description: 'Harvest your first crop', coinReward: 35, check: (gs) => (gs.garden && gs.garden.totalHarvests >= 1) },
+    fiveHarvests: { id: 'fiveHarvests', name: 'Farmer', icon: '🧑‍🌾', description: 'Harvest 5 crops', coinReward: 50, check: (gs) => (gs.garden && gs.garden.totalHarvests >= 5) },
+    tenCareActions: { id: 'tenCareActions', name: 'Caring Heart', icon: '💝', description: 'Perform 10 care actions', coinReward: 40, check: (gs) => (gs.pet && gs.pet.careActions >= 10) },
+    fiftyCareActions: { id: 'fiftyCareActions', name: 'Devoted Caretaker', icon: '🏅', description: 'Perform 50 care actions', coinReward: 75, check: (gs) => (gs.pet && gs.pet.careActions >= 50) },
+    raiseChild: { id: 'raiseChild', name: 'Growing Up', icon: '🌱', description: 'Raise a pet to Child stage', coinReward: 75, check: (gs) => (gs.pet && gs.pet.growthStage !== 'baby') },
+    raiseAdult: { id: 'raiseAdult', name: 'All Grown Up', icon: '⭐', description: 'Raise a pet to Adult stage', coinReward: 150, check: (gs) => (gs.pet && ['adult', 'elder'].includes(gs.pet.growthStage)) },
+    excellentCare: { id: 'excellentCare', name: 'Perfect Parent', icon: '🌟', description: 'Reach Excellent care quality', coinReward: 175, check: (gs) => (gs.pet && gs.pet.careQuality === 'excellent') },
+    evolvePet: { id: 'evolvePet', name: 'Transcendence', icon: '✨', description: 'Evolve a pet to their special form', coinReward: 350, check: (gs) => (gs.pet && gs.pet.evolutionStage === 'evolved') },
+    unlockMythical: { id: 'unlockMythical', name: 'Mythical Discovery', icon: '🦄', description: 'Unlock a mythical pet type', coinReward: 400, check: (gs) => (gs.adultsRaised >= 2) },
+    adoptSecondPet: { id: 'adoptSecondPet', name: 'Growing Family', icon: '🏠', description: 'Adopt a second pet', coinReward: 80, check: (gs) => (gs.pets && gs.pets.length >= 2) },
+    fullFamily: { id: 'fullFamily', name: 'Full House', icon: '👨‍👩‍👧‍👦', description: 'Have 4 pets at once', coinReward: 350, check: (gs) => (gs.pets && gs.pets.length >= 4) },
+    playMinigame: { id: 'playMinigame', name: 'Game Time', icon: '🎮', description: 'Play your first mini-game', coinReward: 15, check: (gs) => { const counts = gs.minigamePlayCounts || {}; return Object.values(counts).some(c => c > 0); } },
+    highScore50: { id: 'highScore50', name: 'High Scorer', icon: '🏆', description: 'Score 50+ in any mini-game', coinReward: 80, check: (gs) => { const scores = gs.minigameHighScores || {}; return Object.values(scores).some(s => s >= 50); } },
+    visitAllRooms: { id: 'visitAllRooms', name: 'Explorer', icon: '🗺️', description: 'Visit all 6 rooms', coinReward: 85, check: (gs) => { const visited = gs.roomsVisited || {}; return ROOM_IDS.every(r => visited[r]); } },
+    bestFriend: { id: 'bestFriend', name: 'Best Friends', icon: '💖', description: 'Reach Best Friend with any pet pair', coinReward: 180, check: (gs) => { const rels = gs.relationships || {}; return Object.values(rels).some(r => r.points >= 180 || r.affinity >= 180); } },
+    nightOwl: { id: 'nightOwl', name: 'Night Owl', icon: '🌙', description: 'Play during nighttime', coinReward: 20, check: (gs) => (gs.timeOfDay === 'night') },
+    weatherWatcher: { id: 'weatherWatcher', name: 'Weather Watcher', icon: '🌧️', description: 'Experience all 3 weather types', coinReward: 45, check: (gs) => { const seen = gs.weatherSeen || {}; return seen.sunny && seen.rainy && seen.snowy; } },
+    dailyComplete: { id: 'dailyComplete', name: 'Daily Champion', icon: '📋', description: 'Complete all daily tasks', coinReward: 40, check: (gs) => { const d = gs.dailyChecklist; return d && d.tasks && d.tasks.every(t => t.done); } },
+    firstBreeding: { id: 'firstBreeding', name: 'Matchmaker', icon: '💕', description: 'Breed two pets for the first time', coinReward: 35, check: (gs) => (gs.totalBreedings || 0) >= 1 },
+    hatchBreedingEgg: { id: 'hatchBreedingEgg', name: 'Proud Parent', icon: '🥚', description: 'Hatch your first breeding egg', coinReward: 40, check: (gs) => (gs.totalBreedingHatches || 0) >= 1 },
+    firstHybrid: { id: 'firstHybrid', name: 'Hybrid Discovery', icon: '🧬', description: 'Create a hybrid pet through breeding', coinReward: 90, check: (gs) => (gs.totalHybridsCreated || 0) >= 1 },
+    firstMutation: { id: 'firstMutation', name: 'Genetic Marvel', icon: '🌈', description: 'Breed a pet with a rare mutation', coinReward: 150, check: (gs) => (gs.totalMutations || 0) >= 1 },
+    fiveBreedings: { id: 'fiveBreedings', name: 'Master Breeder', icon: '🏅', description: 'Successfully breed 5 times', coinReward: 85, check: (gs) => (gs.totalBreedings || 0) >= 5 },
     // Personality & Elder achievements
-    reachElder: { id: 'reachElder', name: 'Elder Wisdom', icon: '🏛️', description: 'Raise a pet to Elder stage', check: (gs) => (gs.pet && gs.pet.growthStage === 'elder') },
-    retirePet: { id: 'retirePet', name: 'Fond Farewell', icon: '🌅', description: 'Retire a pet to the Hall of Fame', check: (gs) => (gs.memorials && gs.memorials.length >= 1) },
-    fiveMemorials: { id: 'fiveMemorials', name: 'Legacy Builder', icon: '🏆', description: 'Have 5 pets in the Hall of Fame', check: (gs) => (gs.memorials && gs.memorials.length >= 5) },
-    favoriteFed: { id: 'favoriteFed', name: 'Gourmet Chef', icon: '👨‍🍳', description: 'Feed a pet its favorite food', check: (gs) => (gs.totalFavoriteFoodFed || 0) >= 1 }
+    reachElder: { id: 'reachElder', name: 'Elder Wisdom', icon: '🏛️', description: 'Raise a pet to Elder stage', coinReward: 200, check: (gs) => (gs.pet && gs.pet.growthStage === 'elder') },
+    retirePet: { id: 'retirePet', name: 'Fond Farewell', icon: '🌅', description: 'Retire a pet to the Hall of Fame', coinReward: 175, check: (gs) => (gs.memorials && gs.memorials.length >= 1) },
+    fiveMemorials: { id: 'fiveMemorials', name: 'Legacy Builder', icon: '🏆', description: 'Have 5 pets in the Hall of Fame', coinReward: 300, check: (gs) => (gs.memorials && gs.memorials.length >= 5) },
+    favoriteFed: { id: 'favoriteFed', name: 'Gourmet Chef', icon: '👨‍🍳', description: 'Feed a pet its favorite food', coinReward: 25, check: (gs) => (gs.totalFavoriteFoodFed || 0) >= 1 }
 };
 
 // ==================== DAILY CHECKLIST ====================
@@ -3211,7 +3211,11 @@ const REWARD_BUNDLES = {
     streakDay10: { id: 'streakDay10', coins: 110, modifierId: 'focusedTraining', collectible: { type: 'accessory', id: 'sunglasses' } },
     streakDay12: { id: 'streakDay12', coins: 90, modifierId: 'luckyPaws' },
     streakDay14: { id: 'streakDay14', coins: 135, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'heartSticker' } },
+    // R4: Streak gap days 15, 17, 25
+    streakDay15: { id: 'streakDay15', coins: 155, modifierId: 'happyHour', collectible: { type: 'sticker', id: 'midnightSticker' } },
+    streakDay17: { id: 'streakDay17', coins: 165, modifierId: 'careRush' },
     streakDay21: { id: 'streakDay21', coins: 185, modifierId: 'happyHour', collectible: { type: 'accessory', id: 'crown' } }, // Fix 14: 185 coins interpolated, happyHour modifier (consistent with Day 7/14)
+    streakDay25: { id: 'streakDay25', coins: 210, modifierId: 'luckyPaws', collectible: { type: 'sticker', id: 'moonSticker' } },
     streakDay30: { id: 'streakDay30', coins: 240, modifierId: 'focusedTraining', collectible: { type: 'sticker', id: 'crownSticker' } },
     weeklyArcFinale: { id: 'weeklyArcFinale', coins: 320, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'legendRibbon' } },
     weeklyArcCare: { id: 'weeklyArcCare', coins: 300, modifierId: 'careRush', collectible: { type: 'sticker', id: 'legendRibbon' } },
@@ -3547,7 +3551,10 @@ const STREAK_MILESTONES = [
     { days: 10, bundleId: 'streakDay10', label: '10-Day Streak', description: 'Super dedicated!' },
     { days: 12, bundleId: 'streakDay12', label: 'Day 12 Streak', description: 'Halfway to two weeks!' },
     { days: 14, bundleId: 'streakDay14', label: '2-Week Streak', description: 'True devotion!', freezeTokens: 1 },
+    { days: 15, bundleId: 'streakDay15', label: 'Day 15 Streak', description: 'Two weeks and a day!' },
+    { days: 17, bundleId: 'streakDay17', label: 'Day 17 Streak', description: 'Unstoppable!' },
     { days: 21, bundleId: 'streakDay21', label: '3-Week Streak', description: 'Incredible commitment!', freezeTokens: 1 },
+    { days: 25, bundleId: 'streakDay25', label: 'Day 25 Streak', description: 'Almost a month!' },
     { days: 30, bundleId: 'streakDay30', label: 'Monthly Streak', description: 'Legendary caretaker!', freezeTokens: 2 }
 ];
 

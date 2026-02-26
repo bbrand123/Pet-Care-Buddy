@@ -16,7 +16,13 @@
                 try {
                     if (ach.check(gameState)) {
                         gameState.achievements[id] = { unlocked: true, unlockedAt: Date.now() };
-                        newUnlocks.push(ach);
+                        // R1: Grant coin reward for this achievement
+                        let _achCoinsGranted = 0;
+                        if (ach.coinReward && typeof applyCoinGainRateLimits === 'function') {
+                            _achCoinsGranted = applyCoinGainRateLimits(ach.coinReward, 'achievement');
+                            if (_achCoinsGranted > 0) gameState.coins = (gameState.coins || 0) + _achCoinsGranted;
+                        }
+                        newUnlocks.push(Object.assign({}, ach, { coinsGranted: _achCoinsGranted }));
                         addJournalEntry('🏆', `Achievement unlocked: ${ach.name}!`);
                     }
                 } catch (e) { /* safe guard */ }
@@ -888,19 +894,57 @@
                         if (totalBonusCoins > 0) {
                             addCoins(totalBonusCoins, 'Daily Tasks (Stage + Mastery + Legacy Bonus)', true);
                         }
+                        // R9: Combo carryover bonus on daily payout
+                        const _sessionBest = Number(gameState.sessionBestCombo) || 0;
+                        let _comboPct = 0;
+                        if (_sessionBest >= 10) _comboPct = 20;
+                        else if (_sessionBest >= 7) _comboPct = 15;
+                        else if (_sessionBest >= 5) _comboPct = 10;
+                        else if (_sessionBest >= 3) _comboPct = 5;
                         if (bundled && typeof showToast === 'function') {
                             const modifierText = bundled.modifier ? ` + ${bundled.modifier.emoji} ${bundled.modifier.name}` : '';
                             const elderText = elderLegacyBonus > 0 ? ` + ${elderLegacyBonus} elder legacy` : '';
                             const bonusText = (stageBonusCoins > 0 || elderLegacyBonus > 0) ? ` + ${stageBonusCoins + elderLegacyBonus} bonus` : '';
-                            showToast(`📋 Daily tasks complete! +${bundled.earnedCoins} coins${bonusText}${modifierText}`, '#FFD700');
+                            if (_comboPct > 0) {
+                                const _comboBonus = applyCoinGainRateLimits(Math.round((bundled.earnedCoins || 0) * _comboPct / 100), 'comboDailyBonus');
+                                if (_comboBonus > 0) gameState.coins = (gameState.coins || 0) + _comboBonus;
+                                showToast(`📋 Daily tasks complete! +${bundled.earnedCoins} coins${bonusText}${modifierText} | Best combo ×${_sessionBest} (+${_comboPct}%)`, '#FFD700');
+                            } else {
+                                showToast(`📋 Daily tasks complete! +${bundled.earnedCoins} coins${bonusText}${modifierText}`, '#FFD700');
+                            }
                         } else {
                             const dailyRewardBase = (typeof ECONOMY_BALANCE !== 'undefined' && typeof ECONOMY_BALANCE.dailyCompletionReward === 'number')
                                 ? ECONOMY_BALANCE.dailyCompletionReward
                                 : 85;
                             const dailyReward = dailyRewardBase + totalBonusCoins;
                             const payout = addCoins(dailyReward, 'Daily Tasks', true);
+                            if (_comboPct > 0 && payout > 0) {
+                                const _comboBonus = applyCoinGainRateLimits(Math.round(payout * _comboPct / 100), 'comboDailyBonus');
+                                if (_comboBonus > 0) gameState.coins = (gameState.coins || 0) + _comboBonus;
+                            }
                             if (payout > 0 && typeof showToast === 'function') {
-                                showToast(`📋 Daily tasks complete! Earned ${payout} coins.`, '#FFD700');
+                                const _comboStr = _comboPct > 0 ? ` | Best combo ×${_sessionBest} (+${_comboPct}%)` : '';
+                                showToast(`📋 Daily tasks complete! Earned ${payout} coins.${_comboStr}`, '#FFD700');
+                            }
+                        }
+                        // Reset session best combo after daily payout
+                        gameState.sessionBestCombo = 0;
+                        // R8: Seasonal passport — increment counter on daily completion
+                        if (!gameState.seasonalPassport || typeof gameState.seasonalPassport !== 'object') {
+                            gameState.seasonalPassport = { spring: 0, summer: 0, autumn: 0, winter: 0, completedSeasons: [] };
+                        }
+                        const _currentSeason = gameState.season || (typeof getCurrentSeason === 'function' ? getCurrentSeason() : 'spring');
+                        if (typeof gameState.seasonalPassport[_currentSeason] === 'number') {
+                            gameState.seasonalPassport[_currentSeason]++;
+                            if (!Array.isArray(gameState.seasonalPassport.completedSeasons)) gameState.seasonalPassport.completedSeasons = [];
+                            if (gameState.seasonalPassport[_currentSeason] >= 7 && !gameState.seasonalPassport.completedSeasons.includes(_currentSeason)) {
+                                gameState.seasonalPassport.completedSeasons.push(_currentSeason);
+                                const _seasonAccessoryMap = { spring: 'springPassportWreath', summer: 'summerPassportShell', autumn: 'autumnPassportAcorn', winter: 'winterPassportStar' };
+                                const _passportAcc = _seasonAccessoryMap[_currentSeason];
+                                if (_passportAcc && typeof grantAccessoryToActivePet === 'function') grantAccessoryToActivePet(_passportAcc);
+                                const _seasonLabel = _currentSeason.charAt(0).toUpperCase() + _currentSeason.slice(1);
+                                if (typeof showToast === 'function') showToast(`\uD83C\uDF38 Seasonal Passport stamped! ${_seasonLabel} accessory unlocked!`, '#CE93D8');
+                                if (typeof addJournalEntry === 'function') addJournalEntry('\uD83D\uDCC5', `Completed the ${_currentSeason} passport!`);
                             }
                         }
                         recordRewardRecapEvent('long', 'Daily checklist complete', { stage });
@@ -1549,6 +1593,32 @@
                 streak.longest = streak.current;
             }
             streak.prestige.cycleBest = Math.max(streak.prestige.cycleBest || 0, streak.current || 0);
+
+            // R5: Push today's care quality score to rolling 7-day history and check weekly report
+            if (!Array.isArray(gameState.careQualityHistory)) gameState.careQualityHistory = [];
+            const _cl = gameState.dailyChecklist;
+            let _todayScore = 0;
+            if (_cl && Array.isArray(_cl.tasks) && _cl.tasks.length > 0) {
+                const _done = _cl.tasks.filter(t => t.done).length;
+                _todayScore = Math.round((_done / _cl.tasks.length) * 100);
+            }
+            gameState.careQualityHistory.push(_todayScore);
+            if (gameState.careQualityHistory.length > 7) gameState.careQualityHistory.shift();
+            if (gameState.careQualityHistory.length === 7) {
+                const _weekAvg = gameState.careQualityHistory.reduce((s, v) => s + v, 0) / 7;
+                if (_weekAvg >= 80) {
+                    if (typeof addGameplayModifier === 'function') addGameplayModifier('luckyPaws', 'Excellent Week');
+                    if (typeof addCoins === 'function') addCoins(50, 'weeklyReport', true);
+                    if (typeof showToast === 'function') showToast('\uD83C\uDF1F Excellent week! +50 coins & Lucky Paws activated', '#FFD700');
+                    if (typeof addJournalEntry === 'function') addJournalEntry('\uD83D\uDCCA', 'Excellent care week! Lucky Paws activated.');
+                } else if (_weekAvg >= 60) {
+                    if (typeof addGameplayModifier === 'function') addGameplayModifier('happyHour', 'Good Week');
+                    if (typeof showToast === 'function') showToast('\uD83D\uDE0A Good week! Happy Hour activated', '#81C784');
+                    if (typeof addJournalEntry === 'function') addJournalEntry('\uD83D\uDCCA', 'Good care week! Happy Hour activated.');
+                } else {
+                    if (typeof showToast === 'function') showToast('\uD83D\uDCCB Tough week \u2014 keep at it!', '#90A4AE');
+                }
+            }
         }
 
         function claimStreakBonus() {

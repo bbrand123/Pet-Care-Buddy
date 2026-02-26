@@ -1782,13 +1782,15 @@
                 ? ECONOMY_BALANCE.harvestRewardMultiplier
                 : 1;
             const currentSeason = gameState.season || getCurrentSeason();
+            // R10: Apply harvest mastery bonus (+15% per mastered crop)
+            const _masteryMult = (gameState.harvestMasteryBonuses && gameState.harvestMasteryBonuses[cropId]) || 1.0;
             const payout = (typeof EconomyCalculations !== 'undefined' && EconomyCalculations && typeof EconomyCalculations.computeHarvestCoinPayout === 'function')
-                ? EconomyCalculations.computeHarvestCoinPayout({
+                ? Math.round(EconomyCalculations.computeHarvestCoinPayout({
                     crop,
                     currentSeason,
                     economyMultiplier: ecoMult
-                })
-                : Math.max(2, Math.round((3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6)) * ((crop.seasonBonus || []).includes(currentSeason) ? 1.2 : 1.0) * ecoMult));
+                }) * _masteryMult)
+                : Math.max(2, Math.round((3 + Math.round((crop.hungerValue || 0) / 4) + Math.round((crop.happinessValue || 0) / 6) + Math.round((crop.energyValue || 0) / 6)) * ((crop.seasonBonus || []).includes(currentSeason) ? 1.2 : 1.0) * ecoMult * _masteryMult));
             // Fix 2: Daily harvest coin cap of 180 to prevent passive farming exploit
             const _HARVEST_DAILY_CAP = 180;
             const eco = ensureEconomyState();
@@ -1802,6 +1804,18 @@
             if (cappedPayout > 0) {
                 eco.harvestCoinsToday = (eco.harvestCoinsToday || 0) + cappedPayout;
                 addCoins(cappedPayout, 'Harvest', true);
+            }
+            // R10: Track per-crop harvest count and check for mastery milestone
+            if (!gameState.harvestCounts || typeof gameState.harvestCounts !== 'object') gameState.harvestCounts = {};
+            if (!gameState.harvestMasteries || !Array.isArray(gameState.harvestMasteries)) gameState.harvestMasteries = [];
+            if (!gameState.harvestMasteryBonuses || typeof gameState.harvestMasteryBonuses !== 'object') gameState.harvestMasteryBonuses = {};
+            gameState.harvestCounts[cropId] = (gameState.harvestCounts[cropId] || 0) + 1;
+            if (gameState.harvestCounts[cropId] >= 20 && !gameState.harvestMasteries.includes(cropId)) {
+                gameState.harvestMasteries.push(cropId);
+                gameState.harvestMasteryBonuses[cropId] = 1.15;
+                const _cropName = (crop && crop.name) ? crop.name : cropId;
+                if (typeof showToast === 'function') showToast(`\uD83C\uDF31 ${_cropName} Mastery! Harvest value +15% forever`, '#81C784');
+                if (typeof addJournalEntry === 'function') addJournalEntry('\uD83C\uDF3F', `Mastered growing ${_cropName}!`);
             }
             return cappedPayout;
         }

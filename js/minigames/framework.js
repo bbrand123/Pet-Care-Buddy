@@ -872,7 +872,28 @@
             const _r8DiffConf = _DIFFICULTY_CONFIG[_r8Diff] || { label: 'Normal', coinMult: 1.0 };
             const _r8CoinScore = Math.round(coinScore * _r8DiffConf.coinMult);
 
-            const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins(gameId, _r8CoinScore) : 0;
+            // R3: Hot streak multiplier — track win/loss, apply multiplier before per-game cap
+            const _r3IsWin = score > 0;
+            if (!Number.isFinite(gameState.minigameWinStreak)) gameState.minigameWinStreak = 0;
+            const _r3PrevStreak = Number(gameState.minigameWinStreak) || 0;
+            if (_r3IsWin) {
+                gameState.minigameWinStreak = _r3PrevStreak + 1;
+            } else {
+                if (_r3PrevStreak >= 2 && typeof showToast === 'function') {
+                    showToast('\uD83D\uDCA8 Streak broken.', '#90A4AE', { duration: 1800 });
+                }
+                gameState.minigameWinStreak = 0;
+            }
+            const _r3StreakMult = _r3IsWin ? Math.min(1 + (gameState.minigameWinStreak - 1) * 0.05, 1.15) : 1;
+            const _r3CoinScore = Math.round(_r8CoinScore * _r3StreakMult);
+            if (_r3IsWin && gameState.minigameWinStreak >= 2) {
+                const _r3Pct = Math.round((_r3StreakMult - 1) * 100);
+                if (_r3Pct > 0 && typeof showToast === 'function') {
+                    showToast(`\uD83D\uDD25 Win streak \xD7${gameState.minigameWinStreak}! +${_r3Pct}% bonus`, '#FF9800', { duration: 2000 });
+                }
+            }
+
+            const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins(gameId, _r3CoinScore) : 0;
             const rewardContext = (gameState && gameState._lastMinigameRewardContext && gameState._lastMinigameRewardContext.source === 'minigame' && gameState._lastMinigameRewardContext.gameId === gameId)
                 ? gameState._lastMinigameRewardContext
                 : null;
