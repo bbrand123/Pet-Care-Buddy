@@ -19,6 +19,9 @@
             return false;
         }
 
+        let _featuresInitialized = false;
+        const _featureUnsubs = [];
+
         // ==================== FEATURE 3: CRITICAL-NEED SPEECH BUBBLES ====================
 
         const _critBubbleQueue = [];
@@ -127,7 +130,7 @@
                 const handler = () => _checkCriticalNeeds();
                 ['pet:fed','pet:washed','pet:played','pet:slept','pet:medicated','pet:groomed','pet:exercised','pet:treated','pet:cuddled']
                     .forEach(ev => {
-                        try { EventBus.on(ev, handler); } catch (_) {}
+                        try { _featureUnsubs.push(EventBus.on(ev, handler)); } catch (_) {}
                     });
             }
         }
@@ -185,7 +188,7 @@
             // Also respond immediately after sleep action
             if (typeof EventBus !== 'undefined' && EventBus) {
                 try {
-                    EventBus.on('pet:slept', () => setTimeout(_checkSleepState, 200));
+                    _featureUnsubs.push(EventBus.on('pet:slept', () => setTimeout(_checkSleepState, 200)));
                 } catch (_) {}
             }
         }
@@ -222,7 +225,7 @@
         function initDailyTaskBurst() {
             if (typeof EventBus === 'undefined' || !EventBus || typeof EVENTS === 'undefined') return;
             try {
-                EventBus.on(EVENTS.DAILY_TASK_COMPLETED || 'reward:dailyTaskCompleted', (data) => {
+                _featureUnsubs.push(EventBus.on(EVENTS.DAILY_TASK_COMPLETED || 'reward:dailyTaskCompleted', (data) => {
                     // Find the completed task row by taskId or just the last checked item
                     const taskId = data && (data.taskId || data.id);
                     let rowEl = null;
@@ -236,7 +239,7 @@
                                 document.querySelector('[data-coach-task].checked:last-child');
                     }
                     if (rowEl) _spawnTaskBurst(rowEl);
-                });
+                }));
             } catch (_) {}
         }
 
@@ -303,17 +306,17 @@
             if (typeof EventBus === 'undefined' || !EventBus || typeof EVENTS === 'undefined') return;
             // Hook into badge and achievement unlock events
             try {
-                EventBus.on(EVENTS.BADGE_UNLOCKED || 'reward:badgeUnlocked', (data) => {
+                _featureUnsubs.push(EventBus.on(EVENTS.BADGE_UNLOCKED || 'reward:badgeUnlocked', (data) => {
                     if (!data) return;
                     showAchievementToast(data.icon || '🏅', data.name || 'Badge unlocked', '#FFD700');
-                });
+                }));
             } catch (_) {}
             // Achievement unlocked event
             try {
-                EventBus.on(EVENTS.ACHIEVEMENT_UNLOCKED || 'reward:achievementUnlocked', (data) => {
+                _featureUnsubs.push(EventBus.on(EVENTS.ACHIEVEMENT_UNLOCKED || 'reward:achievementUnlocked', (data) => {
                     if (!data) return;
                     showAchievementToast(data.icon || '🏆', data.name || 'Achievement unlocked', '#FFD700');
-                });
+                }));
             } catch (_) {}
         }
 
@@ -587,14 +590,14 @@
             setTimeout(_updateWeatherEdge, 500);
             if (typeof EventBus !== 'undefined' && EventBus && typeof EVENTS !== 'undefined') {
                 try {
-                    EventBus.on(EVENTS.ROOM_CHANGED || 'game:roomChanged', () => {
+                    _featureUnsubs.push(EventBus.on(EVENTS.ROOM_CHANGED || 'game:roomChanged', () => {
                         _weatherEdgeCurrent = null; // force rebuild
                         setTimeout(_updateWeatherEdge, 50);
-                    });
-                    EventBus.on(EVENTS.WEATHER_CHANGED || 'game:weatherChanged', () => {
+                    }));
+                    _featureUnsubs.push(EventBus.on(EVENTS.WEATHER_CHANGED || 'game:weatherChanged', () => {
                         _weatherEdgeCurrent = null;
                         setTimeout(_updateWeatherEdge, 50);
-                    });
+                    }));
                 } catch (_) {}
             }
             // Fallback polling every 30s
@@ -651,7 +654,7 @@
             if (typeof EventBus !== 'undefined' && EventBus) {
                 ['pet:fed','pet:washed','pet:played','pet:slept','pet:medicated','pet:groomed','pet:exercised','pet:treated','pet:cuddled']
                     .forEach(ev => {
-                        try { EventBus.on(ev, () => setTimeout(_updateMoodIdleClass, 300)); } catch (_) {}
+                        try { _featureUnsubs.push(EventBus.on(ev, () => setTimeout(_updateMoodIdleClass, 300))); } catch (_) {}
                     });
             }
         }
@@ -704,6 +707,9 @@
         // ==================== INITIALIZATION ====================
 
         function initAllFeatures() {
+            if (_featuresInitialized) return;
+            _featuresInitialized = true;
+
             // Feature 3: Critical need bubbles
             initCriticalNeedBubbles();
 
@@ -727,6 +733,12 @@
 
             // Feature 9: First-of-day greeting (checked on load with delay)
             setTimeout(checkFirstOfDayGreeting, 800);
+        }
+
+        function teardownAllFeatures() {
+            _featureUnsubs.forEach(fn => { try { fn(); } catch (_) {} });
+            _featureUnsubs.length = 0;
+            _featuresInitialized = false;
         }
 
         // Run after DOM is ready and game is initialized

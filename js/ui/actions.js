@@ -1253,6 +1253,11 @@
         let _comboActions = [];  // [{action, ts}]
         let _comboExpireTimer = null;
 
+        function resetComboState() {
+            _comboActions = [];
+            if (_comboExpireTimer) { clearTimeout(_comboExpireTimer); _comboExpireTimer = null; }
+        }
+
         function announceCooldownOnce() {
             const now = Date.now();
             if (now - _lastCooldownAnnouncement < 1600) return;

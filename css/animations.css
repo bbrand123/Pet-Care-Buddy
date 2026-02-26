@@ -1045,15 +1045,17 @@
 }
 
 /* ==================== FEATURE 2: STAT BAR ELASTIC OVERSHOOT ==================== */
-/* Register --progress as an animatable typed property (Chrome 78+, Safari 15.4+) */
-@property --progress {
-    syntax: '<number>';
-    inherits: false;
-    initial-value: 0;
-}
+@supports (--foo: 0) {
+    /* Register --progress as an animatable typed property (Chrome 78+, Safari 15.4+) */
+    @property --progress {
+        syntax: '<number>';
+        inherits: false;
+        initial-value: 0;
+    }
 
-.need-bubble-ring {
-    transition: --progress 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    .need-bubble-ring {
+        transition: --progress 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
 }
 
 /* Wellness bar fill smooth transition */

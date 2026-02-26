@@ -1,9 +1,11 @@
 	        /* Changelog (Retention pass): Updated beginner visibility rules, added Journey/reminder/onboarding/debug panel styles, and modal styles for Journey + return recap. */
 	        /* Registered custom properties for animated stat bars */
-        @property --progress {
-            syntax: '<number>';
-            inherits: false;
-            initial-value: 50;
+        @supports (--foo: 0) {
+            @property --progress {
+                syntax: '<number>';
+                inherits: false;
+                initial-value: 50;
+            }
         }
 
         /* Screen shake for impact events */
@@ -618,8 +620,14 @@
             background: conic-gradient(var(--ring-color) calc(var(--progress) * 1%), #e0e0e0 0);
             mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4.5px));
             -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 4.5px));
-            transition: --progress 400ms ease-out, background 0.5s ease;
-            will-change: --progress;
+            transition: background 0.5s ease;
+        }
+
+        @supports (--foo: 0) {
+            .need-bubble-ring {
+                transition: --progress 400ms ease-out, background 0.5s ease;
+                will-change: --progress;
+            }
         }
 
         .need-bubble-icon {

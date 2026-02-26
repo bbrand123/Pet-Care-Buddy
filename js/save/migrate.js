@@ -89,6 +89,15 @@
             changed: false
         };
 
+        if (fromVersion > SaveSchema.CURRENT_SCHEMA_VERSION) {
+            console.warn(
+                'Save schema version ' + fromVersion +
+                ' is newer than current version ' + SaveSchema.CURRENT_SCHEMA_VERSION +
+                '. Returning payload unchanged.'
+            );
+            return { payload: working, report };
+        }
+
         let currentVersion = fromVersion;
         while (currentVersion < SaveSchema.CURRENT_SCHEMA_VERSION) {
             const migration = SaveMigrationRegistry.getMigrationByFromVersion(currentVersion);

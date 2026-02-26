@@ -2293,6 +2293,7 @@
 
         function handleRuntimeHiddenForVisibilityResume() {
             if (typeof resetMinigameRewardSession === 'function') resetMinigameRewardSession('background');
+            if (typeof resetComboState === 'function') resetComboState();
             saveGame();
             return { saved: true };
         }

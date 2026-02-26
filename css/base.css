@@ -1,10 +1,12 @@
 /* Extracted from style.css - CSS reset, :root custom properties, scrollbar styles, @property declarations, base body styles, skip links, focus styles */
 
         /* Registered custom properties for animated stat bars */
-        @property --progress {
-            syntax: '<number>';
-            inherits: false;
-            initial-value: 50;
+        @supports (--foo: 0) {
+            @property --progress {
+                syntax: '<number>';
+                inherits: false;
+                initial-value: 50;
+            }
         }
 
         /* CSS Reset and Base Styles */
