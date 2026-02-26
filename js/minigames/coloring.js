@@ -459,9 +459,11 @@
                 if (overlay) { overlay.innerHTML = ''; overlay.remove(); }
             }
 
+            // Always increment play count regardless of score, then apply rewards if score > 0
+            incrementMinigamePlayCount('coloring', coloringState ? coloringState.regionsColored.size : 0);
+
             // Apply rewards based on regions colored
             if (coloringState && coloringState.regionsColored.size > 0 && gameState.pet) {
-                incrementMinigamePlayCount('coloring', coloringState ? coloringState.regionsColored.size : 0);
                 const colored = coloringState.regionsColored.size;
                 const total = coloringState.totalRegions;
                 const ratio = colored / Math.max(total, 1);

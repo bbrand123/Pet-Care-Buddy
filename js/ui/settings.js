@@ -114,6 +114,8 @@
                 if (typeof popModalEscape === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
+            // P3-35: Capture original settings at panel open for cancel/undo restoration
+            const _originalSettingsSnapshot = captureSettingsPreferenceSnapshot();
 
             const soundEnabled = typeof GameAudio !== 'undefined' && GameAudio.getEnabled();
             const samplePackEnabled = typeof GameAudio !== 'undefined' && typeof GameAudio.getSamplePackEnabled === 'function'

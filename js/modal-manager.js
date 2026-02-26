@@ -9,7 +9,10 @@
  * @namespace
  */
 const ModalManager = {
-    /** @private Stack of open modal descriptors */
+    /**
+     * @private Stack of open modal descriptors.
+     * Do NOT access or mutate directly — use getStack() for read access.
+     */
     _stack: [],
     /** @private Set of modal IDs currently being closed (re-entrancy guard) */
     _closing: new Set(),
@@ -200,5 +203,14 @@ const ModalManager = {
      */
     get count() {
         return this._stack.length;
+    },
+
+    /**
+     * Get a snapshot copy of the open modal descriptor stack.
+     * Returns a shallow copy so external code cannot mutate internal state.
+     * @returns {Array}
+     */
+    getStack() {
+        return this._stack.slice();
     }
 };

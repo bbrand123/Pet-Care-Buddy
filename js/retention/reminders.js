@@ -116,7 +116,7 @@
     }
 
     function dedupeKeyForItem(type, title, body) {
-        return [type || '', title || '', body || '', getTodayString()].join('|').toLowerCase();
+        return [type || '', title || '', body || ''].join('|').toLowerCase();
     }
 
     function addReminderCenterItem(type, title, body, action) {

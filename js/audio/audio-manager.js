@@ -347,6 +347,13 @@
         return fallback;
     }
 
+    function applyDefaultAudioSettings() {
+        CHANNELS.forEach((channel) => {
+            if (DEFAULT_VOLUMES[channel] != null) state.volumes[channel] = DEFAULT_VOLUMES[channel];
+            if (DEFAULT_MUTED[channel] != null) state.muted[channel] = DEFAULT_MUTED[channel];
+        });
+    }
+
     function loadPersistedSettings() {
         try {
             const raw = localStorage.getItem(SETTINGS_KEY);
@@ -368,7 +375,8 @@
                 }
             }
         } catch (err) {
-            warnDebug('Failed to parse audio settings, using defaults', err);
+            warnDebug('[AudioManager] Could not load persisted settings, using defaults:', err);
+            applyDefaultAudioSettings();
         }
 
         // Migrate legacy per-channel volumes if present.
@@ -636,18 +644,20 @@
     function applyWebAudioChannelGains() {
         if (!audioCtx || !webAudioGains) return;
         const now = audioCtx.currentTime;
-        const masterBase = Math.max(getChannelBaseVolume('master') || 1, 1e-6);
+        const masterVolume = getChannelBaseVolume('master');
+        const masterBase = masterVolume > 0 ? masterVolume : 1e-6;
         const map = {
-            master: getChannelBaseVolume('master'),
-            music: getChannelBaseVolume('music') / masterBase,
-            ambient: getChannelBaseVolume('ambient') / masterBase,
-            sfx: getChannelBaseVolume('sfx') / masterBase,
-            ui: getChannelBaseVolume('ui') / masterBase
+            master: masterVolume,
+            music: masterVolume > 0 ? getChannelBaseVolume('music') / masterBase : 0,
+            ambient: masterVolume > 0 ? getChannelBaseVolume('ambient') / masterBase : 0,
+            sfx: masterVolume > 0 ? getChannelBaseVolume('sfx') / masterBase : 0,
+            ui: masterVolume > 0 ? getChannelBaseVolume('ui') / masterBase : 0
         };
         Object.keys(map).forEach((key) => {
             const node = webAudioGains[key];
             if (!node) return;
-            const v = clamp01(map[key]);
+            const effective = map[key];
+            const v = Number.isFinite(effective) ? clamp01(effective) : 0;
             node.gain.cancelScheduledValues(now);
             node.gain.setTargetAtTime(v, now, 0.015);
         });

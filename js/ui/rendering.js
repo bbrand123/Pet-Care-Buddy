@@ -274,33 +274,36 @@
                 setTimeout(() => { if (layer) layer.innerHTML = ''; }, reduced ? 300 : 900);
             }
 
+            // Use event delegation on the document for room prop taps so that the handler
+            // survives innerHTML rebuilds and never needs per-element re-binding.
+            let _roomPropDelegationBound = false;
             function bindInteractiveRoomPropTaps() {
-                document.querySelectorAll('.room-prop-hit').forEach((btn) => {
-                    if (btn.dataset.boundRoomPropTap === 'true') return;
-                    btn.dataset.boundRoomPropTap = 'true';
-                    btn.addEventListener('click', () => {
-                        const wrapper = btn.closest('.interactive-room-prop');
-                        if (!wrapper) return;
-                        const effect = wrapper.getAttribute('data-prop-effect') || 'lampGlow';
-                        const effectMeta = ROOM_PROP_TAP_EFFECTS[effect] || ROOM_PROP_TAP_EFFECTS.lampGlow;
-                        const particleLayer = wrapper.querySelector('.room-prop-particle-layer');
-                        if (effect === 'lampGlow') {
-                            const nextLit = wrapper.getAttribute('data-prop-lit') !== 'true';
-                            wrapper.setAttribute('data-prop-lit', nextLit ? 'true' : 'false');
-                            wrapper.classList.toggle('is-lit', nextLit);
-                        } else {
-                            wrapper.classList.remove('prop-tapped');
-                            void wrapper.offsetWidth;
-                            wrapper.classList.add('prop-tapped');
-                            setTimeout(() => wrapper.classList.remove('prop-tapped'), 450);
-                        }
-                        spawnRoomPropParticles(particleLayer, effect);
-                        if (typeof triggerUiHaptic === 'function') triggerUiHaptic('propTap');
-                        if (typeof GameAudio !== 'undefined' && typeof GameAudio.playSFXByName === 'function') {
-                            GameAudio.playSFXByName(effectMeta.sfx, GameAudio.sfx.buttonTap, { gain: 0.65 });
-                        }
-                        if (typeof announce === 'function' && effectMeta.announce) announce(effectMeta.announce);
-                    });
+                if (_roomPropDelegationBound) return;
+                _roomPropDelegationBound = true;
+                document.addEventListener('click', (e) => {
+                    const btn = e.target && e.target.closest('.room-prop-hit');
+                    if (!btn) return;
+                    const wrapper = btn.closest('.interactive-room-prop');
+                    if (!wrapper) return;
+                    const effect = wrapper.getAttribute('data-prop-effect') || 'lampGlow';
+                    const effectMeta = ROOM_PROP_TAP_EFFECTS[effect] || ROOM_PROP_TAP_EFFECTS.lampGlow;
+                    const particleLayer = wrapper.querySelector('.room-prop-particle-layer');
+                    if (effect === 'lampGlow') {
+                        const nextLit = wrapper.getAttribute('data-prop-lit') !== 'true';
+                        wrapper.setAttribute('data-prop-lit', nextLit ? 'true' : 'false');
+                        wrapper.classList.toggle('is-lit', nextLit);
+                    } else {
+                        wrapper.classList.remove('prop-tapped');
+                        void wrapper.offsetWidth;
+                        wrapper.classList.add('prop-tapped');
+                        setTimeout(() => wrapper.classList.remove('prop-tapped'), 450);
+                    }
+                    spawnRoomPropParticles(particleLayer, effect);
+                    if (typeof triggerUiHaptic === 'function') triggerUiHaptic('propTap');
+                    if (typeof GameAudio !== 'undefined' && typeof GameAudio.playSFXByName === 'function') {
+                        GameAudio.playSFXByName(effectMeta.sfx, GameAudio.sfx.buttonTap, { gain: 0.65 });
+                    }
+                    if (typeof announce === 'function' && effectMeta.announce) announce(effectMeta.announce);
                 });
             }
 
@@ -826,12 +829,16 @@
         let _speechBubbleTimer = null;
         let _lastSpeechTime = 0;
         let _lastUserInteraction = Date.now();
+        let _userActivityListenersAttached = false;
 
         // Track user interactions to detect idle state for monologues
         function _trackUserActivity() { _lastUserInteraction = Date.now(); }
-        document.addEventListener('click', _trackUserActivity, { passive: true });
-        document.addEventListener('keydown', _trackUserActivity, { passive: true });
-        document.addEventListener('touchstart', _trackUserActivity, { passive: true });
+        if (!_userActivityListenersAttached) {
+            _userActivityListenersAttached = true;
+            document.addEventListener('click', _trackUserActivity, { passive: true });
+            document.addEventListener('keydown', _trackUserActivity, { passive: true });
+            document.addEventListener('touchstart', _trackUserActivity, { passive: true });
+        }
 
         function scheduleSpeechBubble() {
             if (_speechBubbleTimer) {
@@ -909,6 +916,17 @@
         }
 
         function pickSpeechMessage(pet, mood) {
+            // Pre-compute all random chance checks before building the pool
+            // so that pool construction is deterministic and selection is a single random pick.
+            const _chanceFood = Math.random() < 0.3;
+            const _chanceFear = Math.random() < 0.15;
+            const _chanceActivity = Math.random() < 0.3;
+            const _chanceElder = Math.random() < 0.35;
+            const _chanceCaretaker = Math.random() < 0.15;
+            const _chanceMentor = Math.random() < 0.2;
+            const _chanceTod = Math.random() < 0.3;
+            const _chanceSeason = Math.random() < 0.2;
+
             const pools = [];
             // Always include mood-based messages
             if (PET_SPEECH[mood]) pools.push(...PET_SPEECH[mood]);
@@ -931,23 +949,23 @@
                 const prefs = PET_PREFERENCES[pet.type];
                 if (prefs) {
                     // Favorite food desire
-                    if (pet.hunger < 50 && Math.random() < 0.3) {
+                    if (pet.hunger < 50 && _chanceFood) {
                         pools.push(`I want ${prefs.favoriteFoodLabel}!`);
                         pools.push(`Dreaming of ${prefs.favoriteFoodLabel}...`);
                     }
                     // Fear expression
-                    if (Math.random() < 0.15) {
+                    if (_chanceFear) {
                         pools.push(`Please no ${prefs.fearLabel}...`);
                     }
                     // Favorite activity desire
-                    if (pet.happiness < 50 && Math.random() < 0.3) {
+                    if (pet.happiness < 50 && _chanceActivity) {
                         pools.push(`Can we do ${prefs.favoriteActivityLabel}?`);
                         pools.push(`I love ${prefs.favoriteActivityLabel}!`);
                     }
                 }
             }
             // Elder wisdom messages (personality-specific)
-            if (pet.growthStage === 'elder' && Math.random() < 0.35) {
+            if (pet.growthStage === 'elder' && _chanceElder) {
                 const personality = pet.personality || 'playful';
                 if (typeof ELDER_WISDOM_SPEECHES !== 'undefined' && ELDER_WISDOM_SPEECHES[personality]) {
                     pools.push(...ELDER_WISDOM_SPEECHES[personality]);
@@ -960,7 +978,7 @@
                 }
             }
             // Caretaker title references in pet speech
-            if (typeof CARETAKER_PET_SPEECHES !== 'undefined' && Math.random() < 0.15) {
+            if (typeof CARETAKER_PET_SPEECHES !== 'undefined' && _chanceCaretaker) {
                 const title = (gameState.caretakerTitle) || 'newcomer';
                 const titleSpeech = CARETAKER_PET_SPEECHES[title];
                 if (titleSpeech && titleSpeech.length > 0) {
@@ -968,7 +986,7 @@
                 }
             }
             // Mentor reference speech for mentored pets
-            if (pet._mentorId && gameState.pets && Math.random() < 0.2) {
+            if (pet._mentorId && gameState.pets && _chanceMentor) {
                 const mentor = gameState.pets.find(p => p && p.id === pet._mentorId);
                 if (mentor) {
                     const mentorName = mentor.name || 'Elder';
@@ -978,12 +996,12 @@
             }
             // Time of day messages (lower chance)
             const tod = gameState.timeOfDay || 'day';
-            if (PET_SPEECH.timeOfDay[tod] && Math.random() < 0.3) {
+            if (PET_SPEECH.timeOfDay[tod] && _chanceTod) {
                 pools.push(...PET_SPEECH.timeOfDay[tod]);
             }
             // Season messages (lower chance)
             const season = gameState.season || 'spring';
-            if (PET_SPEECH.season[season] && Math.random() < 0.2) {
+            if (PET_SPEECH.season[season] && _chanceSeason) {
                 pools.push(...PET_SPEECH.season[season]);
             }
             if (pools.length === 0) return null;

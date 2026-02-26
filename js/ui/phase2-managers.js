@@ -26,8 +26,8 @@
         '.minigame-summary-overlay',
         '.competition-overlay',
         '.tutorial-overlay',
-        '[role="dialog"]',
-        '[role="alertdialog"]'
+        '.modal-overlay[role="dialog"]', // P3-39: require .modal-overlay to avoid matching non-overlay role=dialog elements
+        '.modal-overlay[role="alertdialog"]'
     ].join(',');
 
     const UI = {

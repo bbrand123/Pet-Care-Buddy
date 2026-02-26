@@ -85,7 +85,6 @@
         if (!pet || typeof pet !== 'object') return '';
         if (typeof pet.personality === 'string') return pet.personality.toLowerCase();
         if (pet.traits && typeof pet.traits.personality === 'string') return pet.traits.personality.toLowerCase();
-        if (Array.isArray(pet.traits) && pet.traits.length > 0) return String(pet.traits[0]).toLowerCase();
         return '';
     }
 
@@ -95,7 +94,7 @@
         if (!a || !b) return 0;
         if (a === b) return 1;
         const clashes = {
-            grumpy: new Set(['playful', 'energetic']),
+            grumpy: new Set(['playful', 'energetic', 'shy']),
             lazy: new Set(['energetic']),
             shy: new Set(['grumpy']),
             energetic: new Set(['lazy']),

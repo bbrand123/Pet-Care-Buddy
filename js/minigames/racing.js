@@ -136,11 +136,22 @@
 
         function updateRacingUI() {
             if (!racingState) return;
+            // P3-51: Update obstacle elements in place instead of rebuilding innerHTML every tick
             const obstacles = document.getElementById('racing-obstacles');
             if (obstacles) {
-                obstacles.innerHTML = racingState.obstacles.map((obs) => (
-                    `<div class="racing-obstacle lane-${obs.lane}" style="top:${obs.y}%;">🚧</div>`
-                )).join('');
+                const obsData = racingState.obstacles;
+                const existing = obstacles.children;
+                while (obstacles.children.length > obsData.length) obstacles.removeChild(obstacles.lastChild);
+                obsData.forEach((obs, i) => {
+                    let el = existing[i];
+                    if (!el) {
+                        el = document.createElement('div');
+                        el.textContent = '🚧';
+                        obstacles.appendChild(el);
+                    }
+                    el.className = `racing-obstacle lane-${obs.lane}`;
+                    el.style.top = `${obs.y}%`;
+                });
             }
             const scoreEl = document.getElementById('racing-score');
             const livesEl = document.getElementById('racing-lives');

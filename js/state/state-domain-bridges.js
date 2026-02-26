@@ -61,9 +61,11 @@
         };
     }
 
-    try {
-        attachDefaultStateDomainBridges();
-    } catch (_) {}
+    if (DefaultStateManager && DefaultEventBus) {
+        try {
+            attachDefaultStateDomainBridges();
+        } catch (_) {}
+    }
 
     return Object.freeze({
         attachCoinsChangedBridge,

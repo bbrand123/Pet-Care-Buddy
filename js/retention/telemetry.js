@@ -413,18 +413,30 @@
         maybeScheduleFlush();
         recordComebackIfNeeded();
         installStateWatchers();
+        var _onVisibilityChange = null;
+        var _onPageHide = null;
         if (typeof document !== 'undefined' && document && typeof document.addEventListener === 'function') {
-            document.addEventListener('visibilitychange', function onVisibilityChange() {
+            _onVisibilityChange = function onVisibilityChange() {
                 if (document.visibilityState === 'hidden') {
                     flush({ force: true, flushPendingPersistence: true }).catch(function noop() {});
                 }
-            });
+            };
+            document.addEventListener('visibilitychange', _onVisibilityChange);
         }
         if (typeof window !== 'undefined' && window && typeof window.addEventListener === 'function') {
-            window.addEventListener('pagehide', function onPageHide() {
+            _onPageHide = function onPageHide() {
                 flush({ force: true, flushPendingPersistence: true }).catch(function noop() {});
-            });
+            };
+            window.addEventListener('pagehide', _onPageHide);
         }
+        return function cleanup() {
+            if (_onVisibilityChange && typeof document !== 'undefined' && document) {
+                document.removeEventListener('visibilitychange', _onVisibilityChange);
+            }
+            if (_onPageHide && typeof window !== 'undefined' && window) {
+                window.removeEventListener('pagehide', _onPageHide);
+            }
+        };
     }
 
     installLifecycleHooks();

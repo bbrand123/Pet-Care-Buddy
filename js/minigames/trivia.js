@@ -105,6 +105,13 @@
             if (nextBtn) nextBtn.disabled = !triviaState.answered;
             if (optionsEl) {
                 const options = Array.isArray(q.options) ? q.options : (Array.isArray(q.choices) ? q.choices : []);
+                // P3-56: Prune stale listener records for previous option buttons before rebuilding.
+                // The old buttons are destroyed by innerHTML reset; their tracker entries accumulate
+                // (4 per question) unless removed. Strip them out to prevent unbounded growth.
+                const tracker = triviaState._runtimeTracker;
+                if (tracker && Array.isArray(tracker.listeners)) {
+                    tracker.listeners = tracker.listeners.filter((entry) => !entry.target.classList || !entry.target.classList.contains('trivia-option'));
+                }
                 optionsEl.innerHTML = options.map((opt, idx) => (
                     `<button type="button" class="trivia-option" data-opt="${idx}" ${triviaState.answered ? 'disabled' : ''}>${escapeHTML(opt)}</button>`
                 )).join('');

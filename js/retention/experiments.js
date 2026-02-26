@@ -164,21 +164,25 @@
         return overrides;
     }
 
+    function deepMerge(target, source) {
+        if (!source || typeof source !== 'object') return target;
+        Object.keys(source).forEach(function(key) {
+            if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])
+                && target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])) {
+                deepMerge(target[key], source[key]);
+            } else {
+                target[key] = source[key];
+            }
+        });
+        return target;
+    }
+
     function applyTuningOverrides(baseTuning) {
         if (!baseTuning || !isObject(baseTuning)) return baseTuning;
         if (!isFlagEnabled('experimentsEnabled')) return baseTuning;
         const overrides = getRetentionTuningOverrides();
         const out = JSON.parse(JSON.stringify(baseTuning));
-        Object.keys(overrides).forEach((key) => {
-            if (!isObject(overrides[key])) {
-                out[key] = overrides[key];
-                return;
-            }
-            out[key] = Object.assign({}, out[key] || {}, overrides[key]);
-            if (key === 'journeyRewardPacing' && isObject(overrides[key].backlog)) {
-                out[key].backlog = Object.assign({}, (out[key] && out[key].backlog) || {}, overrides[key].backlog);
-            }
-        });
+        deepMerge(out, overrides);
         return out;
     }
 

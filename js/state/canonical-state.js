@@ -44,7 +44,7 @@
             if (!isObject(cursor)) return false;
             cursor = cursor[parts[i]];
         }
-        if (!isObject(cursor) && typeof cursor !== 'object') return false;
+        if (!isObject(cursor)) return false;
         const leaf = parts[parts.length - 1];
         if (!cursor || !Object.prototype.hasOwnProperty.call(cursor, leaf)) return false;
         cursor[leaf] = nextValue;

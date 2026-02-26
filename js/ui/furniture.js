@@ -229,8 +229,11 @@
                 renderPetPhase(); // Re-render to show changes
                 setTimeout(() => {
                     const refreshedBtn = document.getElementById('furniture-btn');
-                    if (refreshedBtn) refreshedBtn.focus();
-                    else if (triggerBtn) triggerBtn.focus();
+                    if (refreshedBtn) {
+                        refreshedBtn.focus();
+                    } else if (triggerBtn && triggerBtn.isConnected && typeof triggerBtn.focus === 'function') {
+                        triggerBtn.focus();
+                    }
                 }, 0);
             }
 

@@ -67,7 +67,7 @@
         }, pretty ? 2 : 0);
         return {
             serialized: typeof serialized === 'string' ? serialized : '{}',
-            payload: serialized ? JSON.parse(serialized) : {}
+            payload: JSON.parse(typeof serialized === 'string' ? serialized : '{}')
         };
     }
 

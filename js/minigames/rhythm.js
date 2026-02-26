@@ -123,7 +123,7 @@
             overlay.querySelector('#rhythm-lights').focus();
 
             rhythmState.timerId = trackMiniGameInterval(rhythmState, stepRhythmBeat, rhythmState.intervalMs);
-            stepRhythmBeat();
+            setTimeout(stepRhythmBeat, 1000); // P3-54: 1 second grace period before first beat
         }
 
         function stepRhythmBeat() {
@@ -147,7 +147,7 @@
             const note = document.getElementById('rhythm-note');
             if (note) note.textContent = accent ? 'Strong beat!' : 'Keep the rhythm steady.';
             const beatEl = document.getElementById('rhythm-beat');
-            if (beatEl) beatEl.textContent = `Beat: ${rhythmState.beat}/${rhythmState.totalBeats}`;
+            if (beatEl) beatEl.textContent = `Beat: ${Math.min(rhythmState.beat, rhythmState.totalBeats)}/${rhythmState.totalBeats}`; // P3-53: Cap display at totalBeats
         }
 
         function registerRhythmHit() {
@@ -227,9 +227,8 @@
 	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.playAccessibilityCue === 'function') {
 	                GameAudio.playAccessibilityCue('objectiveEnd', { gain: 0.72, caption: 'Rhythm game ended' });
 	            }
-	            if (typeof GameAudio !== 'undefined' && typeof GameAudio.clearGameplayAudioState === 'function') {
-	                GameAudio.clearGameplayAudioState();
-	            }
+	            // P3-55: clearGameplayAudioState is already called via registerMiniGameAudioStop callback
+	            // inside teardownMiniGameRuntime above; explicit duplicate call removed here.
 	            rhythmState = null;
 	        }
 

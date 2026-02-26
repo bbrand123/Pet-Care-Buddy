@@ -124,7 +124,7 @@
         const petsById = (householdContext && householdContext.petsById) || {};
         const petCount = Object.keys(petsById).length;
 
-        if (energy <= thresholds.energy || (hour >= 22 || hour <= 5) && energy < 60) {
+        if (energy <= thresholds.energy || ((hour >= 22 || hour <= 5) && energy < 60)) {
             return makeActivity('sleep', nowMs);
         }
         if (hunger <= thresholds.hunger) {

@@ -382,13 +382,15 @@
             `;
             document.body.appendChild(overlay);
 
+            let _wbAutoDismissTimer = null;
+
             function _closeWelcomeBack() {
+                clearTimeout(_wbAutoDismissTimer);
+                _wbAutoDismissTimer = null;
                 if (typeof popModalEscape === 'function') popModalEscape(_closeWelcomeBack);
                 overlay.classList.add('modal-closing');
                 setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 220);
-                if (_wbAutoDismissTimer) { clearTimeout(_wbAutoDismissTimer); _wbAutoDismissTimer = null; }
             }
-            let _wbAutoDismissTimer = null;
 
             overlay.querySelector('#welcome-back-close').addEventListener('click', _closeWelcomeBack);
             overlay.addEventListener('click', (e) => { if (e.target === overlay) _closeWelcomeBack(); });
@@ -606,6 +608,7 @@
                         const meta = document.querySelector('meta[name="theme-color"]');
                         if (meta) meta.content = newTheme === 'dark' ? '#1a1a2e' : '#A8D8EA';
                     }, event);
+                    return;
                 }
             };
 
@@ -710,21 +713,25 @@
 
             const eggButton = document.getElementById('egg-button');
 
-            // Use named function to allow proper removal if needed
-            function onEggClick(e) {
-                e.preventDefault();
-                handleEggTap();
-            }
+            // Guard against attaching duplicate listeners to the same element instance
+            if (eggButton && !eggButton.dataset.eggListenerBound) {
+                eggButton.dataset.eggListenerBound = 'true';
 
-            function onEggKeydown(e) {
-                if (e.key === 'Enter' || e.key === ' ') {
+                function onEggClick(e) {
                     e.preventDefault();
                     handleEggTap();
                 }
-            }
 
-            eggButton.addEventListener('click', onEggClick);
-            eggButton.addEventListener('keydown', onEggKeydown);
+                function onEggKeydown(e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleEggTap();
+                    }
+                }
+
+                eggButton.addEventListener('click', onEggClick);
+                eggButton.addEventListener('keydown', onEggKeydown);
+            }
 
             // Cancel adoption button
             const cancelAdoptBtn = document.getElementById('cancel-adopt-btn');
@@ -1031,16 +1038,17 @@
 
             // Text-to-speech
             ttsBtn.addEventListener('click', () => {
-                const name = input.value.trim() || petData.name;
+                const rawName = input.value.trim() || petData.name;
+                const safeName = (rawName || '').replace(/[^\w\s'-]/g, '').trim() || 'your pet';
                 if (!ttsEnabled()) {
                     showToast('Text-to-speech is turned off in Settings', '#FFA726');
                 } else if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(name);
+                    const utterance = new SpeechSynthesisUtterance(safeName);
                     utterance.rate = 0.9;
                     utterance.pitch = 1.1;
                     window.speechSynthesis.cancel(); // Cancel any ongoing speech
                     window.speechSynthesis.speak(utterance);
-                    showToast(`🔊 "${escapeHTML(name)}"`, '#4ECDC4');
+                    showToast(`🔊 "${escapeHTML(safeName)}"`, '#4ECDC4');
                 } else {
                     showToast('Text-to-speech not supported', '#FFA726');
                 }
@@ -1062,8 +1070,9 @@
                     gameState.pet.name = name;
                     // Text-to-speech on submit — cancel any ongoing speech first
                     if ('speechSynthesis' in window && !useDefaults && ttsEnabled()) {
+                        const safeTtsName = (name || '').replace(/[^\w\s'-]/g, '').trim() || 'your pet';
                         window.speechSynthesis.cancel();
-                        const utterance = new SpeechSynthesisUtterance(name);
+                        const utterance = new SpeechSynthesisUtterance(safeTtsName);
                         utterance.rate = 0.9;
                         utterance.pitch = 1.1;
                         window.speechSynthesis.speak(utterance);

@@ -832,8 +832,8 @@
                     // Calculate remaining time for countdown
                     const totalTicksNeeded = effectiveGrowTime * 3;
                     const ticksRemaining = Math.max(0, totalTicksNeeded - plot.growTicks);
-                    // Watering speeds up the next tick by 1.5x (water dries after one tick)
-                    const effectiveTickRate = plot.watered ? 1.5 : 1;
+                    // Watering speeds up the next tick by 2x (water dries after one tick)
+                    const effectiveTickRate = plot.watered ? 2 : 1;
                     const minsRemaining = isReady ? 0 : Math.ceil(ticksRemaining / effectiveTickRate);
                     const timerText = isReady ? '' : (minsRemaining > 0 ? `~${minsRemaining}m left` : 'Almost...');
 

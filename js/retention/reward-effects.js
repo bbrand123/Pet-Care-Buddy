@@ -152,18 +152,19 @@
         const opts = (options && typeof options === 'object') ? options : {};
         const haptics = Array.isArray(preset.haptics) ? preset.haptics : [];
         const animations = Array.isArray(preset.animations) ? preset.animations : [];
+        const timers = [];
         haptics.forEach((step) => {
             const at = Math.max(0, Number(step.at) || 0);
-            setTimeout(() => triggerHapticStep(step), at);
+            timers.push(setTimeout(() => triggerHapticStep(step), at));
         });
         animations.forEach((step) => {
             const at = Math.max(0, Number(step.at) || 0);
-            setTimeout(() => animateSelectorStep(step), at);
+            timers.push(setTimeout(() => animateSelectorStep(step), at));
         });
         if (opts.toast && typeof root.showToast === 'function') {
             try { root.showToast(String(opts.toast), opts.toastColor || '#81C784'); } catch (_) {}
         }
-        return true;
+        return function cancel() { timers.forEach((id) => clearTimeout(id)); timers.length = 0; };
     }
 
     const api = Object.freeze({

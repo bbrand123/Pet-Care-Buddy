@@ -10,7 +10,6 @@
 
     function createVisibilityResumeCoordinator(options) {
         const opts = (options && typeof options === 'object') ? options : {};
-        let isHandlingResume = false;
         let visiblePromiseInFlight = null;
 
         function onHidden(meta) {
@@ -21,23 +20,18 @@
         }
 
         function onVisible(meta) {
-            if (isHandlingResume || visiblePromiseInFlight) return { skipped: true, reason: 'resume-in-flight' };
-            isHandlingResume = true;
-            try {
-                if (typeof opts.onVisible === 'function') {
-                    const result = opts.onVisible(meta || null) || null;
-                    if (result && typeof result.then === 'function') {
-                        visiblePromiseInFlight = Promise.resolve(result).finally(function clearVisiblePromise() {
-                            visiblePromiseInFlight = null;
-                        });
-                        return visiblePromiseInFlight;
-                    }
-                    return result;
+            if (visiblePromiseInFlight) return { skipped: true, reason: 'resume-in-flight' };
+            if (typeof opts.onVisible === 'function') {
+                const result = opts.onVisible(meta || null) || null;
+                if (result && typeof result.then === 'function') {
+                    visiblePromiseInFlight = Promise.resolve(result).finally(function clearVisiblePromise() {
+                        visiblePromiseInFlight = null;
+                    });
+                    return visiblePromiseInFlight;
                 }
-                return null;
-            } finally {
-                isHandlingResume = false;
+                return result;
             }
+            return null;
         }
 
         function handleDocumentVisibilityChange(doc, meta) {

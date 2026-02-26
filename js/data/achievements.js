@@ -61,10 +61,10 @@ const DAILY_WILDCARD_TASKS = [
 ];
 
 const DAILY_SEASONAL_TASKS = {
-    spring: { id: 'seasonalSpring', nameTemplate: 'Enjoy {target} springtime activity', icon: '🌸', target: 1, trackKey: 'totalCareActions', maxTarget: 3, lane: 'seasonal' },
-    summer: { id: 'seasonalSummer', nameTemplate: 'Do {target} summer splash play{plural}', icon: '☀️', target: 1, trackKey: 'totalCareActions', maxTarget: 3, lane: 'seasonal' },
-    autumn: { id: 'seasonalAutumn', nameTemplate: 'Crunch through {target} autumn leaf pile{plural}', icon: '🍂', target: 1, trackKey: 'totalCareActions', maxTarget: 3, lane: 'seasonal' },
-    winter: { id: 'seasonalWinter', nameTemplate: 'Have {target} cozy winter moment{plural}', icon: '❄️', target: 1, trackKey: 'totalCareActions', maxTarget: 3, lane: 'seasonal' }
+    spring: { id: 'seasonalSpring', nameTemplate: 'Enjoy {target} springtime activity', icon: '🌸', target: 1, trackKey: 'springCareActions', maxTarget: 3, lane: 'seasonal' },
+    summer: { id: 'seasonalSummer', nameTemplate: 'Do {target} summer splash play{plural}', icon: '☀️', target: 1, trackKey: 'summerCareActions', maxTarget: 3, lane: 'seasonal' },
+    autumn: { id: 'seasonalAutumn', nameTemplate: 'Crunch through {target} autumn leaf pile{plural}', icon: '🍂', target: 1, trackKey: 'autumnCareActions', maxTarget: 3, lane: 'seasonal' },
+    winter: { id: 'seasonalWinter', nameTemplate: 'Have {target} cozy winter moment{plural}', icon: '❄️', target: 1, trackKey: 'winterCareActions', maxTarget: 3, lane: 'seasonal' }
 };
 
 function getDailyTasksWithSeason() {
@@ -258,7 +258,7 @@ const TROPHIES = {
     mythicalFinder: { id: 'mythicalFinder', name: 'Mythical Finder', icon: '🦄', description: 'Unlock a mythical pet type', shelf: 'growth', check: (gs) => (gs.adultsRaised || 0) >= 2 },
     // Game trophies
     arcadeStar: { id: 'arcadeStar', name: 'Arcade Star', icon: '🕹️', description: 'Score 50+ in 3 different mini-games', shelf: 'games', check: (gs) => { const s = gs.minigameHighScores || {}; return Object.values(s).filter(v => v >= 50).length >= 3; } },
-    gameCollector: { id: 'gameCollector', name: 'Game Collector', icon: '🎲', description: 'Play all 6 mini-games', shelf: 'games', check: (gs) => { const c = gs.minigamePlayCounts || {}; return Object.values(c).filter(v => v > 0).length >= 6; } },
+    gameCollector: { id: 'gameCollector', name: 'Game Collector', icon: '🎲', description: 'Play 6 different mini-games', shelf: 'games', check: (gs) => { const c = gs.minigamePlayCounts || {}; return Object.values(c).filter(v => v > 0).length >= 6; } },
     scoreKing: { id: 'scoreKing', name: 'Score King', icon: '👑', description: 'Score 100+ in any mini-game', shelf: 'games', check: (gs) => { const s = gs.minigameHighScores || {}; return Object.values(s).some(v => v >= 100); } },
     // Garden trophies
     harvestKing: { id: 'harvestKing', name: 'Harvest King', icon: '🌾', description: 'Harvest 30 crops total', shelf: 'garden', check: (gs) => gs.garden && gs.garden.totalHarvests >= 30 },

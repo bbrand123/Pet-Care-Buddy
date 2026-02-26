@@ -97,10 +97,12 @@
                         content.appendChild(temp.firstElementChild);
                     }
                 }
-                // Re-attach collect buttons
+                // Re-attach collect buttons — clone to remove any stale listeners before adding fresh ones
                 document.querySelectorAll('.breeding-egg-collect-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        const eggIdx = parseInt(btn.dataset.eggIndex);
+                    const newBtn = btn.cloneNode(true);
+                    btn.parentNode.replaceChild(newBtn, btn);
+                    newBtn.addEventListener('click', () => {
+                        const eggIdx = parseInt(newBtn.dataset.eggIndex);
                         collectHatchedEgg(eggIdx);
                     });
                 });
@@ -232,8 +234,11 @@
 
             pushModalEscape(closeOverlay);
             overlay._closeOverlay = closeOverlay;
-            document.getElementById('breeding-celebrate-ok').addEventListener('click', closeOverlay);
-            document.getElementById('breeding-celebrate-ok').focus();
+            const celebrateOkBtn = document.getElementById('breeding-celebrate-ok');
+            if (celebrateOkBtn && celebrateOkBtn.isConnected) {
+                celebrateOkBtn.addEventListener('click', closeOverlay);
+                celebrateOkBtn.focus();
+            }
             trapFocus(overlay);
         }
 

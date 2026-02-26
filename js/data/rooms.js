@@ -244,6 +244,26 @@ const ROOM_ARTIFACT_BLUEPRINTS = {
     garden: [
         { id: 'garden-first-sprout', trigger: 'roomUnlock:garden', label: 'First Sprout', description: 'The first sprout that never stopped growing.', render: { emoji: '🌱', layer: 'front' } },
         { id: 'garden-winter-lights', trigger: 'season:winter', label: 'Winter Lights', description: 'Seasonal lights hung across the garden fence.', render: { emoji: '✨', layer: 'back' } }
+    ],
+    library: [
+        { id: 'library-first-book', trigger: 'roomUnlock:library', label: 'Favorite Book', description: 'The first book read together in the library.', render: { emoji: '📖', layer: 'front' } },
+        { id: 'library-study-lamp', trigger: 'milestone:adult', label: 'Study Lamp', description: 'A lamp that kept the late reading sessions warm.', render: { emoji: '🕯️', layer: 'back' } }
+    ],
+    arcade: [
+        { id: 'arcade-first-token', trigger: 'roomUnlock:arcade', label: 'First Token', description: 'A keepsake token from your first arcade session.', render: { emoji: '🪙', layer: 'front' } },
+        { id: 'arcade-high-score', trigger: 'milestone:adult', label: 'High Score Trophy', description: 'A trophy earned from a memorable high score.', render: { emoji: '🏆', layer: 'front' } }
+    ],
+    spa: [
+        { id: 'spa-first-visit', trigger: 'roomUnlock:spa', label: 'Spa Stone', description: 'A smooth stone from your first relaxing spa visit.', render: { emoji: '🪨', layer: 'front' } },
+        { id: 'spa-candle', trigger: 'milestone:elder', label: 'Wellness Candle', description: 'A candle lit during a quiet elder care session.', render: { emoji: '🕯️', layer: 'back' } }
+    ],
+    observatory: [
+        { id: 'observatory-first-star', trigger: 'roomUnlock:observatory', label: 'Star Chart', description: 'A chart from the first night of stargazing together.', render: { emoji: '🌌', layer: 'back' } },
+        { id: 'observatory-telescope-log', trigger: 'milestone:elder', label: 'Telescope Log', description: 'A worn log of constellations spotted through the years.', render: { emoji: '🔭', layer: 'front' } }
+    ],
+    workshop: [
+        { id: 'workshop-first-craft', trigger: 'roomUnlock:workshop', label: 'First Blueprint', description: 'A blueprint from the very first workshop project.', render: { emoji: '📐', layer: 'front' } },
+        { id: 'workshop-tool-set', trigger: 'milestone:adult', label: 'Tool Set', description: 'A small set of tools collected over many crafting sessions.', render: { emoji: '🛠️', layer: 'back' } }
     ]
 };
 

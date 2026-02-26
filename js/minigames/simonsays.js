@@ -125,7 +125,7 @@
                 highestRound: 0,
                 phase: 'watching', // 'watching', 'playing', 'gameover'
                 playbackIndex: 0,
-                playbackTimer: null,
+                playbackTimers: [],
                 difficulty: simonDiff,
                 active: true
             };
@@ -283,7 +283,7 @@
             }
 
             simonState.playbackIndex++;
-            simonState.playbackTimer = setTimeout(() => simonPlayPattern(speed), speed);
+            simonState.playbackTimers.push(setTimeout(() => simonPlayPattern(speed), speed));
         }
 
         function simonLightPad(color, duration) {
@@ -411,7 +411,7 @@
                 teardownMiniGameRuntime(simonState, { overlaySelector: '.simonsays-game-overlay' });
             } else {
                 dismissMiniGameExitDialog();
-                if (simonState.playbackTimer) clearTimeout(simonState.playbackTimer);
+                if (simonState.playbackTimers) { simonState.playbackTimers.forEach(id => clearTimeout(id)); simonState.playbackTimers = []; }
                 if (simonState._autoEndTimeout) clearTimeout(simonState._autoEndTimeout);
                 if (simonState._roundTransitionTimer) clearTimeout(simonState._roundTransitionTimer);
                 if (simonState._escapeHandler) popModalEscape(simonState._escapeHandler);

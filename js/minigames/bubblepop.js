@@ -24,7 +24,6 @@
                 bubbleIdCounter: 0,
                 spawnInterval: null,
                 timerInterval: null,
-                floatIntervals: [],
                 difficulty: bubbleDiff,
                 active: true
             };

@@ -97,7 +97,10 @@
             const rel = legacy[legacyKey];
             if (!isObject(rel)) return;
             const parts = String(legacyKey).split(/[-|]/).filter(Boolean);
-            if (parts.length !== 2) return;
+            if (parts.length !== 2) {
+                if (typeof console !== 'undefined') console.warn('[MLFHouseholdState] Skipping malformed relationship key:', legacyKey);
+                return;
+            }
             const key = Relationships && typeof Relationships.relationshipKey === 'function'
                 ? Relationships.relationshipKey(parts[0], parts[1])
                 : (String(parts[0]) <= String(parts[1]) ? `${parts[0]}|${parts[1]}` : `${parts[1]}|${parts[0]}`);
@@ -348,7 +351,7 @@
             const alert = translateHouseholdBeatToAlert(beat);
             if (!alert || !alert.id || seen.has(alert.id)) return;
             seen.add(alert.id);
-            alert.createdAt = Date.now();
+            alert.createdAt = Number.isFinite(Number(beat.at)) ? Number(beat.at) : Date.now();
             alerts.push(alert);
             added += 1;
             if (root && typeof root.addReminderCenterItem === 'function') {

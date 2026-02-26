@@ -81,7 +81,10 @@
         }
 
         function onOverlayKeydown(evt) {
-            if (!evt) return;
+            if (!evt || !overlay.isConnected) {
+                try { overlay.removeEventListener('keydown', onOverlayKeydown, true); } catch (_) {}
+                return;
+            }
             if (evt.key === 'Escape') {
                 evt.preventDefault();
                 closeOverlay();

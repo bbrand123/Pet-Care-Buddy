@@ -133,10 +133,20 @@
             if (scoreEl) scoreEl.textContent = `Meters: ${runnerState.score}`;
             if (speedEl) speedEl.textContent = `Speed: ${runnerState.speed.toFixed(1)}`;
             if (playerEl) playerEl.style.bottom = `${16 + runnerState.y}px`;
+            // P3-52: Update obstacle elements in place instead of rebuilding innerHTML every tick
             if (obstaclesEl) {
-                obstaclesEl.innerHTML = runnerState.obstacles
-                    .map((obs) => `<div class="runner-obstacle" style="left:${obs.x}%;width:${obs.width}%"></div>`)
-                    .join('');
+                const obsData = runnerState.obstacles;
+                while (obstaclesEl.children.length > obsData.length) obstaclesEl.removeChild(obstaclesEl.lastChild);
+                obsData.forEach((obs, i) => {
+                    let el = obstaclesEl.children[i];
+                    if (!el) {
+                        el = document.createElement('div');
+                        el.className = 'runner-obstacle';
+                        obstaclesEl.appendChild(el);
+                    }
+                    el.style.left = `${obs.x}%`;
+                    el.style.width = `${obs.width}%`;
+                });
             }
         }
 

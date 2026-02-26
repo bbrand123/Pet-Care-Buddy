@@ -22,8 +22,8 @@
 
             // Enhanced celebration: flash + confetti + fireworks + size-up animation
             createCelebrationFlash();
-            createConfetti();
-            createConfetti(); // Double confetti for extra impact
+            const _confetti1 = createConfetti();
+            const _confetti2 = createConfetti(); // Double confetti for extra impact
             createMilestoneFireworks();
             if (typeof GameAudio !== 'undefined') GameAudio.playSFX(GameAudio.sfx.celebration);
 
@@ -110,7 +110,9 @@
             function closeModal() {
                 popModalEscape(closeModal);
                 animateModalClose(modal, () => {
-                    document.querySelectorAll('.confetti-container').forEach(c => c.remove());
+                    // Remove only the confetti containers created by this celebration instance
+                    if (_confetti1 && _confetti1.parentNode) _confetti1.remove();
+                    if (_confetti2 && _confetti2.parentNode) _confetti2.remove();
                     if (returnFocusEl && document.contains(returnFocusEl) && typeof returnFocusEl.focus === 'function') {
                         returnFocusEl.focus();
                     } else {
@@ -310,6 +312,7 @@
                 if (container.parentNode) container.remove();
                 // Note: intentionally keep confetti-style element; it is idempotent and shared
             }, 5200);
+            return container;
         }
 
         // ==================== MILESTONE FIREWORKS ====================
@@ -411,7 +414,7 @@
         function showJournalModal() {
             const existing = document.querySelector('.journal-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -480,7 +483,7 @@
         function showDiaryModal() {
             const existing = document.querySelector('.diary-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -575,7 +578,7 @@
         function showMemorialHall() {
             const existing = document.querySelector('.memorial-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -1299,7 +1302,7 @@
             // like the birthday celebration (.celebration-modal).
             const existingModal = document.querySelector('.modal-overlay.new-pet-modal');
             if (existingModal) {
-                if (existingModal._closeOverlay) popModalEscape(existingModal._closeOverlay);
+                if (typeof existingModal._closeOverlay === 'function') popModalEscape(existingModal._closeOverlay);
                 existingModal.remove();
             }
 
@@ -1621,7 +1624,7 @@
 
             const existing = document.querySelector('.household-summary-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -1776,7 +1779,7 @@
 
             const existing = document.querySelector('.interaction-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -1985,7 +1988,7 @@
 
             const existing = document.querySelector('.social-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2080,7 +2083,7 @@
         function showAchievementsModal() {
             const existing = document.querySelector('.achievements-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2143,7 +2146,7 @@
         function showDailyChecklistModal() {
             const existing = document.querySelector('.daily-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2229,7 +2232,7 @@
         function showBadgesModal() {
             const existing = document.querySelector('.badges-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2308,7 +2311,7 @@
         function showStickerBookModal() {
             const existing = document.querySelector('.sticker-book-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2408,7 +2411,7 @@
         function showTrophyRoomModal() {
             const existing = document.querySelector('.trophy-room-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2486,7 +2489,7 @@
 	        function showStreakModal() {
             const existing = document.querySelector('.streak-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2657,7 +2660,7 @@
 	        function showJourneyModal() {
 	            const existing = document.querySelector('.journey-overlay');
 	            if (existing) {
-	                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+	                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
 	                existing.remove();
 	            }
 	            const status = (typeof getJourneyStatus === 'function')
@@ -2863,7 +2866,7 @@
 	            if (!recap || typeof recap !== 'object') return;
 	            const existing = document.querySelector('.return-recap-overlay');
 	            if (existing) {
-	                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+	                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
 	                existing.remove();
 	            }
 	            const activityLabels = {
@@ -2920,7 +2923,7 @@
         function showRewardsHub() {
             const existing = document.querySelector('.rewards-hub-overlay');
             if (existing) {
-                if (existing._closeOverlay) popModalEscape(existing._closeOverlay);
+                if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay);
                 existing.remove();
             }
 
@@ -2991,7 +2994,7 @@
         // D33: Keyboard shortcuts reference modal
         function showKeyboardShortcutsModal() {
             const existing = document.querySelector('.keyboard-shortcuts-overlay');
-            if (existing) { if (existing._closeOverlay) popModalEscape(existing._closeOverlay); existing.remove(); }
+            if (existing) { if (typeof existing._closeOverlay === 'function') popModalEscape(existing._closeOverlay); existing.remove(); }
 
             const overlay = document.createElement('div');
             overlay.className = 'modal-overlay keyboard-shortcuts-overlay';

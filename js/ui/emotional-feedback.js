@@ -13,6 +13,14 @@
     const DEFAULT_QUIET_BEAT_MS = 220;
     const SESSION_REFLECTION_KEY = '__mlf_emotional_reflection_shown__';
 
+    // P3-38: Safe sessionStorage helpers to handle unavailable/full storage
+    function safeSessionGet(key) {
+        try { return sessionStorage.getItem(key); } catch (_) { return null; }
+    }
+    function safeSessionSet(key, value) {
+        try { sessionStorage.setItem(key, value); } catch (_) {}
+    }
+
     const ACTION_RESULT_TEXT = Object.freeze({
         feed: 'Hunger restored.',
         wash: 'Cleanliness restored.',
@@ -349,7 +357,7 @@
     function maybeReflectCaretakerIdentity(session, plan) {
         try {
             if (typeof sessionStorage !== 'undefined') {
-                const existing = sessionStorage.getItem(SESSION_REFLECTION_KEY);
+                const existing = safeSessionGet(SESSION_REFLECTION_KEY);
                 if (existing === 'true') return;
             }
         } catch (_) {}
@@ -369,9 +377,7 @@
         }
         if (!line) return;
         _activeCareMoment.meta.push({ text: line, type: 'identity' });
-        try {
-            if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SESSION_REFLECTION_KEY, 'true');
-        } catch (_) {}
+        safeSessionSet(SESSION_REFLECTION_KEY, 'true'); // P3-38: use safe helper
     }
 
     function playTierEffects(plan) {
@@ -400,7 +406,8 @@
 
     function startCareMoment(payload) {
         endCareMoment({ flush: true });
-        const id = `care-moment-${++_momentSeq}`;
+        _momentSeq = (_momentSeq + 1) & 0xFFFFFF; // P3-37: wrap at 16M to prevent unbounded growth
+        const id = `care-moment-${_momentSeq}`;
         _activeCareMoment = {
             id,
             startedAt: nowMs(),

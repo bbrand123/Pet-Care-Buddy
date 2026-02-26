@@ -34,7 +34,10 @@
     }
 
     function deepClone(value) {
-        return JSON.parse(JSON.stringify(value));
+        return JSON.parse(JSON.stringify(value, function replacer(key, val) {
+            if (typeof val === 'number' && !Number.isFinite(val)) return null;
+            return val;
+        }));
     }
 
     function sortedPetIds(petsById) {
@@ -42,7 +45,7 @@
             const an = Number(a);
             const bn = Number(b);
             if (Number.isFinite(an) && Number.isFinite(bn) && an !== bn) return an - bn;
-            return String(a).localeCompare(String(b));
+            const sa = String(a); const sb = String(b); return sa < sb ? -1 : sa > sb ? 1 : 0;
         });
     }
 
@@ -55,13 +58,15 @@
         return fallback;
     }
 
+    const KNOWN_NEEDS = new Set(['hunger', 'energy', 'happiness', 'cleanliness', 'fun', 'hygiene']);
+
     function setNeed(pet, key, value) {
         if (!pet.needs || !isObject(pet.needs)) pet.needs = {};
         const clamped = clamp(Math.round(value), 0, 100);
         pet.needs[key] = clamped;
         if (key === 'fun') pet.happiness = clamped;
         else if (key === 'hygiene') pet.cleanliness = clamped;
-        else pet[key] = clamped;
+        else if (KNOWN_NEEDS.has(key)) pet[key] = clamped;
     }
 
     function computeMoodFromNeeds(pet) {
@@ -70,7 +75,7 @@
         const fun = getNeed(pet, 'fun', 50);
         const hygiene = getNeed(pet, 'hygiene', 50);
         const avg = (hunger + energy + fun + hygiene) / 4;
-        const anyCritical = hunger < 20 || energy < 20 || fun < 20 || hygiene < 20;
+        const anyCritical = hunger < 15 || energy < 15 || fun < 15 || hygiene < 15;
         if (avg >= 75 && !anyCritical) return 'happy';
         if (avg >= 55 && !anyCritical) return 'content';
         if (anyCritical || avg < 35) return 'sad';
@@ -98,7 +103,7 @@
         pet.schedule.currentActivity = (Autonomy && typeof Autonomy.normalizeActivity === 'function')
             ? Autonomy.normalizeActivity(pet.schedule.currentActivity || pet.currentActivity, nowMs)
             : (pet.schedule.currentActivity || pet.currentActivity || { type: 'idle', startedAtMs: nowMs, durationMs: FIXED_STEP_MS, endsAtMs: nowMs + FIXED_STEP_MS });
-        pet.currentActivity = Object.assign({}, pet.schedule.currentActivity);
+        pet.currentActivity = deepClone(pet.schedule.currentActivity);
         pet.mood = typeof pet.mood === 'string' ? pet.mood : computeMoodFromNeeds(pet);
         if (!Number.isFinite(Number(pet.lastAutonomyDecisionAt))) pet.lastAutonomyDecisionAt = 0;
         return pet;
@@ -261,14 +266,14 @@
 
     function applySocialEvents(household, socialEvents, dtMs, nowMs) {
         if (!Relationships) return { household, retentionBeats: [] };
-        const relationships = Object.assign({}, household.relationships || {});
+        const relationships = deepClone(isObject(household.relationships) ? household.relationships : {});
         const petsById = household.petsById || {};
         const seenPairs = new Set();
         const retentionBeats = [];
 
         socialEvents
             .slice()
-            .sort((a, b) => String(a.petId).localeCompare(String(b.petId)))
+            .sort((a, b) => { const sa = String(a.petId); const sb = String(b.petId); return sa < sb ? -1 : sa > sb ? 1 : 0; })
             .forEach((event) => {
                 if (!event || event.type !== 'socialize') return;
                 if (event.petId === event.targetPetId) return;
@@ -299,17 +304,23 @@
         const petIds = sortedPetIds(next.petsById);
         const socialEvents = [];
         const retentionBeats = [];
-        const snapshotPetsById = Object.assign({}, next.petsById);
+
+        // P3-20: Apply passive drift (with empty social events) before pet target selection
+        // so that pets use up-to-date relationship scores when choosing social targets.
+        const driftResult = applySocialEvents(next, [], dtMs, nowMs);
+        const nextWithDrift = driftResult && driftResult.household ? driftResult.household : next;
+
+        const snapshotPetsById = Object.assign({}, nextWithDrift.petsById);
         const tickContext = {
-            activePetId: next.activePetId,
+            activePetId: nextWithDrift.activePetId,
             petsById: snapshotPetsById,
-            relationships: next.relationships,
+            relationships: nextWithDrift.relationships,
             options: options || {}
         };
 
         petIds.forEach((petId) => {
-            const result = tickPet(next.petsById[petId], tickContext, dtMs, nowMs);
-            next.petsById[petId] = result.pet;
+            const result = tickPet(nextWithDrift.petsById[petId], tickContext, dtMs, nowMs);
+            nextWithDrift.petsById[petId] = result.pet;
             if (Array.isArray(result.events)) socialEvents.push.apply(socialEvents, result.events);
         });
 
@@ -327,14 +338,16 @@
             }
         });
 
-        const socialResult = applySocialEvents(next, socialEvents, dtMs, nowMs);
-        const withRelationships = socialResult && socialResult.household ? socialResult.household : next;
+        // Apply the actual social interaction events from this tick's pet activities.
+        const socialResult = applySocialEvents(nextWithDrift, socialEvents, dtMs, nowMs);
+        const withRelationships = socialResult && socialResult.household ? socialResult.household : nextWithDrift;
         if (socialResult && Array.isArray(socialResult.retentionBeats) && socialResult.retentionBeats.length) {
             retentionBeats.push.apply(retentionBeats, socialResult.retentionBeats);
         }
         withRelationships.lastSimulatedAt = Number.isFinite(nowMs) ? nowMs : withRelationships.lastSimulatedAt;
         withRelationships.simVersion = SIM_VERSION;
-        return { household: withRelationships, meta: { socialEventCount: socialEvents.length, retentionBeats } };
+        const socialOnlyCount = socialEvents.filter(function(e) { return e && e.type === 'socialize'; }).length;
+        return { household: withRelationships, meta: { socialEventCount: socialOnlyCount, retentionBeats } };
     }
 
     function tickHousehold(stateOrHousehold, dtMs, nowMs, options) {
@@ -387,7 +400,8 @@
         }
         withRelationships.lastSimulatedAt = Number.isFinite(nowMs) ? nowMs : withRelationships.lastSimulatedAt;
         withRelationships.simVersion = SIM_VERSION;
-        return { household: withRelationships, meta: { socialEventCount: socialEvents.length, retentionBeats } };
+        const socialOnlyCount = socialEvents.filter(function(e) { return e && e.type === 'socialize'; }).length;
+        return { household: withRelationships, meta: { socialEventCount: socialOnlyCount, retentionBeats } };
     }
 
     // P1-10: module-level set tracks in-progress simulations to prevent double-decay.

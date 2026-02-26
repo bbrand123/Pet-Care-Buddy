@@ -164,8 +164,9 @@
 
         plot.lastUpdatedAt = now;
 
+        const stageChanged = plot.stage !== previousStage;
         return {
-            stageChanged: plot.stage !== previousStage,
+            stageChanged,
             becameReady: plot.stage >= 3 && previousStage < 3,
             firstMature,
             ready: plot.stage >= 3,
@@ -354,6 +355,8 @@
             plotList.forEach((plot, index) => {
                 if (!plot || plot.stage >= 3) return;
                 if (!sprinklerCoversPlot(sprinkler, index)) return;
+                // Skip fruit trees in cooldown (stage 2 with nextHarvestAt in future) — watering has no effect
+                if (plot.type === 'fruittree' && plot.stage === 2 && Number.isFinite(plot.nextHarvestAt) && ts < plot.nextHarvestAt) return;
                 plot.wateredUntil = ts + waterDurationMs;
                 wateredPlots++;
             });

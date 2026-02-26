@@ -420,48 +420,66 @@
                     </div>
                 `;
 
-                const closeBtn = overlay.querySelector('#economy-close-btn');
-                if (closeBtn) closeBtn.addEventListener('click', closeEconomyModal);
-                const refreshBtn = overlay.querySelector('#economy-refresh-btn');
-                if (refreshBtn) refreshBtn.addEventListener('click', renderEconomyModal);
+            }
 
-                const mysteryBtn = overlay.querySelector('#buy-mystery-egg-btn');
-                if (mysteryBtn) {
-                    mysteryBtn.addEventListener('click', () => {
-                        if (typeof openMysteryEgg !== 'function') return;
-                        const result = openMysteryEgg();
-                        if (!result.ok) {
-                            showToast('Not enough coins for a mystery egg.', '#FFA726');
-                            return;
-                        }
-                        showToast(`🥚 Mystery Egg opened! ${result.reward.emoji} ${result.reward.label}`, '#FFD54F');
-                        renderEconomyModal();
-                    });
-                }
+            // P3-36: Use event delegation on the stable overlay container instead of
+            // per-element listeners that accumulate on each renderEconomyModal refresh.
+            if (!overlay._economyDelegateAttached) {
+                overlay._economyDelegateAttached = true;
 
-                overlay.querySelectorAll('[data-shop-buy]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
-                        if (typeof buyPetShopItem !== 'function') return;
-                        const [category, itemId] = String(btn.getAttribute('data-shop-buy') || '').split(':');
-                        const result = buyPetShopItem(category, itemId, 1);
-                        if (!result.ok) {
-                            showToast('Not enough coins for that purchase.', '#FFA726');
-                            return;
-                        }
-                        showToast(`🛍️ Purchased ${result.item.emoji} ${result.item.name}!`, '#66BB6A');
+                overlay.addEventListener('change', (e) => {
+                    const select = e.target;
+                    if (select && select.id === 'auction-slot-select') {
+                        if (typeof setAuctionSlot !== 'function') return;
+                        setAuctionSlot(select.value);
                         renderEconomyModal();
-                    });
+                    }
                 });
 
-                overlay.querySelectorAll('[data-shop-use]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                overlay.addEventListener('click', (e) => {
+                    const btn = e.target && e.target.closest('button, [data-shop-buy], [data-shop-use], [data-prestige-buy], [data-repair-item], [data-rare-buy], [data-craft-recipe], [data-sell-loot], [data-sell-loot-bulk], [data-auction-action], [data-auction-post]');
+                    if (!btn) return;
+
+                    if (btn.id === 'economy-close-btn') {
+                        closeEconomyModal();
+                        return;
+                    }
+                    if (btn.id === 'economy-refresh-btn') {
+                        renderEconomyModal();
+                        return;
+                    }
+                    if (btn.id === 'buy-mystery-egg-btn') {
+                        if (typeof openMysteryEgg !== 'function') return;
+                        const result = openMysteryEgg();
+                        if (!result.ok) { showToast('Not enough coins for a mystery egg.', '#FFA726'); return; }
+                        showToast(`🥚 Mystery Egg opened! ${result.reward.emoji} ${result.reward.label}`, '#FFD54F');
+                        renderEconomyModal();
+                        return;
+                    }
+                    if (btn.id === 'auction-claim-btn') {
+                        if (typeof claimAuctionEarnings !== 'function') return;
+                        const result = claimAuctionEarnings();
+                        if (!result.ok) { showToast('No auction earnings to claim yet.', '#90A4AE'); return; }
+                        showToast(`🏦 Claimed ${result.amount} coins from auction sales!`, '#FFD700');
+                        renderEconomyModal();
+                        return;
+                    }
+                    const shopBuy = btn.getAttribute('data-shop-buy');
+                    if (shopBuy) {
+                        if (typeof buyPetShopItem !== 'function') return;
+                        const [category, itemId] = shopBuy.split(':');
+                        const result = buyPetShopItem(category, itemId, 1);
+                        if (!result.ok) { showToast('Not enough coins for that purchase.', '#FFA726'); return; }
+                        showToast(`🛍️ Purchased ${result.item.emoji} ${result.item.name}!`, '#66BB6A');
+                        renderEconomyModal();
+                        return;
+                    }
+                    const shopUse = btn.getAttribute('data-shop-use');
+                    if (shopUse) {
                         if (typeof useOwnedEconomyItem !== 'function') return;
-                        const [category, itemId] = String(btn.getAttribute('data-shop-use') || '').split(':');
+                        const [category, itemId] = shopUse.split(':');
                         const result = useOwnedEconomyItem(category, itemId);
-                        if (!result.ok) {
-                            showToast('You do not own that item yet.', '#FFA726');
-                            return;
-                        }
+                        if (!result.ok) { showToast('You do not own that item yet.', '#FFA726'); return; }
                         showToast(`✅ Used ${result.def.emoji || '🎁'} ${result.def.name}!`, '#66BB6A');
                         if (typeof updateNeedDisplays === 'function') updateNeedDisplays();
                         if (typeof updatePetMood === 'function') updatePetMood();
@@ -471,15 +489,12 @@
                         } else {
                             renderEconomyModal();
                         }
-                    });
-                });
-
-                // Rec 6: Prestige shop buy handlers
-                overlay.querySelectorAll('[data-prestige-buy]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const prestigeBuy = btn.getAttribute('data-prestige-buy');
+                    if (prestigeBuy) {
                         if (typeof buyPrestigePurchase !== 'function') return;
-                        const purchaseId = btn.getAttribute('data-prestige-buy');
-                        const result = buyPrestigePurchase(purchaseId);
+                        const result = buyPrestigePurchase(prestigeBuy);
                         if (!result.ok) {
                             if (result.reason === 'already-owned') showToast('You already own this upgrade!', '#90A4AE');
                             else showToast('Not enough coins for this prestige purchase.', '#FFA726');
@@ -487,14 +502,12 @@
                         }
                         showToast(`🏆 Unlocked ${result.item.emoji} ${result.item.name}!`, '#FFD700');
                         renderEconomyModal();
-                    });
-                });
-
-                // Rec 5: Repair item handlers
-                overlay.querySelectorAll('[data-repair-item]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const repairItem_data = btn.getAttribute('data-repair-item');
+                    if (repairItem_data) {
                         if (typeof repairItem !== 'function') return;
-                        const [category, itemId] = String(btn.getAttribute('data-repair-item') || '').split(':');
+                        const [category, itemId] = repairItem_data.split(':');
                         const result = repairItem(category, itemId);
                         if (!result.ok) {
                             if (result.reason === 'insufficient-funds') showToast(`Not enough coins to repair (${result.needed}🪙 needed).`, '#FFA726');
@@ -503,130 +516,77 @@
                         }
                         showToast(`🔧 Repaired for ${result.cost}🪙! Durability: ${result.durability.current}/${result.durability.max}`, '#66BB6A');
                         renderEconomyModal();
-                    });
-                });
-
-                overlay.querySelectorAll('[data-rare-buy]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const rareBuy = btn.getAttribute('data-rare-buy');
+                    if (rareBuy) {
                         if (typeof buyRareMarketOffer !== 'function') return;
-                        const offerId = btn.getAttribute('data-rare-buy');
-                        const result = buyRareMarketOffer(offerId);
-                        if (!result.ok) {
-                            showToast('Could not complete rare market purchase.', '#FFA726');
-                            return;
-                        }
+                        const result = buyRareMarketOffer(rareBuy);
+                        if (!result.ok) { showToast('Could not complete rare market purchase.', '#FFA726'); return; }
                         showToast(`✨ Bought ${result.itemEmoji} ${result.itemLabel}!`, '#4ECDC4');
                         renderEconomyModal();
-                    });
-                });
-
-                overlay.querySelectorAll('[data-craft-recipe]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const craftRecipe_data = btn.getAttribute('data-craft-recipe');
+                    if (craftRecipe_data) {
                         if (typeof craftRecipe !== 'function') return;
-                        const recipeId = btn.getAttribute('data-craft-recipe');
-                        const result = craftRecipe(recipeId);
-                        if (!result.ok) {
-                            showToast('Missing ingredients or coins for crafting.', '#FFA726');
-                            return;
-                        }
+                        const result = craftRecipe(craftRecipe_data);
+                        if (!result.ok) { showToast('Missing ingredients or coins for crafting.', '#FFA726'); return; }
                         showToast(`🛠️ Crafted ${result.craftedEmoji} ${result.craftedLabel}!`, '#81C784');
                         renderEconomyModal();
-                    });
-                });
-
-                overlay.querySelectorAll('[data-sell-loot]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const sellLoot = btn.getAttribute('data-sell-loot');
+                    if (sellLoot) {
                         if (typeof sellExplorationLoot !== 'function') return;
-                        const lootId = btn.getAttribute('data-sell-loot');
-                        const result = sellExplorationLoot(lootId, 1);
-                        if (!result.ok) {
-                            showToast('Could not sell loot item.', '#FFA726');
-                            return;
-                        }
+                        const result = sellExplorationLoot(sellLoot, 1);
+                        if (!result.ok) { showToast('Could not sell loot item.', '#FFA726'); return; }
                         showToast(`💰 Sold ${result.loot.emoji} ${result.loot.name} for ${result.total} coins!`, '#FFD700');
                         renderEconomyModal();
-                    });
-                });
-
-                overlay.querySelectorAll('[data-sell-loot-bulk]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const sellLootBulk = btn.getAttribute('data-sell-loot-bulk');
+                    if (sellLootBulk) {
                         if (typeof sellExplorationLoot !== 'function') return;
-                        const lootId = btn.getAttribute('data-sell-loot-bulk');
-                        const owned = (snapshot.loot && snapshot.loot[lootId]) || 0;
+                        const currentSnapshot = (typeof getOwnedEconomySnapshot === 'function') ? getOwnedEconomySnapshot() : { loot: {} };
+                        const owned = (currentSnapshot.loot && currentSnapshot.loot[sellLootBulk]) || 0;
                         if (owned <= 0) return;
-                        const result = sellExplorationLoot(lootId, owned);
-                        if (!result.ok) {
-                            showToast('Could not sell all loot for this item.', '#FFA726');
-                            return;
-                        }
+                        const result = sellExplorationLoot(sellLootBulk, owned);
+                        if (!result.ok) { showToast('Could not sell all loot for this item.', '#FFA726'); return; }
                         showToast(`💰 Sold ${result.quantity}x ${result.loot.emoji} ${result.loot.name} for ${result.total} coins!`, '#FFD700');
                         renderEconomyModal();
-                    });
-                });
-
-                const auctionSlotSelect = overlay.querySelector('#auction-slot-select');
-                if (auctionSlotSelect) {
-                    auctionSlotSelect.addEventListener('change', () => {
-                        if (typeof setAuctionSlot !== 'function') return;
-                        setAuctionSlot(auctionSlotSelect.value);
-                        renderEconomyModal();
-                    });
-                }
-
-                const claimBtn = overlay.querySelector('#auction-claim-btn');
-                if (claimBtn) {
-                    claimBtn.addEventListener('click', () => {
-                        if (typeof claimAuctionEarnings !== 'function') return;
-                        const result = claimAuctionEarnings();
-                        if (!result.ok) {
-                            showToast('No auction earnings to claim yet.', '#90A4AE');
-                            return;
-                        }
-                        showToast(`🏦 Claimed ${result.amount} coins from auction sales!`, '#FFD700');
-                        renderEconomyModal();
-                    });
-                }
-
-                overlay.querySelectorAll('[data-auction-action]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
-                        const [action, listingId] = String(btn.getAttribute('data-auction-action') || '').split(':');
+                        return;
+                    }
+                    const auctionAction = btn.getAttribute('data-auction-action');
+                    if (auctionAction) {
+                        const [action, listingId] = auctionAction.split(':');
                         if (action === 'buy' && typeof buyAuctionListing === 'function') {
                             const result = buyAuctionListing(listingId);
                             if (!result.ok) {
-                                const reasonMap = {
-                                    'own-listing': 'You cannot buy your own listing.',
-                                    'insufficient-funds': 'Not enough coins.',
-                                    'listing-not-found': 'Listing is no longer available.'
-                                };
+                                const reasonMap = { 'own-listing': 'You cannot buy your own listing.', 'insufficient-funds': 'Not enough coins.', 'listing-not-found': 'Listing is no longer available.' };
                                 showToast(reasonMap[result.reason] || 'Could not buy listing.', '#FFA726');
                                 return;
                             }
                             showToast(`🛒 Bought ${result.listing.emoji} ${result.listing.name}!`, '#4ECDC4');
                         } else if (action === 'cancel' && typeof cancelAuctionListing === 'function') {
                             const result = cancelAuctionListing(listingId);
-                            if (!result.ok) {
-                                showToast('Could not cancel listing.', '#FFA726');
-                                return;
-                            }
+                            if (!result.ok) { showToast('Could not cancel listing.', '#FFA726'); return; }
                             showToast(`↩️ Cancelled listing for ${result.listing.emoji} ${result.listing.name}.`, '#90A4AE');
                         }
                         renderEconomyModal();
-                    });
-                });
-
-                overlay.querySelectorAll('[data-auction-post]').forEach((btn) => {
-                    btn.addEventListener('click', () => {
+                        return;
+                    }
+                    const auctionPost = btn.getAttribute('data-auction-post');
+                    if (auctionPost) {
                         if (typeof createAuctionListing !== 'function') return;
-                        const [type, id, suggestedPrice] = String(btn.getAttribute('data-auction-post') || '').split(':');
+                        const [type, id, suggestedPrice] = auctionPost.split(':');
                         const price = Math.max(1, parseInt(suggestedPrice, 10) || 1);
                         const result = createAuctionListing(type, id, 1, price);
-                        if (!result.ok) {
-                            showToast('Could not create auction listing.', '#FFA726');
-                            return;
-                        }
+                        if (!result.ok) { showToast('Could not create auction listing.', '#FFA726'); return; }
                         showToast(`📌 Listed ${result.listing.emoji} ${result.listing.name} for ${price} coins.`, '#81C784');
                         renderEconomyModal();
-                    });
+                        return;
+                    }
                 });
             }
 

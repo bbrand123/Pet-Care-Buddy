@@ -1355,6 +1355,20 @@
                 // Sync active pet to pets array before saving
                 syncActivePetToArray();
                 if (gameState.phase === 'pet') {
+                    // Push the active pet's current legacy stats into the household record BEFORE
+                    // the sim runs with preferHousehold:true, otherwise mergeLegacyIntoCanonical-
+                    // HouseholdPet discards them and syncHouseholdToLegacy overwrites gameState.pet
+                    // with stale household values — causing visible stat drops on save/refresh.
+                    if (gameState.household && gameState.household.petsById && gameState.pet && gameState.pet.id != null) {
+                        const _activePetId = String(gameState.pet.id);
+                        const _householdRecord = gameState.household.petsById[_activePetId];
+                        if (_householdRecord && _householdRecord.needs) {
+                            if (Number.isFinite(gameState.pet.hunger)) _householdRecord.needs.hunger = gameState.pet.hunger;
+                            if (Number.isFinite(gameState.pet.energy)) _householdRecord.needs.energy = gameState.pet.energy;
+                            if (Number.isFinite(gameState.pet.happiness)) _householdRecord.needs.fun = gameState.pet.happiness;
+                            if (Number.isFinite(gameState.pet.cleanliness)) _householdRecord.needs.hygiene = gameState.pet.cleanliness;
+                        }
+                    }
                     simulateHouseholdToNowForRuntime(gameState, nowMs, {
                         syncOptions: {
                             preferHousehold: true
@@ -1454,6 +1468,7 @@
             }, 1500);
         }
 
+	        let _loadError = null;
 	        function loadGame() {
 	            let _needsSaveAfterLoad = false;
 	            try {
@@ -1858,8 +1873,7 @@
             return null;
         }
 
-        let _loadError = null;
-	        function showSaveRecoveryDialog() {
+        function showSaveRecoveryDialog() {
 	            if (!_loadError) return;
 	            const recoveryError = _loadError;
 	            _loadError = null;
@@ -1934,7 +1948,7 @@
                         isValidPetType(pet.type));
                 }
                 if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-                if (!['egg', 'hatching', 'pet'].includes(data.phase)) return false;
+                if (!['egg', 'pet'].includes(data.phase)) return false;
                 if (data.phase === 'pet') {
                     const hasValidPetObject = hasValidCorePet(data.pet);
                     const hasValidPetArray = Array.isArray(data.pets) && data.pets.some((p) => hasValidCorePet(p));
@@ -2410,6 +2424,7 @@
         // ==================== INITIALIZATION ====================
 
         function init() {
+            let _hadOfflineChangesOnLoadFlag = false;
             // Initialize dark mode from saved preference
             try {
                 const savedTheme = (_mlfPlatformAdapters && _mlfPlatformAdapters.storage)
@@ -2647,17 +2662,16 @@
                     }
                     delete gameState._offlineChanges;
                     saveGame();
-                    gameState._hadOfflineChangesOnLoad = hadOfflineChanges;
+                    _hadOfflineChangesOnLoadFlag = hadOfflineChanges;
                 } else {
-                    gameState._hadOfflineChangesOnLoad = false;
+                    _hadOfflineChangesOnLoadFlag = false;
                 }
                 // Show streak notification if bonus available (only if no welcome-back modal shown)
-                if (gameState.streak && gameState.streak.current > 0 && !gameState.streak.todayBonusClaimed && !gameState._hadOfflineChangesOnLoad) {
+                if (gameState.streak && gameState.streak.current > 0 && !gameState.streak.todayBonusClaimed && !_hadOfflineChangesOnLoadFlag) {
                     setTimeout(() => {
                         showToast(`🔥 ${gameState.streak.current}-day streak! Tap Rewards to claim bonus!`, '#FF6D00');
                     }, (asyncReadiness && asyncReadiness.top) ? 2100 : 1500);
                 }
-                delete gameState._hadOfflineChangesOnLoad;
                 checkReminderSignals();
             } else {
                 // Reset to egg phase if not in pet phase

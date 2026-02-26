@@ -252,6 +252,9 @@
                 </div>
             `;
             document.body.appendChild(overlay);
+            // P3-57: Initialize runtime tracking so listeners are tracked for cleanup
+            initMiniGameRuntimeTracking(tournamentState, { overlaySelector: '.tournament-game-overlay' });
+            trackMiniGameOverlay(tournamentState, overlay);
             // P2-49: Guard against double popModalEscape across multiple exit paths
             let _tournamentEscapePopped = false;
             function safeTournamentPopEscape() {
@@ -261,15 +264,16 @@
                     popModalEscape(tournamentState._escapeHandler);
                 }
             }
-            overlay.querySelector('#tour-next').addEventListener('click', resolveTournamentRound);
-            overlay.querySelector('#tour-done').addEventListener('click', () => {
+            // P3-57: Use bindMiniGameEvent so listeners are tracked and removed on teardown
+            bindMiniGameEvent(tournamentState, overlay.querySelector('#tour-next'), 'click', resolveTournamentRound);
+            bindMiniGameEvent(tournamentState, overlay.querySelector('#tour-done'), 'click', () => {
                 safeTournamentPopEscape();
                 const root = document.querySelector('.tournament-game-overlay');
                 if (root) { root.innerHTML = ''; root.remove(); }
                 tournamentState = null;
                 restorePostMiniGameState();
             });
-            overlay.addEventListener('click', (e) => {
+            bindMiniGameEvent(tournamentState, overlay, 'click', (e) => {
                 if (e.target === overlay) {
                     safeTournamentPopEscape();
                     const root = document.querySelector('.tournament-game-overlay');
@@ -285,11 +289,30 @@
                 tournamentState = null;
                 restorePostMiniGameState();
             }
-            pushModalEscape(tournamentEscapeHandler);
-            tournamentState._escapeHandler = tournamentEscapeHandler;
+            registerMiniGameEscapeHandler(tournamentState, tournamentEscapeHandler);
             trapFocus(overlay);
             overlay.querySelector('#tour-next').focus();
             updateTournamentUI();
+        }
+
+        function teardownTournamentGame() {
+            // P3-57: Ensure teardown is called on all exit paths via MiniGameRegistry
+            if (!tournamentState) {
+                dismissMiniGameExitDialog();
+                return false;
+            }
+            teardownMiniGameRuntime(tournamentState, { overlaySelector: '.tournament-game-overlay' });
+            tournamentState = null;
+            return true;
+        }
+
+        if (typeof MiniGameRegistry !== 'undefined' && MiniGameRegistry && typeof MiniGameRegistry.registerLifecycle === 'function') {
+            MiniGameRegistry.registerLifecycle('tournament', {
+                start: startTournamentGame,
+                teardown: teardownTournamentGame,
+                getState: () => tournamentState,
+                overlaySelector: '.tournament-game-overlay'
+            });
         }
 
         function updateTournamentUI() {

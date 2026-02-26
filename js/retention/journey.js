@@ -429,9 +429,7 @@
         } else {
             if (!gs.streak || gs.streak.todayBonusClaimed) return { ok: false, reason: 'already-claimed' };
             gs.streak.todayBonusClaimed = true;
-            if (typeof root.saveGame === 'function') {
-                try { root.saveGame({ silentIndicator: true, source: 'retention-streak' }); } catch (_) {}
-            }
+            // P3-58: Removed redundant saveGame here; incrementChapterProgress below already saves.
             result = { bonus: { label: 'Daily streak' }, milestones: [], streakDripCoins: 0 };
         }
         const journeyState = ensureJourneyState(gs);
@@ -444,11 +442,12 @@
         if (typeof root.recordSeasonalJourneyActivity === 'function') {
             try { root.recordSeasonalJourneyActivity('streak', 1); } catch (_) {}
         }
-        incrementChapterProgress(playerId || getPlayerId(gs), 'streakClaims', 1);
+        // P3-58: Capture return value to reuse in telemetry instead of calling getCurrentChapter again.
+        const updatedChapter = incrementChapterProgress(playerId || getPlayerId(gs), 'streakClaims', 1);
         if (Telemetry && typeof Telemetry.emit === 'function') {
             Telemetry.emit('streak_claim', {
                 day: clampInt(gs.streak && gs.streak.current, 0),
-                chapterId: (getCurrentChapter(playerId) || {}).chapterId || ''
+                chapterId: (updatedChapter || {}).chapterId || ''
             });
         }
         return Object.assign({ ok: true }, result);

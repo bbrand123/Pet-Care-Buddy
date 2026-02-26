@@ -103,7 +103,7 @@
         const owned = new Set((state && state[map.key]) || []);
         const unowned = catalog.filter((item) => !owned.has(item.id));
         const pool = unowned.length ? unowned : catalog;
-        const seed = `${kind}:${Date.now()}:${(state && state[map.key] && state[map.key].length) || 0}`;
+        const seed = `${kind}:${(state && state[map.key] && state[map.key].length) || 0}`;
         return pool[hashString(seed) % pool.length] || pool[0] || null;
     }
 

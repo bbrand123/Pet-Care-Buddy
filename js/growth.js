@@ -159,7 +159,7 @@
                 // Announce growth stage transition (Item 25)
                 const petName = getPetDisplayName(pet);
                 const stageLabel = GROWTH_STAGES[currentStage]?.label || currentStage;
-                announce(`${petName} has grown to the ${stageLabel} stage!`, true);
+                announce(`${petName} has reached the ${stageLabel} stage!`, true);
 
                 // Update adults raised counter
                 if (currentStage === 'adult') {

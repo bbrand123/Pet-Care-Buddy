@@ -142,7 +142,8 @@
     }
 
     function pickDeterministic(arr, seed, count) {
-        const source = Array.isArray(arr) ? arr.slice() : [];
+        // P3-59: Deduplicate source array before picking to avoid selecting duplicate entries
+        const source = Array.isArray(arr) ? [...new Set(arr)] : [];
         const out = [];
         let h = hashString(seed);
         while (source.length > 0 && out.length < count) {
@@ -316,7 +317,8 @@
             incrementSeasonalObjectiveProgress(objective.id, amount || 1);
             changed = true;
         });
-        return changed ? getCurrentSeasonalJourney() : getCurrentSeasonalJourney();
+        // P3-60: Both branches returned the same value; simplified to a single call.
+        return getCurrentSeasonalJourney();
     }
 
     function getActiveLimitedRewards(weekKey) {

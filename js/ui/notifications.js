@@ -11,7 +11,6 @@
         // Notification history (keeps last 20 for review)
         const MAX_NOTIFICATION_HISTORY = 20;
         let _notificationHistory = [];
-        const _toastDecodeEl = document.createElement('textarea');
         const _uiNotificationsPlatform = (typeof MLFPlatformAdapters !== 'undefined' && MLFPlatformAdapters && typeof MLFPlatformAdapters.createDefaultAdapters === 'function')
             ? MLFPlatformAdapters.createDefaultAdapters({
                 root: (typeof window !== 'undefined') ? window : globalThis,
@@ -21,9 +20,15 @@
             })
             : null;
 
-        function decodeEntities(text) {
-            _toastDecodeEl.innerHTML = text;
-            return _toastDecodeEl.value;
+        function decodeEntities(str) {
+            if (typeof str !== 'string') return str;
+            return str
+                .replace(/&amp;/g, '&')
+                .replace(/&lt;/g, '<')
+                .replace(/&gt;/g, '>')
+                .replace(/&quot;/g, '"')
+                .replace(/&#039;/g, "'")
+                .replace(/&apos;/g, "'");
         }
 
         function sanitizeToastText(message) {
@@ -140,7 +145,7 @@
                 removeElementWithOptionalTransition(overlay, 'overlay', () => {
                     emitUiHook('overlay:closed', { element: overlay, source: 'notifications.showToolsMenu', overlayType: 'tools-menu' });
                 });
-                if (triggerEl && typeof triggerEl.focus === 'function') triggerEl.focus();
+                if (triggerEl && triggerEl.isConnected && typeof triggerEl.focus === 'function') triggerEl.focus();
             }
 
             overlay.querySelectorAll('.tools-menu-btn').forEach((btn) => {
@@ -819,3 +824,12 @@
             if (_rewardCardTimer) clearTimeout(_rewardCardTimer);
             _rewardCardTimer = setTimeout(dismissRewardCard, 3500);
         }
+
+        // P3-34: Clear pending toast timers when page is hidden to prevent burst on resume
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                if (_careToastTimer) { clearTimeout(_careToastTimer); _careToastTimer = null; }
+                if (_toastQueueTimer) { clearTimeout(_toastQueueTimer); _toastQueueTimer = null; }
+                if (_deferredToastTimer) { clearTimeout(_deferredToastTimer); _deferredToastTimer = null; }
+            }
+        });

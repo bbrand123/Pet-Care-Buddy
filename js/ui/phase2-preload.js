@@ -189,7 +189,7 @@
                     pendingSplashDismissArgs = null;
                     splashDismissForceTimer = null;
                     originalDismiss(args || {});
-                }, 1800);
+                }, 5000); // P3-40: increased from 1800ms to 5000ms for slow mobile connections
             }
         };
 

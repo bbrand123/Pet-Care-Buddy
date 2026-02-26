@@ -315,7 +315,7 @@
                         updateDayNightDisplay();
 
                         // Announce time-of-day changes (Item 24)
-                        if (_lastAnnouncedTimeOfDay && gameState.timeOfDay !== _lastAnnouncedTimeOfDay) {
+                        if (_lastAnnouncedTimeOfDay !== null && gameState.timeOfDay !== _lastAnnouncedTimeOfDay) {
                             const timeLabels = { day: 'Daytime', sunset: 'Evening', night: 'Nighttime', sunrise: 'Sunrise' };
                             announce(`Time changed to ${timeLabels[gameState.timeOfDay] || gameState.timeOfDay}.`);
                         }
@@ -323,7 +323,9 @@
 
                         // Morning energy boost when transitioning to sunrise
                         if (newTimeOfDay === 'sunrise' && previousTime === 'night') {
-                            pet.energy = clamp(pet.energy + 15, 0, 100);
+                            const _morningBaseBoost = 15;
+                            const _morningBoost = pet.isElder ? Math.floor(_morningBaseBoost * 0.7) : _morningBaseBoost;
+                            pet.energy = clamp(pet.energy + _morningBoost, 0, 100);
                             const morningPetName = getPetDisplayName(pet);
                             announce(`Good morning! ${morningPetName} wakes up feeling refreshed!`);
                         }
