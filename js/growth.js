@@ -169,6 +169,40 @@
                 const stageLabel = GROWTH_STAGES[currentStage]?.label || currentStage;
                 announce(`${petName} has reached the ${stageLabel} stage!`, true);
 
+                // R2: Grant a free starter egg on the baby→child transition (first pet only)
+                if (currentStage === 'child' && getPetCount() === 1 && !gameState.starterEggGranted) {
+                    gameState.starterEggGranted = true;
+                    // Build a fully-incubated mystery egg for the player to hatch
+                    try {
+                        if (!Array.isArray(gameState.hatchedBreedingEggs)) gameState.hatchedBreedingEggs = [];
+                        const _starterTypes = typeof getUnlockedPetTypes === 'function' ? getUnlockedPetTypes() : Object.keys(PET_TYPES || {});
+                        const _starterType = _starterTypes[Math.floor(Math.random() * _starterTypes.length)] || 'furry';
+                        const _starterTypeData = (typeof getAllPetTypeData === 'function') ? getAllPetTypeData(_starterType) : (PET_TYPES || {})[_starterType];
+                        const _starterColor = (_starterTypeData && Array.isArray(_starterTypeData.colors))
+                            ? _starterTypeData.colors[Math.floor(Math.random() * _starterTypeData.colors.length)]
+                            : '#F8BBD0';
+                        const incBase = (typeof BREEDING_CONFIG !== 'undefined' && BREEDING_CONFIG.incubationBaseTicks) || 20;
+                        gameState.hatchedBreedingEggs.push({
+                            offspringType: _starterType,
+                            incubationTicks: incBase,
+                            incubationTarget: incBase,
+                            parent1Name: 'Mysterious Visitor',
+                            parent2Name: '?',
+                            color: _starterColor,
+                            pattern: 'none',
+                            genetics: {},
+                            roomBonuses: {},
+                            careBonuses: 0,
+                            hasMutation: false,
+                            isHybrid: false,
+                            isStarterEgg: true
+                        });
+                        if (typeof showToast === 'function') {
+                            setTimeout(() => showToast('\uD83E\uDD5A A mysterious egg appeared \u2014 your pet might enjoy the company!', '#CE93D8'), 2500);
+                        }
+                    } catch (_e) { /* never block growth */ }
+                }
+
                 // Update adults raised counter
                 if (currentStage === 'adult') {
                     gameState.adultsRaised = (gameState.adultsRaised || 0) + 1;

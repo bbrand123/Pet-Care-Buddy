@@ -422,11 +422,14 @@
                         const petName = getPetDisplayName(pet);
 
                         if (careQualityChange.improved) {
+                            // R8: Enhanced tier-rise celebration toast with heart rating
+                            const _r8TierNum = { poor: 1, average: 2, good: 3, excellent: 4 }[careQualityChange.to] || 2;
+                            const _r8Hearts = '\u2665'.repeat(_r8TierNum) + '\u2661'.repeat(4 - _r8TierNum);
                             // Combine quality + evolution into a single toast when applicable
                             if (careQualityChange.to === 'excellent' && pet.growthStage === 'adult') {
-                                showToast(`${toData.emoji} Care quality: Excellent! Your pet can now evolve!`, '#FFD700');
+                                showToast(`${toData.emoji} Tier up! ${toData.label} ${_r8Hearts} — ${petName} can now evolve!`, '#FFD700');
                             } else {
-                                showToast(`${toData.emoji} Care quality improved to ${toData.label}!`, '#66BB6A');
+                                showToast(`${toData.emoji} Tier up! Care quality: ${toData.label} ${_r8Hearts}`, '#66BB6A');
                             }
                         } else {
                             showToast(`${toData.emoji} Care quality changed to ${toData.label}`, '#FFB74D');

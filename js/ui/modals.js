@@ -2710,11 +2710,16 @@
                     `
                     : '';
                 const seasonalJourney = status.seasonalJourney || (typeof getCurrentSeasonalJourney === 'function' ? getCurrentSeasonalJourney() : null);
+                // R7: Calculate days until chapter expires
+                const _r7SjDaysLeft = (seasonalJourney && seasonalJourney.endsOn)
+                    ? Math.max(0, Math.ceil((new Date(seasonalJourney.endsOn + 'T23:59:59').getTime() - Date.now()) / 86400000))
+                    : null;
+                const _r7SjEndsStr = _r7SjDaysLeft != null ? ` \u00b7 Ends in ${_r7SjDaysLeft} day${_r7SjDaysLeft !== 1 ? 's' : ''}` : '';
                 const seasonalJourneyHTML = seasonalJourney
                     ? `
                         <div class="journey-emotional-prompt" role="group" aria-label="Seasonal journey">
                             <p><strong>${escapeHTML((seasonalJourney.icon || '✨') + ' ' + (seasonalJourney.title || 'Seasonal Journey'))}</strong></p>
-                            <p>Week ${escapeHTML(seasonalJourney.weekKey || '')} · ${Math.floor(seasonalJourney.completedObjectives || 0)}/${Math.floor(seasonalJourney.totalObjectives || 0)} objectives</p>
+                            <p>Week ${escapeHTML(seasonalJourney.weekKey || '')} · ${Math.floor(seasonalJourney.completedObjectives || 0)}/${Math.floor(seasonalJourney.totalObjectives || 0)} objectives${_r7SjEndsStr}</p>
                             ${Array.isArray(seasonalJourney.rewardTrack) && seasonalJourney.rewardTrack.length ? `<p>Reward track: ${escapeHTML(seasonalJourney.rewardTrack.map((r) => r && r.label ? r.label : 'Reward').join(' · '))}</p>` : ''}
                         </div>
                     `

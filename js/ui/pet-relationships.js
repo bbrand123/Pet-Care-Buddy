@@ -172,15 +172,64 @@
             const petsById = _getHouseholdPets();
             const otherPetIds = Object.keys(petsById).filter(id => id !== activePetId);
 
-            if (otherPetIds.length === 0) {
-                if (typeof showToast === 'function') showToast('\u{1F43E} No other pets in household yet.', '#81C784', { duration: 2500 });
-                return;
-            }
-
             const activePet = petsById[activePetId] || (typeof gameState !== 'undefined' && gameState && gameState.pet) || {};
             const activePetName = _escapeRelHTML((activePet && activePet.name) || 'Your Pet');
             const activePetEmoji = _getPetEmoji(activePet);
             const Rel = _relModule();
+
+            // R2: When only 1 pet, show teaser card instead of toast
+            if (otherPetIds.length === 0) {
+                const hasPendingEgg = typeof gameState !== 'undefined' && gameState && Array.isArray(gameState.hatchedBreedingEggs) && gameState.hatchedBreedingEggs.length > 0;
+                const teaserCardHTML = `
+                    <div class="rel-solo-teaser" role="status">
+                        <div class="rel-solo-teaser-emoji" aria-hidden="true">🥚</div>
+                        <p class="rel-solo-teaser-text">Your pet is ready to make a friend. Hatch a second pet to unlock bonds!</p>
+                        ${hasPendingEgg
+                            ? `<button class="rel-solo-teaser-btn" id="rel-hatch-egg-btn" type="button">Hatch Your Egg</button>`
+                            : `<button class="rel-solo-teaser-btn" id="rel-get-egg-btn" type="button">Get an Egg</button>`}
+                    </div>`;
+                const overlay = document.createElement('div');
+                overlay.className = 'rel-panel-overlay';
+                overlay.setAttribute('role', 'dialog');
+                overlay.setAttribute('aria-modal', 'true');
+                overlay.setAttribute('aria-label', activePetName + '\'s Bonds');
+                overlay.innerHTML = `<div class="rel-panel">
+                    <div class="rel-panel-header">
+                        <span class="rel-panel-emoji" aria-hidden="true">${activePetEmoji}</span>
+                        <h2 class="rel-panel-title">${activePetName}'s Bonds</h2>
+                        <button class="rel-panel-close" type="button" id="rel-panel-close" aria-label="Close relationships">\u2715</button>
+                    </div>
+                    <div class="rel-panel-body">${teaserCardHTML}</div>
+                </div>`;
+                document.body.appendChild(overlay);
+                function closeSoloPanel() {
+                    if (typeof popModalEscape === 'function') popModalEscape(closeSoloPanel);
+                    if (typeof animateModalClose === 'function') animateModalClose(overlay, () => overlay.remove());
+                    else overlay.remove();
+                }
+                overlay.querySelector('#rel-panel-close').addEventListener('click', closeSoloPanel);
+                overlay.addEventListener('click', function(e) { if (e.target === overlay) closeSoloPanel(); });
+                if (typeof pushModalEscape === 'function') pushModalEscape(closeSoloPanel);
+                if (typeof trapFocus === 'function') trapFocus(overlay);
+                const hatchBtn = overlay.querySelector('#rel-hatch-egg-btn');
+                const getEggBtn = overlay.querySelector('#rel-get-egg-btn');
+                if (hatchBtn) {
+                    hatchBtn.addEventListener('click', function() {
+                        closeSoloPanel();
+                        if (typeof openBreedingUI === 'function') openBreedingUI();
+                        else if (typeof showToast === 'function') showToast('Go to the Breeding section to hatch your egg!', '#CE93D8');
+                    });
+                }
+                if (getEggBtn) {
+                    getEggBtn.addEventListener('click', function() {
+                        closeSoloPanel();
+                        if (typeof openShopModal === 'function') openShopModal('eggs');
+                        else if (typeof showToast === 'function') showToast('Visit the Shop to get an egg!', '#CE93D8');
+                    });
+                }
+                overlay.querySelector('#rel-panel-close').focus();
+                return;
+            }
 
             let cardsHTML = '';
             otherPetIds.forEach(otherId => {

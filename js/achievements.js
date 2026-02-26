@@ -1551,8 +1551,13 @@
             if (!streak.prestige || typeof streak.prestige !== 'object') {
                 streak.prestige = { cycleMonth: '', cycleBest: 0, lifetimeTier: 0, completedCycles: 0, claimedMonthlyReward: '' };
             }
+            // R1: Initialize streak freeze state with safe defaults (new/upgrading players get 1 free freeze)
+            if (!Number.isFinite(streak.freezes)) streak.freezes = 1;
+            if (!Number.isFinite(streak.lastPlayTimestamp)) streak.lastPlayTimestamp = 0;
+
             const today = getTodayString();
             const monthKey = getCurrentMonthKey();
+            const nowMs = Date.now();
 
             // Monthly prestige loop after day 30: reset cycle progress while preserving tier.
             if (streak.prestige.cycleMonth && streak.prestige.cycleMonth !== monthKey && (streak.current || 0) >= 30) {
@@ -1571,28 +1576,59 @@
                 return;
             }
 
-            // Check if last play was yesterday
-            const yesterday = new Date();
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+            // R1: Grant 1 streak freeze every Monday at login (cap at 2)
+            const _dayOfWeek = new Date().getDay(); // 0=Sun, 1=Mon
+            if (_dayOfWeek === 1 && streak.lastMondayFreezeGrant !== today) {
+                streak.lastMondayFreezeGrant = today;
+                if ((streak.freezes || 0) < 2) {
+                    streak.freezes = Math.min(2, (streak.freezes || 0) + 1);
+                }
+            }
 
-            if (streak.lastPlayDate === yesterdayStr) {
-                // Streak continues
-                streak.current++;
-            } else if (streak.lastPlayDate === null) {
+            // R1: Use 36-hour grace window instead of strict 24h date check
+            const GRACE_MS = 36 * 3600 * 1000;
+            const lastPlayMs = streak.lastPlayTimestamp || 0;
+            const msSinceLastPlay = lastPlayMs > 0 ? nowMs - lastPlayMs : Infinity;
+
+            if (!streak.lastPlayDate) {
                 // First time playing
                 streak.current = 1;
+            } else if (msSinceLastPlay <= GRACE_MS) {
+                // Within 36-hour grace window — streak continues
+                streak.current = Math.max(1, (streak.current || 0) + 1);
             } else {
-                // Streak broken
-                streak.current = 1;
+                // Missed the grace window — apply freeze or soft decay
+                if ((streak.freezes || 0) > 0) {
+                    streak.freezes = Math.max(0, streak.freezes - 1);
+                    streak.current = Math.max(1, (streak.current || 0) + 1);
+                    // Queue toast (shown after UI is ready in flushStreakToasts)
+                    streak._pendingFreezeToast = true;
+                } else {
+                    // No freeze available: halve streak and enter rebuild mode
+                    const prevBest = streak.current || 1;
+                    streak.streakBestBeforeBreak = Math.max(streak.streakBestBeforeBreak || 0, prevBest);
+                    streak.current = Math.max(1, Math.floor(prevBest / 2));
+                    streak.streakRebuildActive = true;
+                    streak._pendingRebuildToast = true;
+                }
             }
 
             streak.lastPlayDate = today;
+            streak.lastPlayTimestamp = nowMs;
             streak.todayBonusClaimed = false;
             if (streak.current > streak.longest) {
                 streak.longest = streak.current;
             }
             streak.prestige.cycleBest = Math.max(streak.prestige.cycleBest || 0, streak.current || 0);
+
+            // R1: Clear rebuild flag once player surpasses their previous best
+            if (streak.streakRebuildActive && streak.current > (streak.streakBestBeforeBreak || 0)) {
+                streak.streakRebuildActive = false;
+                delete streak.streakBestBeforeBreak;
+                if (typeof showToast === 'function') {
+                    setTimeout(() => showToast('\uD83D\uDD25 Streak fully restored! You made it back!', '#FFD700'), 1200);
+                }
+            }
 
             // R5: Push today's care quality score to rolling 7-day history and check weekly report
             if (!Array.isArray(gameState.careQualityHistory)) gameState.careQualityHistory = [];
@@ -1606,6 +1642,15 @@
             if (gameState.careQualityHistory.length > 7) gameState.careQualityHistory.shift();
             if (gameState.careQualityHistory.length === 7) {
                 const _weekAvg = gameState.careQualityHistory.reduce((s, v) => s + v, 0) / 7;
+                // R8: Compute actionable tip from lowest-scoring need area
+                const _lowNeeds = ['hunger', 'happiness', 'cleanliness', 'energy'];
+                const _pet = gameState.pet;
+                let _tipNeed = null;
+                if (_pet) {
+                    let _minVal = 101;
+                    _lowNeeds.forEach(n => { const v = Number(_pet[n] || 100); if (v < _minVal) { _minVal = v; _tipNeed = n; } });
+                }
+                const _tipText = _tipNeed ? ` Tip: focusing on ${_tipNeed} this week could push you to Excellent.` : '';
                 if (_weekAvg >= 80) {
                     if (typeof addGameplayModifier === 'function') addGameplayModifier('luckyPaws', 'Excellent Week');
                     if (typeof addCoins === 'function') addCoins(50, 'weeklyReport', true);
@@ -1613,10 +1658,64 @@
                     if (typeof addJournalEntry === 'function') addJournalEntry('\uD83D\uDCCA', 'Excellent care week! Lucky Paws activated.');
                 } else if (_weekAvg >= 60) {
                     if (typeof addGameplayModifier === 'function') addGameplayModifier('happyHour', 'Good Week');
-                    if (typeof showToast === 'function') showToast('\uD83D\uDE0A Good week! Happy Hour activated', '#81C784');
+                    if (typeof showToast === 'function') showToast('\uD83D\uDE0A Good week! Happy Hour activated.' + _tipText, '#81C784');
                     if (typeof addJournalEntry === 'function') addJournalEntry('\uD83D\uDCCA', 'Good care week! Happy Hour activated.');
                 } else {
-                    if (typeof showToast === 'function') showToast('\uD83D\uDCCB Tough week \u2014 keep at it!', '#90A4AE');
+                    if (typeof showToast === 'function') showToast('\uD83D\uDCCB Tough week \u2014 keep at it!' + _tipText, '#90A4AE');
+                }
+                // R6: Trigger weekly summary modal once per week
+                if (typeof showWeeklySummaryModal === 'function') {
+                    const _lastSummaryTs = Number(gameState._lastWeeklySummaryTs) || 0;
+                    if (Date.now() - _lastSummaryTs >= 7 * 86400000 || _lastSummaryTs === 0) {
+                        gameState._lastWeeklySummaryTs = Date.now();
+                        setTimeout(() => showWeeklySummaryModal(_weekAvg), 3000);
+                    }
+                }
+            }
+
+            // R6: Perfect Care Week — 5 consecutive "excellent" days (score ≥ 80) in history
+            if (gameState.careQualityHistory.length >= 5 && !gameState._perfectCareWeekGranted) {
+                const _recent5 = gameState.careQualityHistory.slice(-5);
+                const _allExcellent = _recent5.every(s => s >= 80);
+                if (_allExcellent) {
+                    gameState._perfectCareWeekGranted = true;
+                    // Grant 25 bonus coins (rate-limited) + glow animation + special toast
+                    if (typeof applyCoinGainRateLimits === 'function' && typeof addCoins === 'function') {
+                        const _pcBonus = applyCoinGainRateLimits(25, 'perfectCareWeek');
+                        if (_pcBonus > 0) addCoins(_pcBonus, 'Perfect Care Week', true);
+                    }
+                    if (typeof grantSticker === 'function') grantSticker('perfectCareSticker');
+                    if (typeof addJournalEntry === 'function') addJournalEntry('\uD83C\uDF1F', 'Perfect Care Week! Five consecutive excellent days.');
+                    // CSS glow animation on pet element (handled by flag, UI reads it)
+                    gameState._perfectCareWeekCelebrate = true;
+                    if (typeof showToast === 'function') {
+                        setTimeout(() => {
+                            showToast('\uD83C\uDF1F Perfect Care Week! Your pet is thriving \uD83C\uDF1F +25 coins', '#FFD700');
+                            // Schedule animation clear
+                            setTimeout(() => { if (gameState) delete gameState._perfectCareWeekCelebrate; }, 3000);
+                        }, 1200);
+                    }
+                }
+            } else if (!gameState.careQualityHistory.some(s => s < 80)) {
+                // Reset grant flag when history no longer has 5 consecutive excellent
+                delete gameState._perfectCareWeekGranted;
+            }
+        }
+
+        // R1: Flush pending streak toasts after UI is ready (called from core init)
+        function flushStreakToasts() {
+            const streak = gameState.streak;
+            if (!streak) return;
+            if (streak._pendingFreezeToast) {
+                delete streak._pendingFreezeToast;
+                if (typeof showToast === 'function') {
+                    showToast('\u2744\uFE0F Streak freeze used! Your streak is safe.', '#4FC3F7');
+                }
+            }
+            if (streak._pendingRebuildToast) {
+                delete streak._pendingRebuildToast;
+                if (typeof showToast === 'function') {
+                    showToast('\uD83D\uDCAA Comeback streak active \u2014 reach your previous best to restore.', '#FF8A65');
                 }
             }
         }
@@ -1644,12 +1743,23 @@
                 if (streak.current >= milestone.days && !streak.claimedMilestones.includes(milestone.days)) {
                     streak.claimedMilestones.push(milestone.days);
                     const bundle = milestone.bundleId ? applyRewardBundle(milestone.bundleId, `Streak ${milestone.days}`) : null;
+                    // R1: Grant freeze tokens from milestone rewards (cap at 2)
+                    if (milestone.freezeTokens && milestone.freezeTokens > 0) {
+                        if (!Number.isFinite(streak.freezes)) streak.freezes = 0;
+                        streak.freezes = Math.min(2, streak.freezes + milestone.freezeTokens);
+                    }
                     unclaimedMilestones.push({
                         ...milestone,
                         bundle
                     });
                     recordRewardRecapEvent('mid', `Streak milestone ${milestone.days}`, { days: milestone.days, bundleId: milestone.bundleId || null });
                     hitMilestoneToday = true;
+                    // R5: After Day 3 milestone, show notification opt-in if not yet requested
+                    if (milestone.days === 3 && !gameState.notificationPermissionRequested) {
+                        if (typeof showNotificationOptInModal === 'function') {
+                            setTimeout(showNotificationOptInModal, 2500);
+                        }
+                    }
                 }
             }
 

@@ -343,9 +343,74 @@
         }
 
         // ==================== FEATURE 13: LONG-ABSENCE DRAMATIC MOMENT ====================
+        // R4: Stasis mode for 7+ day absences (showed before full need reveal)
 
         const LONG_ABSENCE_THRESHOLD_HOURS = 24;
+        const STASIS_ABSENCE_THRESHOLD_HOURS = 168; // 7 days
         let _longAbsenceCutsceneDone = false;
+        let _stasisWakeDone = false;
+
+        function showStasisWakeSequence(pet, onComplete) {
+            if (_stasisWakeDone) { if (onComplete) onComplete(); return; }
+            _stasisWakeDone = true;
+
+            const petName = (pet && pet.name && pet.name.trim()) ? pet.name : 'Your pet';
+            const petEmoji = (function() {
+                if (typeof PET_TYPES !== 'undefined' && pet && pet.type && PET_TYPES[pet.type]) {
+                    return PET_TYPES[pet.type].emoji || '\uD83D\uDC3E';
+                }
+                return '\uD83D\uDC3E';
+            })();
+
+            // Phase 1: Stasis animation overlay on pet
+            const petEl = document.querySelector('.pet-sprite, .pet-container, .pet-emoji, #pet-display');
+            if (petEl && !_isReducedMotion()) {
+                petEl.classList.add('stasis-wake-glow');
+                setTimeout(() => petEl.classList.remove('stasis-wake-glow'), 2000);
+            }
+
+            // Phase 2: After 2s, show the welcome-back card requiring tap to dismiss
+            setTimeout(() => {
+                const overlay = document.createElement('div');
+                overlay.className = 'stasis-welcome-overlay';
+                overlay.setAttribute('role', 'dialog');
+                overlay.setAttribute('aria-modal', 'true');
+                overlay.setAttribute('aria-label', 'Welcome back');
+                overlay.setAttribute('tabindex', '-1');
+
+                overlay.innerHTML = `
+                    <div class="stasis-welcome-card">
+                        <div class="stasis-welcome-emoji" aria-hidden="true">\u2728 ${petEmoji} \u2728</div>
+                        <h2 class="stasis-welcome-title">Your pet was resting peacefully while you were away.</h2>
+                        <p class="stasis-welcome-body">${petName} is happy you're back!</p>
+                        <button class="stasis-welcome-btn" id="stasis-welcome-dismiss" type="button">Continue \u2192</button>
+                    </div>
+                `;
+                document.body.appendChild(overlay);
+
+                const _prevFocus = document.activeElement;
+                overlay.focus();
+                const dismiss = () => {
+                    if (typeof popModalEscape === 'function') popModalEscape(dismiss);
+                    if (typeof animateModalClose === 'function') animateModalClose(overlay, () => overlay.remove());
+                    else overlay.remove();
+                    if (_prevFocus && typeof _prevFocus.focus === 'function') _prevFocus.focus();
+                    if (onComplete) onComplete();
+                };
+                if (typeof pushModalEscape === 'function') pushModalEscape(dismiss);
+                if (typeof trapFocus === 'function') trapFocus(overlay);
+                overlay.querySelector('#stasis-welcome-dismiss').addEventListener('click', dismiss);
+                overlay.querySelector('#stasis-welcome-dismiss').focus();
+            }, _isReducedMotion() ? 0 : 2000);
+        }
+
+        function checkStasisModeOnLoad() {
+            if (typeof gameState === 'undefined' || !gameState || !gameState.pet) return false;
+            const lastUpdate = Number(gameState.lastUpdate) || 0;
+            if (!lastUpdate) return false;
+            const hoursAway = (Date.now() - lastUpdate) / 3600000;
+            return hoursAway >= STASIS_ABSENCE_THRESHOLD_HOURS;
+        }
 
         function showLongAbsenceCutscene(pet, onComplete) {
             if (_longAbsenceCutsceneDone) { if (onComplete) onComplete(); return; }
@@ -426,6 +491,109 @@
             if (!lastUpdate) return false;
             const hoursAway = (Date.now() - lastUpdate) / 3600000;
             return hoursAway >= LONG_ABSENCE_THRESHOLD_HOURS;
+        }
+
+        // ==================== R5: PUSH NOTIFICATION OPT-IN MODAL ====================
+
+        function showNotificationOptInModal() {
+            if (typeof gameState === 'undefined' || !gameState) return;
+            if (gameState.notificationPermissionRequested) return;
+            // Only show if notifications are supported
+            const hasNative = typeof MLFNativeNotifications !== 'undefined' && MLFNativeNotifications && typeof MLFNativeNotifications.requestPermission === 'function';
+            const hasWeb = typeof Notification !== 'undefined';
+            if (!hasNative && !hasWeb) return;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'notif-optin-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', 'Enable streak reminders');
+            overlay.setAttribute('tabindex', '-1');
+            overlay.innerHTML = `
+                <div class="notif-optin-card">
+                    <h2 class="notif-optin-title">\uD83D\uDD14 Never miss a streak day</h2>
+                    <p class="notif-optin-body">Let your pet remind you to visit. Choose how often:</p>
+                    <div class="notif-optin-actions">
+                        <button class="notif-optin-btn notif-gentle" id="notif-gentle-btn" type="button">Gentle daily reminder</button>
+                        <button class="notif-optin-btn notif-risk" id="notif-risk-btn" type="button">Only when my streak is at risk</button>
+                        <button class="notif-optin-dismiss" id="notif-dismiss-btn" type="button">No thanks</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const _prevFocus = document.activeElement;
+            overlay.focus();
+            function dismiss() {
+                if (typeof popModalEscape === 'function') popModalEscape(dismiss);
+                if (typeof animateModalClose === 'function') animateModalClose(overlay, () => overlay.remove());
+                else overlay.remove();
+                if (_prevFocus && typeof _prevFocus.focus === 'function') _prevFocus.focus();
+            }
+            function requestWithFrequency(frequency) {
+                gameState.notificationPermissionRequested = true;
+                gameState.notificationFrequency = frequency;
+                if (typeof saveGame === 'function') saveGame();
+                const notifAPI = (typeof MLFNativeNotifications !== 'undefined') ? MLFNativeNotifications : null;
+                if (notifAPI && typeof notifAPI.requestPermission === 'function') {
+                    notifAPI.requestPermission().then(function(result) {
+                        if (result === 'granted' || result === 'authorized') {
+                            if (typeof showToast === 'function') showToast('\uD83D\uDD14 Reminders enabled!', '#81C784');
+                        }
+                    }).catch(function() {});
+                } else if (typeof Notification !== 'undefined' && typeof Notification.requestPermission === 'function') {
+                    Notification.requestPermission().catch(function() {});
+                }
+                dismiss();
+            }
+            if (typeof pushModalEscape === 'function') pushModalEscape(dismiss);
+            if (typeof trapFocus === 'function') trapFocus(overlay);
+            overlay.querySelector('#notif-gentle-btn').addEventListener('click', () => requestWithFrequency('daily'));
+            overlay.querySelector('#notif-risk-btn').addEventListener('click', () => requestWithFrequency('risk'));
+            overlay.querySelector('#notif-dismiss-btn').addEventListener('click', () => {
+                gameState.notificationPermissionRequested = true;
+                if (typeof saveGame === 'function') saveGame();
+                dismiss();
+            });
+            overlay.querySelector('#notif-gentle-btn').focus();
+        }
+
+        // R5: Inactivity banner for players with 2+ days away who haven't enabled notifications
+        function maybeShowNotificationInactivityBanner() {
+            if (typeof gameState === 'undefined' || !gameState) return;
+            if (gameState.notificationPermissionRequested) return;
+            const lastUpdate = Number(gameState.lastUpdate) || 0;
+            if (!lastUpdate) return;
+            const daysSincePlay = (Date.now() - lastUpdate) / 86400000;
+            if (daysSincePlay < 2) return;
+            // Show at most once per week
+            const lastBannerTs = Number(gameState._notifBannerLastShown) || 0;
+            if (Date.now() - lastBannerTs < 7 * 86400000) return;
+            gameState._notifBannerLastShown = Date.now();
+            if (typeof saveGame === 'function') saveGame();
+            // Show soft dismissible banner
+            if (typeof document === 'undefined') return;
+            const existing = document.getElementById('notif-inactivity-banner');
+            if (existing) return;
+            const banner = document.createElement('div');
+            banner.id = 'notif-inactivity-banner';
+            banner.className = 'notif-inactivity-banner';
+            banner.setAttribute('role', 'alert');
+            banner.innerHTML = `
+                <span>\uD83D\uDD14 Enable reminders to protect your streak?</span>
+                <button class="notif-banner-enable" id="notif-banner-enable" type="button">Enable</button>
+                <button class="notif-banner-dismiss" id="notif-banner-dismiss" type="button" aria-label="Dismiss">\u00D7</button>
+            `;
+            // Insert at top of game content or body
+            const target = document.getElementById('game-content') || document.body;
+            target.prepend(banner);
+            banner.querySelector('#notif-banner-enable').addEventListener('click', function() {
+                banner.remove();
+                showNotificationOptInModal();
+            });
+            banner.querySelector('#notif-banner-dismiss').addEventListener('click', function() {
+                banner.remove();
+            });
         }
 
         // ==================== FEATURE 14: MEMORIAL GARDEN VIEW ====================
@@ -819,6 +987,254 @@
             _arcUpdateEvents.forEach(ev => {
                 try { _featureUnsubs.push(EventBus.on(ev, () => _renderArcPill())); } catch (_) {}
             });
+        }
+
+        // ==================== R6: WEEKLY SUMMARY MODAL ====================
+
+        function showWeeklySummaryModal(weekAvg) {
+            if (typeof gameState === 'undefined' || !gameState) return;
+            const _pct = Math.round(Number(weekAvg) || 0);
+            const _tier = _pct >= 80 ? 'Excellent' : _pct >= 60 ? 'Good' : 'Tough';
+            const _tierEmoji = _pct >= 80 ? '\uD83C\uDF1F' : _pct >= 60 ? '\uD83D\uDE0A' : '\uD83D\uDCCB';
+            const _streak = (gameState.streak && gameState.streak.current) || 0;
+            const _coins = (gameState.economy && typeof gameState.economy.coins === 'number') ? gameState.economy.coins : (gameState.coins || 0);
+            // Build care quality emoji row
+            const _history = Array.isArray(gameState.careQualityHistory) ? gameState.careQualityHistory : [];
+            const _emojiRow = _history.map(s => s >= 80 ? '\uD83C\uDF1F' : s >= 60 ? '\uD83D\uDE0A' : '\uD83D\uDCCB').join(' ') || '\u2014';
+            // Relationship progress
+            const _pets = Array.isArray(gameState.pets) ? gameState.pets : (gameState.pet ? [gameState.pet] : []);
+            const _relNote = _pets.length > 1 ? `${_pets.length} pets in your household.` : 'Still a solo household \u2014 a friend egg awaits!';
+
+            const overlay = document.createElement('div');
+            overlay.className = 'weekly-summary-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', 'Weekly Summary');
+            overlay.setAttribute('tabindex', '-1');
+            overlay.innerHTML = `
+                <div class="weekly-summary-card">
+                    <h2 class="weekly-summary-title">\uD83D\uDCCA This Week</h2>
+                    <div class="weekly-summary-body">
+                        <div class="weekly-summary-row">
+                            <span class="weekly-summary-label">Care quality</span>
+                            <span class="weekly-summary-value">${_tierEmoji} ${_tier} (${_pct}%)</span>
+                        </div>
+                        <div class="weekly-summary-row">
+                            <span class="weekly-summary-label">Daily trend</span>
+                            <span class="weekly-summary-value">${_emojiRow}</span>
+                        </div>
+                        <div class="weekly-summary-row">
+                            <span class="weekly-summary-label">Streak</span>
+                            <span class="weekly-summary-value">\uD83D\uDD25 Day ${_streak}</span>
+                        </div>
+                        <div class="weekly-summary-row">
+                            <span class="weekly-summary-label">Coins earned</span>
+                            <span class="weekly-summary-value">\uD83E\uDE99 ${_coins} total</span>
+                        </div>
+                        <div class="weekly-summary-row">
+                            <span class="weekly-summary-label">Household</span>
+                            <span class="weekly-summary-value">${_relNote}</span>
+                        </div>
+                    </div>
+                    <button class="weekly-summary-close" id="weekly-summary-close" type="button">Keep going!</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            const _prevFocus = document.activeElement;
+            overlay.focus();
+            function close() {
+                if (typeof popModalEscape === 'function') popModalEscape(close);
+                if (typeof animateModalClose === 'function') animateModalClose(overlay, () => overlay.remove());
+                else overlay.remove();
+                if (_prevFocus && typeof _prevFocus.focus === 'function') _prevFocus.focus();
+            }
+            if (typeof pushModalEscape === 'function') pushModalEscape(close);
+            if (typeof trapFocus === 'function') trapFocus(overlay);
+            overlay.querySelector('#weekly-summary-close').addEventListener('click', close);
+            overlay.querySelector('#weekly-summary-close').focus();
+        }
+
+        // R6: "This Week" button accessor (called from journal/stats area)
+        function openWeeklySummary() {
+            if (typeof gameState === 'undefined' || !gameState) return;
+            const _weekAvg = Array.isArray(gameState.careQualityHistory) && gameState.careQualityHistory.length > 0
+                ? gameState.careQualityHistory.reduce((s, v) => s + v, 0) / gameState.careQualityHistory.length
+                : 0;
+            showWeeklySummaryModal(_weekAvg);
+        }
+
+        // ==================== R9: WHILE YOU WERE AWAY SURPRISE EVENTS ====================
+
+        const _R9_SURPRISE_COOLDOWN_MS = 8 * 60 * 60 * 1000; // 8 hours
+        const _R9_MIN_AGE_HOURS = 72; // Not for first 3 days
+        const _R9_TRIGGER_CHANCE = 0.20; // 20%
+
+        // Weighted event pool: relationship_moment(40), small_gift(30), rare_visitor(20), dream_sequence(10)
+        const _R9_EVENT_POOL = [
+            { type: 'relationship_moment', weight: 40 },
+            { type: 'small_gift', weight: 30 },
+            { type: 'rare_visitor', weight: 20 },
+            { type: 'dream_sequence', weight: 10 }
+        ];
+
+        function _r9PickWeightedEvent() {
+            const total = _R9_EVENT_POOL.reduce((s, e) => s + e.weight, 0);
+            let roll = Math.random() * total;
+            for (const entry of _R9_EVENT_POOL) {
+                roll -= entry.weight;
+                if (roll <= 0) return entry.type;
+            }
+            return _R9_EVENT_POOL[0].type;
+        }
+
+        function _r9BuildEventPayload(type, pet, pets) {
+            const petName = (typeof getPetDisplayName === 'function') ? getPetDisplayName(pet) : (pet && pet.name) || 'your pet';
+            switch (type) {
+                case 'relationship_moment': {
+                    const others = (pets || []).filter(p => p && p !== pet && p.id !== pet.id);
+                    if (!others.length) return _r9BuildEventPayload('small_gift', pet, pets); // Fallback
+                    const other = others[Math.floor(Math.random() * others.length)];
+                    const otherName = (typeof getPetDisplayName === 'function') ? getPetDisplayName(other) : (other && other.name) || 'a friend';
+                    return {
+                        type, icon: '\u{1F90D}',
+                        title: 'A Special Moment',
+                        body: `While you were away, ${petName} and ${otherName} spent some cozy time together. Their bond grew a little stronger!`,
+                        cta: 'Warm my heart!',
+                        applyFn: () => {
+                            if (typeof addRelationshipPoints === 'function') {
+                                try { addRelationshipPoints(pet.id, other.id, 8); } catch (_) {}
+                            }
+                        }
+                    };
+                }
+                case 'small_gift': {
+                    const giftCoins = 10 + Math.floor(Math.random() * 21); // 10-30
+                    return {
+                        type, icon: '\u{1F381}',
+                        title: 'A Little Gift',
+                        body: `A friendly visitor stopped by and left a small gift for ${petName}! You found ${giftCoins} coins.`,
+                        cta: 'Collect gift!',
+                        applyFn: () => {
+                            if (typeof applyCoinGainRateLimits === 'function' && typeof addCoins === 'function') {
+                                try {
+                                    const safe = applyCoinGainRateLimits(giftCoins, 'surpriseGift');
+                                    if (safe > 0) addCoins(safe, 'Surprise Gift', true);
+                                } catch (_) {}
+                            } else if (gameState && gameState.economy) {
+                                gameState.economy.coins = (gameState.economy.coins || 0) + giftCoins;
+                            }
+                        }
+                    };
+                }
+                case 'rare_visitor': {
+                    const bonusCoins = 20 + Math.floor(Math.random() * 16); // 20-35
+                    return {
+                        type, icon: '\u{1F984}',
+                        title: 'A Rare Visitor',
+                        body: `A mysterious creature stopped by to see ${petName} while you were away! It seemed impressed and left a little surprise — ${bonusCoins} coins and a mood boost!`,
+                        cta: 'Amazing!',
+                        applyFn: () => {
+                            if (typeof applyCoinGainRateLimits === 'function' && typeof addCoins === 'function') {
+                                try {
+                                    const safe = applyCoinGainRateLimits(bonusCoins, 'rareVisitor');
+                                    if (safe > 0) addCoins(safe, 'Rare Visitor', true);
+                                } catch (_) {}
+                            }
+                            if (pet) pet.happiness = Math.min(100, (pet.happiness || 50) + 10);
+                        }
+                    };
+                }
+                case 'dream_sequence': {
+                    const dreams = [
+                        `${petName} dreamed of a magical garden full of sparkling flowers.`,
+                        `${petName} had a dream about flying over a rainbow-colored meadow.`,
+                        `${petName} dreamed you were playing together on a warm sunny beach.`,
+                        `${petName} dreamed of discovering a hidden treasure chest!`
+                    ];
+                    const dreamText = dreams[Math.floor(Math.random() * dreams.length)];
+                    return {
+                        type, icon: '\u2728',
+                        title: 'Sweet Dreams',
+                        body: `${dreamText} ${petName} woke up feeling rested and happy!`,
+                        cta: 'Awww!',
+                        applyFn: () => {
+                            if (pet) {
+                                pet.happiness = Math.min(100, (pet.happiness || 50) + 8);
+                                pet.energy = Math.min(100, (pet.energy || 50) + 5);
+                            }
+                        }
+                    };
+                }
+                default:
+                    return null;
+            }
+        }
+
+        function showSurpriseEventModal(eventPayload) {
+            if (!eventPayload) return;
+            const existing = document.querySelector('.surprise-event-overlay');
+            if (existing) existing.remove();
+
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay surprise-event-overlay';
+            overlay.setAttribute('role', 'dialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-label', 'Surprise event');
+            overlay.innerHTML = `
+                <div class="modal-card surprise-event-card" style="max-width:340px;text-align:center;">
+                    <div style="font-size:3rem;margin-bottom:8px;" aria-hidden="true">${eventPayload.icon}</div>
+                    <h2 style="margin:0 0 10px;">${eventPayload.title}</h2>
+                    <p style="margin:0 0 18px;line-height:1.5;">${eventPayload.body}</p>
+                    <button id="surprise-event-cta" class="modal-btn confirm" style="width:100%;font-size:1rem;">${eventPayload.cta}</button>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+
+            function closeModal() {
+                if (typeof popModalEscape === 'function') popModalEscape(closeModal);
+                overlay.remove();
+                if (typeof saveGame === 'function') {
+                    try { saveGame({ silentIndicator: true, source: 'surprise-event' }); } catch (_) {}
+                }
+            }
+
+            const ctaBtn = overlay.querySelector('#surprise-event-cta');
+            if (ctaBtn) ctaBtn.addEventListener('click', () => {
+                try { if (typeof eventPayload.applyFn === 'function') eventPayload.applyFn(); } catch (_) {}
+                closeModal();
+            });
+
+            if (typeof pushModalEscape === 'function') pushModalEscape(closeModal);
+            if (typeof trapFocus === 'function') trapFocus(overlay);
+            if (ctaBtn) ctaBtn.focus();
+        }
+
+        function checkAndMaybeTriggerSurpriseEvent() {
+            try {
+                if (typeof gameState === 'undefined' || !gameState) return;
+                const pet = gameState.pet;
+                if (!pet) return;
+
+                // Not during first 3 days
+                const ageInHours = typeof getPetAge === 'function' ? getPetAge(pet) : 0;
+                if (ageInHours < _R9_MIN_AGE_HOURS) return;
+
+                // 8h cooldown
+                const lastTs = Number(gameState.lastSurpriseEventTs) || 0;
+                if (lastTs && (Date.now() - lastTs) < _R9_SURPRISE_COOLDOWN_MS) return;
+
+                // 20% chance
+                if (Math.random() > _R9_TRIGGER_CHANCE) return;
+
+                const pets = Array.isArray(gameState.pets) ? gameState.pets : [pet];
+                const eventType = _r9PickWeightedEvent();
+                const payload = _r9BuildEventPayload(eventType, pet, pets);
+                if (!payload) return;
+
+                gameState.lastSurpriseEventTs = Date.now();
+                showSurpriseEventModal(payload);
+            } catch (_) {}
         }
 
         function initAllFeatures() {

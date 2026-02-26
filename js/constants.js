@@ -3213,9 +3213,10 @@ const REWARD_BUNDLES = {
     streakDay14: { id: 'streakDay14', coins: 135, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'heartSticker' } },
     // R4: Streak gap days 15, 17, 25
     streakDay15: { id: 'streakDay15', coins: 155, modifierId: 'happyHour', collectible: { type: 'sticker', id: 'midnightSticker' } },
-    streakDay17: { id: 'streakDay17', coins: 165, modifierId: 'careRush' },
+    // R6: Updated day 17/25 bundles to match spec (goldSticker, diamondSticker, correct modifiers)
+    streakDay17: { id: 'streakDay17', coins: 155, modifierId: 'luckyPaws', collectible: { type: 'sticker', id: 'goldSticker' } },
     streakDay21: { id: 'streakDay21', coins: 185, modifierId: 'happyHour', collectible: { type: 'accessory', id: 'crown' } }, // Fix 14: 185 coins interpolated, happyHour modifier (consistent with Day 7/14)
-    streakDay25: { id: 'streakDay25', coins: 210, modifierId: 'luckyPaws', collectible: { type: 'sticker', id: 'moonSticker' } },
+    streakDay25: { id: 'streakDay25', coins: 200, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'diamondSticker' } },
     streakDay30: { id: 'streakDay30', coins: 240, modifierId: 'focusedTraining', collectible: { type: 'sticker', id: 'crownSticker' } },
     weeklyArcFinale: { id: 'weeklyArcFinale', coins: 320, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'legendRibbon' } },
     weeklyArcCare: { id: 'weeklyArcCare', coins: 300, modifierId: 'careRush', collectible: { type: 'sticker', id: 'legendRibbon' } },
@@ -3479,7 +3480,13 @@ const STICKERS = {
     moonCrest: { id: 'moonCrest', name: 'Moon Crest', emoji: '🌙', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
     sunCrest: { id: 'sunCrest', name: 'Sun Crest', emoji: '☀️', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
     tideCrest: { id: 'tideCrest', name: 'Tide Crest', emoji: '🌊', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
-    bloomCrest: { id: 'bloomCrest', name: 'Bloom Crest', emoji: '🌸', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' }
+    bloomCrest: { id: 'bloomCrest', name: 'Bloom Crest', emoji: '🌸', category: 'special', rarity: 'legendary', source: 'Streak prestige reward rotation' },
+    // R6: New milestone stickers for days 17 and 25 gaps
+    midnightSticker: { id: 'midnightSticker', name: 'Midnight Star', emoji: '🌙', category: 'special', rarity: 'rare', source: 'Day 15 streak milestone' },
+    moonSticker: { id: 'moonSticker', name: 'Crescent Moon', emoji: '🌛', category: 'special', rarity: 'rare', source: 'Day 25 streak milestone' },
+    goldSticker: { id: 'goldSticker', name: 'Gold Medal', emoji: '🥇', category: 'special', rarity: 'rare', source: 'Day 17 streak milestone' },
+    diamondSticker: { id: 'diamondSticker', name: 'Diamond', emoji: '💎', category: 'special', rarity: 'legendary', source: 'Day 25 streak milestone' },
+    perfectCareSticker: { id: 'perfectCareSticker', name: 'Perfect Caretaker', emoji: '🌟', category: 'special', rarity: 'legendary', source: '5 consecutive Excellent care days' }
 };
 
 const STICKER_RARITIES = {

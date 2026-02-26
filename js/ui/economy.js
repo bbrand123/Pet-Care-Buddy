@@ -158,6 +158,25 @@
                 const postables = getAuctionPostables(snapshot);
                 const mysteryPrice = (typeof getMysteryEggPrice === 'function') ? getMysteryEggPrice() : 120;
 
+                // R7: Seasonal countdown helpers
+                const _r7Season = (gameState && gameState.season) || (typeof getCurrentSeason === 'function' ? getCurrentSeason() : 'spring');
+                const _r7SeqMap = { spring: 'summer', summer: 'autumn', autumn: 'winter', winter: 'spring' };
+                const _r7SeasonNext = _r7SeqMap[_r7Season] || 'spring';
+                const _r7DaysLeft = (() => {
+                    try {
+                        if (typeof SEASONS === 'undefined') return 999;
+                        const sd = SEASONS[_r7Season];
+                        if (!sd || !Array.isArray(sd.months)) return 999;
+                        const today = new Date();
+                        const lastMonth = sd.months[sd.months.length - 1];
+                        let endYear = today.getFullYear();
+                        if (lastMonth < today.getMonth()) endYear += 1;
+                        const endDate = new Date(endYear, lastMonth + 1, 0);
+                        const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        return Math.max(0, Math.ceil((endDate.getTime() - startOfToday.getTime()) / 86400000));
+                    } catch (_) { return 999; }
+                })();
+
                 let shopSections = '';
                 const shopCategories = [
                     { key: 'food', title: 'Food', icon: '🍽️' },
@@ -172,12 +191,29 @@
                     const cards = entries.map((item) => {
                         // Rec 10: Seasonal availability check
                         const available = (typeof isShopItemAvailable === 'function') ? isShopItemAvailable(item.id) : true;
-                        if (!available) return `
-                            <div class="economy-card" style="opacity:0.5;">
-                                <div><strong>${item.emoji} ${item.name}</strong></div>
-                                <div class="explore-subtext" style="color:#FFA726;">Out of season</div>
-                            </div>
-                        `;
+                        if (!available) {
+                            // R7: Find the next season this item returns in
+                            const _r7Avail = (typeof SEASONAL_SHOP_AVAILABILITY !== 'undefined') ? (SEASONAL_SHOP_AVAILABILITY[item.id] || null) : null;
+                            let _r7Returns = '';
+                            if (_r7Avail) {
+                                const _seq = ['spring', 'summer', 'autumn', 'winter'];
+                                const _idx = _seq.indexOf(_r7Season);
+                                for (let _si = 1; _si <= 4; _si++) {
+                                    const _c = _seq[(_idx + _si) % 4];
+                                    if (_r7Avail.includes(_c)) {
+                                        const _cd = (typeof SEASONS !== 'undefined') ? SEASONS[_c] : null;
+                                        _r7Returns = ` · Returns in ${_cd ? _cd.icon + '\u00a0' + _cd.name : _c}`;
+                                        break;
+                                    }
+                                }
+                            }
+                            return `
+                                <div class="economy-card" style="opacity:0.5;">
+                                    <div><strong>${item.emoji} ${item.name}</strong></div>
+                                    <div class="explore-subtext" style="color:#FFA726;">Out of season${_r7Returns}</div>
+                                </div>
+                            `;
+                        }
                         const price = (typeof getShopItemPrice === 'function') ? getShopItemPrice(category.key, item.id) : (item.basePrice || 0);
                         const ownedId = category.key === 'seeds' ? item.cropId
                             : category.key === 'accessories' ? item.accessoryId
@@ -205,9 +241,14 @@
                                 }
                             }
                         }
+                        // R7: Countdown badge — show when ≤7 days remain and item won't be available next season
+                        const _r7ItemSeasons = (typeof SEASONAL_SHOP_AVAILABILITY !== 'undefined') ? (SEASONAL_SHOP_AVAILABILITY[item.id] || null) : null;
+                        const _r7CountdownBadge = (_r7DaysLeft <= 7 && _r7ItemSeasons && !_r7ItemSeasons.includes(_r7SeasonNext))
+                            ? `<div class="shop-countdown-badge" style="color:#EF5350;font-size:0.75rem;font-weight:bold;">\u23f3 ${_r7DaysLeft} day${_r7DaysLeft !== 1 ? 's' : ''} left!</div>`
+                            : '';
                         // R9: "Save X more coins" hint — show when halfway to affording item
                         const _r9Diff = price - balance;
-                        const _r9SaveHint = (available && balance < price && balance >= price * 0.5)
+                        const _r9SaveHint = (balance < price && balance >= price * 0.5)
                             ? `<div class="shop-save-hint">\uD83D\uDCB0 Save ${_r9Diff} more coin${_r9Diff !== 1 ? 's' : ''}!</div>`
                             : '';
                         return `
@@ -215,6 +256,7 @@
                                 <div><strong>${item.emoji} ${item.name}</strong></div>
                                 <div class="explore-subtext">${item.description || ''}</div>
                                 <div class="explore-subtext">Owned: ${ownedCount}</div>
+                                ${_r7CountdownBadge}
                                 ${_r9SaveHint}
                                 ${durabilityHTML}
                                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">

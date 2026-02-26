@@ -83,9 +83,7 @@
   "./ui/exploration.js",
   "./ui/settings.js",
   "./ui/phase2-hooks.js",
-  "./ui/phase2-managers.js",
-  "./ui/pet-relationships.js",
-  "./ui/features.js"
+  "./ui/phase2-managers.js"
 ]),
     MINIGAME_RUNTIME_FILES: Object.freeze([
   "./registries/minigame-registry.js",
@@ -189,8 +187,6 @@
   "./ui/settings.js",
   "./ui/phase2-hooks.js",
   "./ui/phase2-managers.js",
-  "./ui/pet-relationships.js",
-  "./ui/features.js",
   "./registries/minigame-registry.js",
   "./config/minigame-descriptors.js",
   "./minigames/framework.js",

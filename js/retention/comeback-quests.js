@@ -12,7 +12,8 @@
         streak: { id: 'streak', title: 'Warm up your streak', body: 'Claim your streak reward to restart momentum.', metric: 'streak', target: 1, actionType: 'streak', reward: { tokens: 4, bondXp: 6 } },
         expedition: { id: 'expedition', title: 'Return to exploration', body: 'Run a quick expedition to reconnect with your adventure loop.', metric: 'explore', target: 1, actionType: 'explore', reward: { tokens: 5, coins: 25 } },
         garden: { id: 'garden', title: 'Tend the garden again', body: 'Visit the garden and complete a harvest or planting action.', metric: 'garden', target: 1, actionType: 'garden', reward: { tokens: 4, coins: 20 } },
-        care: { id: 'care', title: 'Rebuild the care routine', body: 'Do a few care actions to re-establish the bond rhythm.', metric: 'care', target: 3, actionType: 'journey', reward: { tokens: 4, bondXp: 8 } },
+        // R4: Reframed as gift-giving rather than task completion
+        care: { id: 'care', title: 'Your pet missed you \u2014 here\'s how to reconnect', body: 'Give your pet a meal, a cuddle, and some play time to reconnect.', metric: 'care', target: 3, actionType: 'journey', reward: { tokens: 4, bondXp: 8 }, actionLabels: { feed: 'Give your pet a meal', play: 'Give your pet some playtime', wash: 'Give your pet a bath', sleep: 'Let your pet rest', cuddle: 'Give your pet a cuddle', medicine: 'Give your pet some care', groom: 'Give your pet a groom', exercise: 'Take your pet for a walk' } },
         social: { id: 'social', title: 'Check in on the household', body: 'Open household social time and trigger one relationship moment.', metric: 'social', target: 1, actionType: 'social', reward: { tokens: 5, bondXp: 4 } }
     });
     const ACTIVITY_ALIASES = Object.freeze({

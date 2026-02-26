@@ -206,9 +206,14 @@
             const streak = gameState.streak;
             if (!streak || streak.current <= 0) return '';
             const hasBonus = !streak.todayBonusClaimed;
-            return `<button class="streak-hud ${hasBonus ? 'has-bonus' : ''}" id="streak-hud" type="button" title="${streak.current}-day streak${hasBonus ? ' (bonus available!)' : ''}" aria-label="${streak.current} day streak${hasBonus ? ', bonus available' : ''}">
+            // R1: Show freeze count in streak chip
+            const freezes = Number.isFinite(streak.freezes) ? streak.freezes : 0;
+            const freezeLabel = freezes > 0 ? ` · ${freezes} freeze` : '';
+            const rebuildLabel = streak.streakRebuildActive ? ' · comeback' : '';
+            const titleSuffix = hasBonus ? ' (bonus available!)' : '';
+            return `<button class="streak-hud ${hasBonus ? 'has-bonus' : ''}${streak.streakRebuildActive ? ' streak-rebuild' : ''}" id="streak-hud" type="button" title="${streak.current}-day streak${freezeLabel}${rebuildLabel}${titleSuffix}" aria-label="${streak.current} day streak${freezeLabel}${rebuildLabel}${hasBonus ? ', bonus available' : ''}">
                 <span class="streak-flame-icon" aria-hidden="true">🔥</span>
-                <span>${streak.current}</span>
+                <span>Day ${streak.current}${freezeLabel}</span>
                 ${hasBonus ? '<span class="streak-bonus-label" aria-hidden="true">Bonus</span>' : ''}
                 ${hasBonus ? '<span class="streak-bonus-dot" aria-hidden="true"></span>' : ''}
             </button>`;
@@ -250,6 +255,125 @@
                 </section>
 	            `;
 	        }
+
+        // R3: Focus Card — persistent next-objective HUD element
+        function _getFocusCardSuggestion() {
+            try {
+                const streak = gameState.streak || {};
+                const coins = (gameState.economy && typeof gameState.economy.coins === 'number') ? gameState.economy.coins : (gameState.coins || 0);
+                const pets = Array.isArray(gameState.pets) ? gameState.pets : (gameState.pet ? [gameState.pet] : []);
+
+                // 1. Active comeback quest progress
+                const comebackMod = (typeof MLFComebackQuests !== 'undefined' && MLFComebackQuests);
+                if (comebackMod && typeof comebackMod.getActiveComebackQuest === 'function') {
+                    const quest = comebackMod.getActiveComebackQuest();
+                    if (quest && quest.status !== 'completed') {
+                        const prog = Math.floor(quest.progress || 0);
+                        const tgt = Math.floor(quest.target || 1);
+                        return { text: `Comeback quest: ${prog} of ${tgt} ${quest.progressLabel || 'done'}`, action: 'journey', icon: '\uD83D\uDCAA' };
+                    }
+                }
+
+                // 2. Journey chapter objective closest to completion
+                const Journey = (typeof MLFJourney !== 'undefined' && MLFJourney) || null;
+                if (Journey && typeof Journey.getCurrentChapter === 'function') {
+                    try {
+                        const chap = Journey.getCurrentChapter();
+                        if (chap && Array.isArray(chap.objectives)) {
+                            const incomplete = chap.objectives
+                                .filter(o => !o.completed && o.target > 0)
+                                .map(o => ({ ...o, pct: (o.progress || 0) / o.target }))
+                                .sort((a, b) => b.pct - a.pct);
+                            if (incomplete.length > 0) {
+                                const best = incomplete[0];
+                                const remaining = Math.max(1, (best.target || 1) - (best.progress || 0));
+                                return { text: `${remaining} more ${best.unit || 'actions'} \u2192 ${best.label || 'Chapter reward'}`, action: 'journey', icon: '\uD83D\uDCD6' };
+                            }
+                        }
+                    } catch (_) {}
+                }
+
+                // 3. Streak milestone countdown
+                if (streak.current > 0) {
+                    const milestones = (typeof STREAK_MILESTONES !== 'undefined') ? STREAK_MILESTONES : [];
+                    const next = milestones.find(m => streak.current < m.days && !((streak.claimedMilestones || []).includes(m.days)));
+                    if (next) {
+                        const daysLeft = next.days - streak.current;
+                        if (daysLeft <= 5) {
+                            const bundle = (typeof REWARD_BUNDLES !== 'undefined' && REWARD_BUNDLES[next.bundleId]) ? REWARD_BUNDLES[next.bundleId] : null;
+                            const rewardHint = bundle ? `: ${bundle.coins || ''}c` : '';
+                            return { text: `${daysLeft} more day${daysLeft === 1 ? '' : 's'} \u2192 Day ${next.days} reward${rewardHint}`, action: 'streak', icon: '\uD83D\uDD25' };
+                        }
+                    }
+                }
+
+                // 4. Coin savings goal — if <120 coins and no second pet
+                if (coins < 120 && pets.length < 2) {
+                    const needed = 120 - coins;
+                    return { text: `Save ${needed} more coins for a mystery egg`, action: 'shop', icon: '\uD83D\uDCB0' };
+                }
+
+                // 5. Next achievement within reach
+                const achProgress = (typeof ACHIEVEMENTS !== 'undefined') ? ACHIEVEMENTS : null;
+                if (achProgress) {
+                    const owned = gameState.achievements || {};
+                    for (const [id, ach] of Object.entries(achProgress)) {
+                        if (owned[id]) continue;
+                        if (id === 'tenCareActions' && (gameState.totalCareActions || 0) >= 5) {
+                            const rem = 10 - (gameState.totalCareActions || 0);
+                            if (rem > 0) return { text: `${rem} more care actions \u2192 ${ach.name}`, action: 'achievements', icon: '\uD83C\uDFC6' };
+                        }
+                        if (id === 'fiveHarvests' && (gameState.totalHarvests || 0) >= 2) {
+                            const rem = 5 - (gameState.totalHarvests || 0);
+                            if (rem > 0) return { text: `${rem} more harvests \u2192 ${ach.name}`, action: 'achievements', icon: '\uD83C\uDF3B' };
+                        }
+                    }
+                }
+
+                // 6. Generic fallback
+                return { text: 'Your pet is ready to play \u2014 try a minigame!', action: 'minigame', icon: '\uD83C\uDFAE' };
+            } catch (_) {
+                return { text: 'Your pet is ready to play \u2014 try a minigame!', action: 'minigame', icon: '\uD83C\uDFAE' };
+            }
+        }
+
+        function generateFocusCardHTML() {
+            try {
+                // Dismissed per session — use sessionStorage
+                if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('mlf_focuscard_dismissed')) return '';
+                if (!gameState || !gameState.pet) return '';
+                const suggestion = _getFocusCardSuggestion();
+                if (!suggestion) return '';
+                return `<div class="focus-card" id="focus-card" role="region" aria-label="Next objective">
+                    <span class="focus-card-icon" aria-hidden="true">${suggestion.icon}</span>
+                    <button class="focus-card-text" id="focus-card-action" type="button" data-action="${escapeHTML(suggestion.action)}">${escapeHTML(suggestion.text)}</button>
+                    <button class="focus-card-dismiss" id="focus-card-dismiss" type="button" aria-label="Dismiss suggestion">\u00D7</button>
+                </div>`;
+            } catch (_) { return ''; }
+        }
+
+        function wireFocusCardEvents() {
+            const card = document.getElementById('focus-card');
+            if (!card) return;
+            const dismissBtn = document.getElementById('focus-card-dismiss');
+            const actionBtn = document.getElementById('focus-card-action');
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', function() {
+                    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('mlf_focuscard_dismissed', '1');
+                    card.remove();
+                });
+            }
+            if (actionBtn) {
+                actionBtn.addEventListener('click', function() {
+                    const action = actionBtn.getAttribute('data-action') || '';
+                    if (action === 'journey' && typeof showJourneyModal === 'function') showJourneyModal();
+                    else if (action === 'streak' && typeof showRewardsHub === 'function') showRewardsHub();
+                    else if (action === 'shop' && typeof openShopModal === 'function') openShopModal();
+                    else if (action === 'achievements' && typeof showAchievementsModal === 'function') showAchievementsModal();
+                    else if (action === 'minigame' && typeof openMiniGamesMenu === 'function') openMiniGamesMenu();
+                });
+            }
+        }
 
             function spawnRoomPropParticles(layer, effect) {
                 if (!layer) return;
@@ -1865,6 +1989,7 @@
                     </div>
                 </div>
 
+                ${generateFocusCardHTML()}
 	                ${generateStreakStatusPanelHTML()}
 	                ${generateJourneyStatusPanelHTML()}
                     ${generateRetentionEmotionalPromptHTML()}
@@ -1897,6 +2022,11 @@
                     const _neglectCount = Math.max(0, Math.floor(Number(pet.neglectCount) || 0));
                     const _neglectCap = 15;
                     const _neglectHTML = `<span class="care-quality-neglect" aria-label="Neglect events: ${_neglectCount} of ${_neglectCap} max">Neglect events: ${_neglectCount} / ${_neglectCap}</span>`;
+                    // R8: 4-heart tier indicator
+                    const _r8TierNum = { poor: 1, average: 2, good: 3, excellent: 4 }[careQuality] || 2;
+                    const _r8Hearts = '\u2665'.repeat(_r8TierNum) + '\u2661'.repeat(4 - _r8TierNum);
+                    const _r8NextTier = { poor: 'Average', average: 'Good', good: 'Excellent', excellent: null }[careQuality];
+                    const _r8NextHint = _r8NextTier ? `<span class="care-quality-next-hint" style="font-size:0.7rem;opacity:0.75;">Next tier: ${_r8NextTier}</span>` : '';
 
                     return `
                         <div class="care-quality-wrap" aria-label="Care quality and age">
@@ -1906,7 +2036,9 @@
                                     <div class="care-quality-text">
                                         <span class="care-quality-label">Care Quality</span>
                                         <span class="care-quality-value">${qualityData.label}</span>
+                                        <span class="care-quality-stars" aria-label="${_r8TierNum} of 4 hearts" aria-hidden="false">${_r8Hearts}</span>
                                         <span class="care-quality-hint">${qualityData.description}</span>
+                                        ${_r8NextHint}
                                         ${_neglectHTML}
                                     </div>
                                 </div>
@@ -2512,6 +2644,9 @@
 
             // Bind favorites bar events (Feature 5)
             bindFavoritesEvents();
+
+            // R3: Focus card event wiring
+            wireFocusCardEvents();
 
             // Streak HUD click handler (Feature 10)
             const streakHud = document.getElementById('streak-hud');

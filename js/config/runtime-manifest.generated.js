@@ -83,9 +83,7 @@ export const UI_RUNTIME_FILES = Object.freeze([
   "./ui/exploration.js",
   "./ui/settings.js",
   "./ui/phase2-hooks.js",
-  "./ui/phase2-managers.js",
-  "./ui/pet-relationships.js",
-  "./ui/features.js"
+  "./ui/phase2-managers.js"
 ]);
 
 export const MINIGAME_RUNTIME_FILES = Object.freeze([

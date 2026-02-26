@@ -235,6 +235,8 @@
             seasonalPassport: { spring: 0, summer: 0, autumn: 0, winter: 0, completedSeasons: [] },
             // R9: Session best combo for daily payout carryover
             sessionBestCombo: 0,
+            // R9 (retention): Last surprise event timestamp (for 8h cooldown)
+            lastSurpriseEventTs: 0,
             // R10: Garden plot mastery tracking
             harvestCounts: {},
             harvestMasteries: [],
@@ -1733,6 +1735,8 @@
                     if (!Array.isArray(parsed.seasonalPassport.completedSeasons)) parsed.seasonalPassport.completedSeasons = [];
                     // R9: Session best combo
                     if (typeof parsed.sessionBestCombo !== 'number') parsed.sessionBestCombo = 0;
+                    // R9 (retention): Surprise event cooldown timestamp
+                    if (typeof parsed.lastSurpriseEventTs !== 'number') parsed.lastSurpriseEventTs = 0;
                     // R10: Garden mastery
                     if (!parsed.harvestCounts || typeof parsed.harvestCounts !== 'object') parsed.harvestCounts = {};
                     if (!Array.isArray(parsed.harvestMasteries)) parsed.harvestMasteries = [];
@@ -2571,6 +2575,10 @@
 
             // Update daily streak
             updateStreak();
+            // R1: Show any pending streak freeze/rebuild toasts after UI is available
+            if (typeof flushStreakToasts === 'function') setTimeout(flushStreakToasts, 1500);
+            // R5: Show inactivity notification banner if applicable
+            if (typeof maybeShowNotificationInactivityBanner === 'function') setTimeout(maybeShowNotificationInactivityBanner, 3000);
             refreshMasteryTracks();
             getGoalLadder();
             runLoginMemoryHooks();
@@ -2642,6 +2650,20 @@
             }
             repairPetIdsAndNextId(gameState);
 
+            // R7: Season change detection — one-time celebration toast on first open of a new season
+            try {
+                const _r7CurrentSeason = typeof getCurrentSeason === 'function' ? getCurrentSeason() : null;
+                if (_r7CurrentSeason && gameState.lastSeenSeason && gameState.lastSeenSeason !== _r7CurrentSeason && typeof SEASONS !== 'undefined') {
+                    const _r7SeasonData = SEASONS[_r7CurrentSeason];
+                    setTimeout(() => {
+                        if (typeof showToast === 'function') {
+                            showToast(`${_r7SeasonData ? _r7SeasonData.icon : '\u2728'} ${_r7SeasonData ? _r7SeasonData.name : _r7CurrentSeason} has arrived! New items in the shop.`, '#FF9800');
+                        }
+                    }, 2500);
+                }
+                gameState.lastSeenSeason = _r7CurrentSeason;
+            } catch (_) {}
+
             if (gameState.phase === 'pet' && gameState.pet) {
                 renderPetPhase();
                 // Ensure garden timer is running even if renderPetPhase() skipped
@@ -2678,8 +2700,13 @@
                     const hadOfflineChanges = true;
                     if (typeof showWelcomeBackModal === 'function') {
                         setTimeout(() => {
+                            // R4: 7+ day stasis wake sequence (replaces 24h cutscene for very long absences)
+                            const _stasisThreshold = 7 * 24 * 60; // 7 days in minutes
+                            if (oc.minutes >= _stasisThreshold && typeof showStasisWakeSequence === 'function') {
+                                // Hold off on showing actual need levels until stasis card is dismissed
+                                showStasisWakeSequence(gameState.pet, () => showWelcomeBackModal(oc, gameState.pet));
                             // Feature 13: 2.5s dramatic cutscene for absences ≥ 24h
-                            if (oc.minutes >= 1440 && typeof showLongAbsenceCutscene === 'function') {
+                            } else if (oc.minutes >= 1440 && typeof showLongAbsenceCutscene === 'function') {
                                 showLongAbsenceCutscene(gameState.pet, () => showWelcomeBackModal(oc, gameState.pet));
                             } else {
                                 showWelcomeBackModal(oc, gameState.pet);
@@ -2714,6 +2741,10 @@
                     }, (asyncReadiness && asyncReadiness.top) ? 2100 : 1500);
                 }
                 checkReminderSignals();
+                // R9: While you were away — surprise event (4-5s delay, after welcome modals settle)
+                if (typeof checkAndMaybeTriggerSurpriseEvent === 'function') {
+                    setTimeout(checkAndMaybeTriggerSurpriseEvent, 4500);
+                }
             } else {
                 // Reset to egg phase if not in pet phase
                 gameState.phase = 'egg';
