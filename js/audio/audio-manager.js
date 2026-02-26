@@ -1569,24 +1569,34 @@
         if (tierKey === 'milestone' || tierKey === 'rare') {
             playOneShot('achievement', Object.assign({ gain: 0.96, mixDuck: 'critical', critical: true }, opts));
             setTimeout(() => playOneShot('reward-treasure', Object.assign({ gain: 0.7, mixDuck: 'reward' }, opts)), 90);
+            // Feature 20: achievement caption
+            if (state.soundCueCaptionsEnabled) dispatchCaption('achievement', 'reward', '🏆 Achievement unlocked!');
             return { ok: true, tier: tierKey };
         }
         if (tierKey === 'streak') {
             playOneShot('combo-rise', Object.assign({ gain: 0.9, mixDuck: 'reward' }, opts));
             setTimeout(() => playOneShot('coin-collect', Object.assign({ gain: 0.62, mixDuck: 'reward' }, opts)), 60);
+            // Feature 20: streak caption
+            if (state.soundCueCaptionsEnabled) dispatchCaption('streak', 'reward', '🔥 Streak bonus!');
             return { ok: true, tier: tierKey };
         }
         if (tierKey === 'big') {
             playOneShot('achievement', Object.assign({ gain: 0.88, mixDuck: 'reward' }, opts));
             setTimeout(() => playOneShot('reward-treasure', Object.assign({ gain: 0.64, mixDuck: 'reward' }, opts)), 70);
+            // Feature 20: big reward caption
+            if (state.soundCueCaptionsEnabled) dispatchCaption('reward-big', 'reward', '🌟 Big reward!');
             return { ok: true, tier: tierKey };
         }
         if (tierKey === 'medium') {
             playOneShot('reward-treasure', Object.assign({ gain: 0.82, mixDuck: 'reward' }, opts));
             if (!opts.skipAccent) setTimeout(() => playOneShot('coin-collect', Object.assign({ gain: 0.5, mixDuck: 'reward' }, opts)), 55);
+            // Feature 20: coin earn caption
+            if (state.soundCueCaptionsEnabled) dispatchCaption('coin-earn', 'reward', '💰 Coins earned');
             return { ok: true, tier: tierKey };
         }
         playOneShot('coin-collect', Object.assign({ gain: 0.78, mixDuck: 'reward' }, opts));
+        // Feature 20: small coin caption
+        if (state.soundCueCaptionsEnabled) dispatchCaption('coin-earn', 'reward', '💰 Coins earned');
         return { ok: true, tier: tierKey };
     }
 
@@ -1639,6 +1649,22 @@
                 gain: clamp(gain * 0.55, 0.18, 0.6),
                 mixDuck: 'reward'
             }), 42);
+        }
+        // Feature 20: Sound captions for care actions
+        if (state.soundCueCaptionsEnabled) {
+            const _careCaptions = {
+                feed: '🍽️ Eating',
+                wash: '🛁 Bath time',
+                play: '😄 Playing',
+                sleep: '😴 Sleeping',
+                exercise: '💪 Exercising',
+                treat: '🍪 Treat time',
+                cuddle: '🥰 Cuddling',
+                medicine: '💊 Medicine',
+                groom: '💇 Grooming'
+            };
+            const _careCaption = _careCaptions[act];
+            if (_careCaption) dispatchCaption(act, 'care', _careCaption);
         }
         return { ok: true, action: act };
     }
@@ -2147,6 +2173,7 @@
         playAccessibilityCue,
         emitAccessibilityCue,
         getAccessibilityCueLegend,
+        dispatchCaption,
         getCaptionChannelState,
         getSoundCueCaptionsEnabled,
         setSoundCueCaptionsEnabled,

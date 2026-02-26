@@ -222,6 +222,43 @@ const ECONOMY_SHOP_ITEMS = {
             accessoryId: 'wizard',
             description: 'Rare magical headwear.',
             rarity: 'rare'
+        },
+        // Feature 11: Seasonal cosmetic pack
+        winterScarf: {
+            id: 'winterScarf',
+            name: 'Winter Scarf',
+            emoji: '🧣',
+            basePrice: 65,
+            accessoryId: 'winterScarf',
+            description: 'A cozy scarf for cold days.',
+            season: 'winter'
+        },
+        summerShades: {
+            id: 'summerShades',
+            name: 'Summer Shades',
+            emoji: '😎',
+            basePrice: 55,
+            accessoryId: 'summerShades',
+            description: 'Cool reflective shades for hot days.',
+            season: 'summer'
+        },
+        fallLeafCrown: {
+            id: 'fallLeafCrown',
+            name: 'Leaf Crown',
+            emoji: '🍂',
+            basePrice: 70,
+            accessoryId: 'fallLeafCrown',
+            description: 'A rustic crown woven from autumn leaves.',
+            season: 'autumn'
+        },
+        springFlowerCrown: {
+            id: 'springFlowerCrown',
+            name: 'Flower Crown',
+            emoji: '🌸',
+            basePrice: 60,
+            accessoryId: 'springFlowerCrown',
+            description: 'A delicate crown of spring blossoms.',
+            season: 'spring'
         }
     },
     seeds: {
@@ -520,6 +557,11 @@ const SEASONAL_SHOP_AVAILABILITY = {
     ribbonBow: ['spring', 'summer', 'autumn', 'winter'],
     sunglasses: ['spring', 'summer'],
     wizardHat: ['autumn', 'winter'],
+    // Feature 11: Seasonal cosmetic pack — each exclusive to its season
+    winterScarf: ['winter'],
+    summerShades: ['summer'],
+    fallLeafCrown: ['autumn'],
+    springFlowerCrown: ['spring'],
     // Decorations
     plantDecor: ['spring', 'summer'],
     balloonDecor: ['spring', 'summer', 'autumn', 'winter'],

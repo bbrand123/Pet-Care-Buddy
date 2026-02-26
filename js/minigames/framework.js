@@ -129,6 +129,16 @@
         // MiniGameRegistry may not yet be populated when this file is evaluated.
         // Call getMiniGameDescriptors() lazily at each use site instead.
 
+        // Feature 5: Personality → preferred mini-game IDs (1–3 per type)
+        const PERSONALITY_GAME_PREFS = {
+            playful:   ['fetch', 'bubblepop', 'racing'],
+            lazy:      ['coloring', 'fishing', 'matching'],
+            curious:   ['trivia', 'simonsays', 'slider'],
+            shy:       ['hideseek', 'coloring', 'fishing'],
+            energetic: ['racing', 'runner', 'rhythm'],
+            grumpy:    ['hideseek', 'trivia', 'cooking']
+        };
+
         // ==================== CELEBRATION EFFECTS ====================
 
         // Spawn confetti particles for minigame wins
@@ -166,6 +176,55 @@
             document.body.appendChild(banner);
             if (typeof hapticPattern === 'function') hapticPattern('highscore');
             setTimeout(() => banner.remove(), 2500);
+        }
+
+        // Feature 4: Track last mini-game result for reaction beat
+        let _lastMgWon = false;
+
+        // Feature 4: Show a 1.5s pet reaction beat before restoring post-game state
+        function showMinigameReactionBeat(won, callback) {
+            const reducedMotion = document.documentElement.getAttribute('data-reduced-motion') === 'true' ||
+                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+            if (reducedMotion) { if (callback) callback(); return; }
+
+            const petArea = document.querySelector('.pet-area');
+            if (!petArea) { if (callback) callback(); return; }
+
+            const reactionOverlay = document.createElement('div');
+            reactionOverlay.className = 'minigame-reaction-overlay';
+            reactionOverlay.setAttribute('aria-hidden', 'true');
+
+            let petEmoji = '🐾';
+            if (typeof gameState !== 'undefined' && gameState && gameState.pet) {
+                const pt = (typeof PET_TYPES !== 'undefined') ? PET_TYPES[gameState.pet.type] : null;
+                if (pt && pt.emoji) petEmoji = pt.emoji;
+            }
+
+            const reactionClass = won ? 'reaction-win' : 'reaction-lose';
+            const labelEl = document.createElement('div');
+            labelEl.style.cssText = 'position:absolute;bottom:30%;left:50%;transform:translateX(-50%);font-size:1.1rem;font-weight:800;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,0.5);opacity:0;transition:opacity 0.3s ease;white-space:nowrap;';
+            labelEl.textContent = won ? '🎉 Great game!' : '😊 Good try!';
+
+            const petEl = document.createElement('div');
+            petEl.className = `minigame-reaction-pet ${reactionClass}`;
+            petEl.style.cssText = 'position:absolute;bottom:35%;left:50%;transform:translateX(-50%);';
+            petEl.textContent = petEmoji;
+
+            reactionOverlay.appendChild(petEl);
+            reactionOverlay.appendChild(labelEl);
+            document.body.appendChild(reactionOverlay);
+
+            // Show label with slight delay
+            setTimeout(() => { labelEl.style.opacity = '1'; }, 400);
+
+            setTimeout(() => {
+                reactionOverlay.style.transition = 'opacity 0.25s ease';
+                reactionOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    reactionOverlay.remove();
+                    if (callback) callback();
+                }, 260);
+            }, 1500);
         }
 
         // Restore idle animations and room earcons after a mini-game ends
@@ -395,6 +454,13 @@
             const scoreHistory = gameState.minigameScoreHistory || {};
             const playCounts = gameState.minigamePlayCounts || {};
 
+            // Feature 5: Resolve active pet personality for preference badges
+            const _activePet = (typeof getActivePet === 'function' ? getActivePet() : null) ||
+                (gameState && gameState.activePet) || null;
+            const _petPersonality = _activePet && _activePet.personality ? _activePet.personality : null;
+            const _petPreferredGames = _petPersonality && PERSONALITY_GAME_PREFS[_petPersonality]
+                ? new Set(PERSONALITY_GAME_PREFS[_petPersonality]) : new Set();
+
             const startedGames = [];
             const newGames = [];
             getMiniGameDescriptors().forEach(game => {
@@ -422,12 +488,18 @@
                 const shortDescription = String(game.description || '').split(/[.!?]/)[0] || game.description || '';
 	                const thumbSVG = MINI_GAME_THUMBNAILS[game.id] || '';
                     const cardArt = getMiniGameCardArt(game.id);
+                // Feature 5: personality preference badge
+                const _isFave = _petPreferredGames.has(game.id);
+                const _faveBadgeHTML = _isFave
+                    ? `<span class="mg-personality-badge" aria-label="${escapeHTML(_petPersonality || '')} favourite">♥</span>`
+                    : '';
 	                const cardHTML = `
-	                    <button class="minigame-card" data-game="${game.id}" data-art-pattern="${cardArt.pattern}" style="--minigame-card-c1:${cardArt.c1};--minigame-card-c2:${cardArt.c2};" aria-label="Play ${game.name}${best ? ', best: ' + best : ''}${plays > 0 ? ', difficulty ' + diffLevel + ' of 10' : ''}"${plays > 0 ? ` aria-describedby="diff-${game.id}"` : ''}>
+	                    <button class="minigame-card" data-game="${game.id}" data-art-pattern="${cardArt.pattern}" style="--minigame-card-c1:${cardArt.c1};--minigame-card-c2:${cardArt.c2};" aria-label="Play ${game.name}${_isFave ? ', ' + (_petPersonality || 'pet') + '\'s favourite' : ''}${best ? ', best: ' + best : ''}${plays > 0 ? ', difficulty ' + diffLevel + ' of 10' : ''}"${plays > 0 ? ` aria-describedby="diff-${game.id}"` : ''}>
 	                        <div class="minigame-card-visual" aria-hidden="true">
                                 <div class="minigame-card-badges">
                                     <span class="minigame-card-badge">${escapeHTML(cardArt.badge)}</span>
                                     <span class="minigame-card-badge soft">${escapeHTML(cardArt.mood)}</span>
+                                    ${_faveBadgeHTML}
                                 </div>
                                 <div class="minigame-card-pattern"></div>
 	                            ${thumbSVG}
@@ -561,6 +633,12 @@
                 if (coinReward > 0) {
                     GameAudio.playSFXByName('coin-jingle', GameAudio.sfx.celebration);
 	                }
+                // Feature 20: minigame win/lose caption
+                if (GameAudio.getSoundCueCaptionsEnabled && GameAudio.getSoundCueCaptionsEnabled() && typeof GameAudio.dispatchCaption === 'function') {
+                    const _mgWon = score > 0 || coinReward > 0 || medal !== null;
+                    GameAudio.dispatchCaption(_mgWon ? 'minigame-win' : 'minigame-lose', 'minigame',
+                        _mgWon ? '🎉 Mini-game won!' : '😔 Mini-game over');
+                }
 	            }
                 if (typeof showRewardBurstFX === 'function') {
                     const burstCoinCount = Math.max(0, Math.min(12, Math.ceil(coinReward / 12)));
@@ -575,7 +653,9 @@
             function close() {
                 popModalEscape(close);
                 if (overlay.parentNode) overlay.remove();
-                restorePostMiniGameState();
+                // Feature 4: determine win/lose then show 1.5s reaction beat
+                _lastMgWon = score > 0 || coinReward > 0 || medal !== null;
+                showMinigameReactionBeat(_lastMgWon, () => restorePostMiniGameState());
             }
 
             overlay.querySelector('[data-summary-close]')?.addEventListener('click', close);
@@ -595,6 +675,10 @@
         }
 
         function startMiniGame(gameId) {
+            // Feature 20: minigame-start caption
+            if (typeof GameAudio !== 'undefined' && GameAudio.getSoundCueCaptionsEnabled && GameAudio.getSoundCueCaptionsEnabled() && typeof GameAudio.dispatchCaption === 'function') {
+                GameAudio.dispatchCaption('minigame-start', 'minigame', '🎮 Mini-game starting!');
+            }
             switch (gameId) {
                 case 'fetch':
                     startFetchGame();

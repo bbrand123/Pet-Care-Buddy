@@ -2642,7 +2642,12 @@
                     const hadOfflineChanges = true;
                     if (typeof showWelcomeBackModal === 'function') {
                         setTimeout(() => {
-                            showWelcomeBackModal(oc, gameState.pet);
+                            // Feature 13: 2.5s dramatic cutscene for absences ≥ 24h
+                            if (oc.minutes >= 1440 && typeof showLongAbsenceCutscene === 'function') {
+                                showLongAbsenceCutscene(gameState.pet, () => showWelcomeBackModal(oc, gameState.pet));
+                            } else {
+                                showWelcomeBackModal(oc, gameState.pet);
+                            }
                         }, 600);
                     } else {
                         // Fallback to toast if modal function not loaded yet

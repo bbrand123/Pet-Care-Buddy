@@ -1248,6 +1248,11 @@
         let _lastCooldownAnnouncement = 0;
         const _cooldownToastByKey = {};
 
+        // Feature 17: Care Combo — track consecutive different actions within 30s
+        const _COMBO_WINDOW_MS = 30000;
+        let _comboActions = [];  // [{action, ts}]
+        let _comboExpireTimer = null;
+
         function announceCooldownOnce() {
             const now = Date.now();
             if (now - _lastCooldownAnnouncement < 1600) return;
@@ -1775,18 +1780,20 @@
                     // Sleep is more effective at night (deep sleep) and less during the day (just a nap)
                     const sleepTime = gameState.timeOfDay || 'day';
                     let sleepBonus = 22; // default nap
-                    let sleepAnnounce = 'Your pet had a nice nap!';
+                    // Feature 10: use pet name instead of generic "Your pet"
+                    const _sleepName = pet.name || petData.name || 'Your pet';
+                    let sleepAnnounce = `${_sleepName} had a nice nap!`;
                     if (sleepTime === 'night') {
                         sleepBonus = 35; // deep sleep at night
-                        sleepAnnounce = 'Your pet had a wonderful deep sleep!';
+                        sleepAnnounce = `${_sleepName} had a wonderful deep sleep!`;
                         careAffinity = 'tired';
                     } else if (sleepTime === 'sunset') {
                         sleepBonus = 27; // good evening rest
-                        sleepAnnounce = 'Your pet had a cozy evening rest!';
+                        sleepAnnounce = `${_sleepName} had a cozy evening rest!`;
                         careAffinity = 'tired';
                     } else if (sleepTime === 'sunrise') {
                         sleepBonus = 27; // nice morning sleep-in
-                        sleepAnnounce = 'Your pet slept in a little!';
+                        sleepAnnounce = `${_sleepName} slept in a little!`;
                     }
                     sleepBonus = Math.round((sleepBonus + sleepWisdom) * getRoomBonus('sleep') * sleepPersonality * sleepPref * careDecisionResult.gainMultiplier * rewardCareMult);
                     pet.energy = clamp(pet.energy + sleepBonus, 0, 100);
@@ -1976,6 +1983,18 @@
                 energy: pet.energy - beforeStats.energy
             };
             showStatDeltaNearNeedBubbles(statDeltas, { announce: false });
+            // Feature 1: Floating +stat label above the pet (primary stat change only)
+            if (petContainer) {
+                const _f1PrimaryKey = CARE_PRIMARY_NEED_MAP[action] || null;
+                if (_f1PrimaryKey && statDeltas[_f1PrimaryKey] !== 0) {
+                    showFloatingStatChange(petContainer, CARE_NEED_LABELS[_f1PrimaryKey] || _f1PrimaryKey, statDeltas[_f1PrimaryKey]);
+                } else {
+                    const _f1Top = Object.entries(statDeltas).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+                    if (_f1Top && _f1Top[1] !== 0) {
+                        showFloatingStatChange(petContainer, CARE_NEED_LABELS[_f1Top[0]] || _f1Top[0], _f1Top[1]);
+                    }
+                }
+            }
             if (typeof showStatChangeSummary === 'function') {
                 const summaryChanges = Object.entries(statDeltas)
                     .filter(([, amount]) => amount !== 0)
@@ -2029,6 +2048,37 @@
             if (typeof trackCareAction === 'function') trackCareAction(action);
             if (typeof noteFirstSessionCareLoopComplete === 'function') noteFirstSessionCareLoopComplete(action);
             markCoachChecklistProgress(action);
+
+            // Feature 17: Care Combo multiplier
+            {
+                const _now = Date.now();
+                // Expire entries outside the 30s window
+                _comboActions = _comboActions.filter(e => _now - e.ts < _COMBO_WINDOW_MS);
+                // Only count if last action was different
+                const _lastComboAction = _comboActions.length > 0 ? _comboActions[_comboActions.length - 1].action : null;
+                if (_lastComboAction !== action) {
+                    _comboActions.push({ action, ts: _now });
+                }
+                const _comboCount = _comboActions.length;
+                if (_comboExpireTimer) clearTimeout(_comboExpireTimer);
+                _comboExpireTimer = setTimeout(() => { _comboActions = []; _comboExpireTimer = null; }, _COMBO_WINDOW_MS);
+
+                if (_comboCount === 3) {
+                    showToast('🔥 Care Combo ×3! Nice routine!', '#FF9800', { duration: 2200 });
+                } else if (_comboCount === 5) {
+                    // ×5: +10 coins bonus (rate-limited) + toast
+                    if (typeof applyCoinGainRateLimits === 'function' && typeof gameState !== 'undefined') {
+                        const _bonusCoins = 10;
+                        const _limited = applyCoinGainRateLimits(_bonusCoins, 'combo');
+                        if (_limited > 0) {
+                            gameState.coins = (gameState.coins || 0) + _limited;
+                            if (typeof saveGame === 'function') saveGame();
+                        }
+                    }
+                    showToast('🌟 Care Combo ×5! +10 coins!', '#FFD700', { duration: 2800 });
+                    _comboActions = []; // reset after milestone
+                }
+            }
 
             // Apply incubation bonus to breeding eggs from care actions
             if (typeof applyBreedingEggCareBonus === 'function') {
@@ -2399,7 +2449,9 @@
             if (_previousMood && _previousMood !== mood) {
                 const moodLabels = { happy: 'happy', neutral: 'okay', sad: 'sad', sleepy: 'sleepy', energetic: 'energetic' };
                 const label = moodLabels[mood] || mood;
-                announce(`Your pet is now feeling ${label}.`);
+                // Feature 10: use pet name
+                const _moodPetName = pet.name || (petData && petData.name) || 'Your pet';
+                announce(`${_moodPetName} is now feeling ${label}.`);
             }
             _previousMood = mood;
 
@@ -2557,6 +2609,11 @@
             `;
 
             document.body.appendChild(overlay);
+
+            // Feature 19: mark personality-favourite food items
+            if (typeof markFavoriteFoodItems === 'function') {
+                markFavoriteFoodItems(overlay.querySelector('.feed-menu-items') || overlay, pet);
+            }
 
             function closeMenu() {
                 popModalEscape(closeMenu);

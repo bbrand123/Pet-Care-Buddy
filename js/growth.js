@@ -154,6 +154,14 @@
                     const petName = getPetDisplayName(pet);
                     const stageLabel = GROWTH_STAGES[currentStage]?.label || currentStage;
                     addJournalEntry('🎉', `${petName} grew to ${stageLabel} stage!`);
+                    // Feature 16: Auto-captured memory photo with stage flavor
+                    const _stageFlavors = {
+                        child:  'The world looks a little bigger now.',
+                        adult:  'Standing tall and ready for adventures.',
+                        elder:  'Wisdom earned through a life well loved.'
+                    };
+                    const _stageFlavor = _stageFlavors[currentStage] || `${petName} reached a new stage.`;
+                    addJournalEntry('🎂', `${petName} — ${stageLabel}. ${_stageFlavor}`);
                 }
 
                 // Announce growth stage transition (Item 25)
