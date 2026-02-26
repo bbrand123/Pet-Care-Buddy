@@ -146,8 +146,9 @@
         };
     }
 
-    function applyActivityEffects(nextPet, dtMinutes) {
+    function applyActivityEffects(nextPet, dtMinutes, duoBonusMult) {
         const activity = nextPet.schedule && nextPet.schedule.currentActivity ? nextPet.schedule.currentActivity : { type: 'idle' };
+        const _duoMult = (Number.isFinite(duoBonusMult) && duoBonusMult > 1) ? duoBonusMult : 1;
         const hunger = getNeed(nextPet, 'hunger', 70);
         const energy = getNeed(nextPet, 'energy', 70);
         const fun = getNeed(nextPet, 'fun', 70);
@@ -182,7 +183,7 @@
             h -= 1.2 * dtMinutes;
             hy -= 0.4 * dtMinutes;
         } else if (activity.type === 'socialize') {
-            f += 2.5 * dtMinutes;
+            f += 2.5 * _duoMult * dtMinutes;
             e -= 0.8 * dtMinutes;
             h -= 0.7 * dtMinutes;
         } else if (activity.type === 'exploreRoom') {
@@ -229,8 +230,19 @@
 
         chooseNextActivityIfNeeded(nextPet, context, nowMs);
 
+        let _duoBonusMult = 1;
+        if (Relationships && typeof Relationships.getDuoBonus === 'function') {
+            const _act = nextPet.schedule && nextPet.schedule.currentActivity;
+            if (_act && _act.type === 'socialize' && _act.targetPetId != null) {
+                const _relKey = Relationships.relationshipKey(String(nextPet.id), String(_act.targetPetId));
+                const _rels = (context && context.relationships) || {};
+                const _duoBonus = Relationships.getDuoBonus(_rels[_relKey]);
+                if (_duoBonus) _duoBonusMult = _duoBonus.careMultiplier || 1;
+            }
+        }
+
         if (!(options.skipActivePetNeeds && isActive)) {
-            applyActivityEffects(nextPet, dtMs / 60000);
+            applyActivityEffects(nextPet, dtMs / 60000, _duoBonusMult);
         } else {
             nextPet.mood = computeMoodFromNeeds(nextPet);
         }

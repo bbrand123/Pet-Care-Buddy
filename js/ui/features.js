@@ -704,6 +704,53 @@
             });
         }
 
+        // ==================== FEATURE 21: PET RELATIONSHIP DUO BONUS TOASTS ====================
+
+        const _REL_CARE_EVENTS = ['pet:fed', 'pet:played', 'pet:cuddled', 'pet:treated', 'pet:exercised'];
+        let _lastDuoBonusToastMs = 0;
+        const _DUO_BONUS_TOAST_COOLDOWN_MS = 45000;
+
+        function _onCareActionRelCheck() {
+            if (typeof gameState === 'undefined' || !gameState || !gameState.pet || gameState.phase !== 'pet') return;
+            if (!gameState.household || !gameState.household.petsById) return;
+            const Rel = (typeof MLFSimRelationships !== 'undefined') ? MLFSimRelationships : null;
+            if (!Rel || typeof Rel.getDuoBonus !== 'function') return;
+            const activePetId = String((gameState.pet && gameState.pet.id) || '');
+            if (!activePetId) return;
+            const petsById = gameState.household.petsById;
+            const relationships = gameState.household.relationships || {};
+            const otherIds = Object.keys(petsById).filter(id => id !== activePetId);
+            let bestBonus = null;
+            let bestBonusPetName = '';
+            otherIds.forEach(otherId => {
+                const key = Rel.relationshipKey(activePetId, otherId);
+                const rel = relationships[key];
+                if (!rel) return;
+                const bonus = Rel.getDuoBonus(rel);
+                if (!bonus) return;
+                if (!bestBonus || bonus.careMultiplier > bestBonus.careMultiplier) {
+                    bestBonus = bonus;
+                    const op = petsById[otherId];
+                    bestBonusPetName = (op && op.name) ? op.name : 'your companion';
+                }
+            });
+            if (bestBonus) {
+                const now = Date.now();
+                if (now - _lastDuoBonusToastMs >= _DUO_BONUS_TOAST_COOLDOWN_MS) {
+                    _lastDuoBonusToastMs = now;
+                    const pct = Math.round((bestBonus.careMultiplier - 1) * 100);
+                    showToast(bestBonus.icon + ' ' + bestBonus.label + ' with ' + bestBonusPetName + ': +' + pct + '% when socializing!', '#FFD54F', { duration: 2800 });
+                }
+            }
+        }
+
+        function initRelationshipFeature() {
+            if (typeof EventBus === 'undefined' || !EventBus) return;
+            _REL_CARE_EVENTS.forEach(ev => {
+                try { _featureUnsubs.push(EventBus.on(ev, _onCareActionRelCheck)); } catch (_) {}
+            });
+        }
+
         // ==================== INITIALIZATION ====================
 
         function initAllFeatures() {
@@ -733,6 +780,9 @@
 
             // Feature 9: First-of-day greeting (checked on load with delay)
             setTimeout(checkFirstOfDayGreeting, 800);
+
+            // Feature 21: Pet relationship duo bonus toasts
+            initRelationshipFeature();
         }
 
         function teardownAllFeatures() {

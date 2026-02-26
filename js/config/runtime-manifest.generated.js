@@ -84,6 +84,7 @@ export const UI_RUNTIME_FILES = Object.freeze([
   "./ui/settings.js",
   "./ui/phase2-hooks.js",
   "./ui/phase2-managers.js",
+  "./ui/pet-relationships.js",
   "./ui/features.js"
 ]);
 

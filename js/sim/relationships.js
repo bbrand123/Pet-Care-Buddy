@@ -15,6 +15,8 @@
     const FRIEND_AFFINITY = 60;
     const RIVAL_AFFINITY = -60;
     const TAG_FAMILIARITY_MIN = 50;
+    const DUO_BONUS_AFFINITY = 40;
+    const VALID_BOND_TYPES = new Set(['sibling', 'mentor']);
 
     function clamp(value, min, max) {
         return Math.max(min, Math.min(max, Number.isFinite(value) ? value : min));
@@ -31,7 +33,8 @@
             affinity: 0,
             familiarity: 0,
             lastInteractionAt: Number.isFinite(nowMs) ? nowMs : 0,
-            tags: []
+            tags: [],
+            bondType: null
         };
     }
 
@@ -54,7 +57,8 @@
             affinity: clamp(Number(base.affinity) || 0, AFFINITY_MIN, AFFINITY_MAX),
             familiarity: clamp(Number(base.familiarity) || 0, FAMILIARITY_MIN, FAMILIARITY_MAX),
             lastInteractionAt: Number.isFinite(Number(base.lastInteractionAt)) ? Number(base.lastInteractionAt) : 0,
-            tags: normalizeTags(base.tags)
+            tags: normalizeTags(base.tags),
+            bondType: (typeof base.bondType === 'string' && VALID_BOND_TYPES.has(base.bondType)) ? base.bondType : null
         };
         return updateRelationshipTags(normalized);
     }
@@ -63,11 +67,15 @@
         const next = Object.assign({}, rel || {});
         const affinity = clamp(Number(next.affinity) || 0, AFFINITY_MIN, AFFINITY_MAX);
         const familiarity = clamp(Number(next.familiarity) || 0, FAMILIARITY_MIN, FAMILIARITY_MAX);
+        const bondType = (typeof next.bondType === 'string' && VALID_BOND_TYPES.has(next.bondType)) ? next.bondType : null;
         const tags = [];
         if (familiarity >= TAG_FAMILIARITY_MIN && affinity >= FRIEND_AFFINITY) tags.push('friend');
         if (familiarity >= TAG_FAMILIARITY_MIN && affinity <= RIVAL_AFFINITY) tags.push('rival');
+        if (bondType === 'sibling') tags.push('sibling');
+        if (bondType === 'mentor') tags.push('mentor');
         next.affinity = affinity;
         next.familiarity = familiarity;
+        next.bondType = bondType;
         next.tags = tags;
         return next;
     }
@@ -227,7 +235,39 @@
                 familiarity: after.familiarity
             }));
         }
+        if (after.bondType === 'sibling' && before.bondType !== 'sibling') {
+            beats.push(Object.assign({ type: 'relationship_sibling_bond', priority: 'high' }, pair));
+        }
+        if (after.bondType === 'mentor' && before.bondType !== 'mentor') {
+            beats.push(Object.assign({ type: 'relationship_mentor_bond', priority: 'medium' }, pair));
+        }
         return beats;
+    }
+
+    function assignBond(rel, bondType) {
+        const type = (typeof bondType === 'string' && VALID_BOND_TYPES.has(bondType)) ? bondType : null;
+        const next = normalizeRelationship(rel);
+        next.bondType = type;
+        return updateRelationshipTags(next);
+    }
+
+    function getDuoBonus(rel) {
+        if (!rel || typeof rel !== 'object') return null;
+        const normalized = normalizeRelationship(rel);
+        const tags = normalized.tags;
+        const bondType = normalized.bondType;
+        const affinity = normalized.affinity;
+        const hasFriend = tags.indexOf('friend') !== -1;
+        const hasRival = tags.indexOf('rival') !== -1;
+        const hasSibling = tags.indexOf('sibling') !== -1;
+        const hasMentor = tags.indexOf('mentor') !== -1;
+        if (hasSibling && hasFriend) return { moodBonus: 5, careMultiplier: 1.12, label: 'Close Siblings', icon: '\u{1F46B}' };
+        if (hasSibling) return { moodBonus: 3, careMultiplier: 1.06, label: 'Siblings', icon: '\u{1F46B}' };
+        if (hasMentor) return { moodBonus: 2, careMultiplier: 1.10, label: 'Mentoring', icon: '\u{1F4DA}' };
+        if (hasFriend) return { moodBonus: 4, careMultiplier: 1.08, label: 'Best Friends', icon: '\u{1F49B}' };
+        if (hasRival) return { moodBonus: 0, careMultiplier: 1.04, label: 'Rivals', icon: '\u2694\uFE0F' };
+        if (affinity >= DUO_BONUS_AFFINITY) return { moodBonus: 2, careMultiplier: 1.03, label: 'Good Friends', icon: '\u{1F91D}' };
+        return null;
     }
 
     return Object.freeze({
@@ -238,6 +278,7 @@
         FRIEND_AFFINITY,
         RIVAL_AFFINITY,
         TAG_FAMILIARITY_MIN,
+        DUO_BONUS_AFFINITY,
         relationshipKey,
         createRelationship,
         normalizeRelationship,
@@ -246,6 +287,8 @@
         applySocialInteraction,
         applyPassiveDrift,
         getRelationshipHighlightsForPet,
-        detectRetentionBeats
+        detectRetentionBeats,
+        assignBond,
+        getDuoBonus
     });
 });

@@ -2050,6 +2050,11 @@
                                     <span class="btn-icon" aria-hidden="true">🏠</span>
                                     <span>Social Hub</span>
                                 </button>
+                                <button class="action-btn bonds-btn" id="bonds-btn" aria-haspopup="dialog">
+                                    <span class="action-btn-tooltip">View & manage bonds</span>
+                                    <span class="btn-icon" aria-hidden="true">💛</span>
+                                    <span>Bonds</span>
+                                </button>
                                 <button class="action-btn breed-btn" id="breed-btn" aria-haspopup="dialog">
                                     <span class="action-btn-tooltip">Breed Pets</span>
                                     <span class="btn-icon" aria-hidden="true">💕</span>
@@ -2357,6 +2362,12 @@
             const socialHubBtn = document.getElementById('social-hub-btn');
             if (socialHubBtn) {
                 socialHubBtn.addEventListener('click', () => showSocialHub());
+            }
+            const bondsBtn = document.getElementById('bonds-btn');
+            if (bondsBtn) {
+                bondsBtn.addEventListener('click', () => {
+                    if (typeof openRelationshipPanel === 'function') openRelationshipPanel();
+                });
             }
             const breedBtn = document.getElementById('breed-btn');
             if (breedBtn) {
