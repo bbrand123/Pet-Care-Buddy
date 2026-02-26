@@ -3143,18 +3143,18 @@ const DAILY_FIXED_TASKS = [
 ];
 
 const DAILY_MODE_TASKS = [
-    { id: 'playMinigame', nameTemplate: 'Play {target} mini-game{plural}', icon: '🎮', target: 1, trackKey: 'minigameCount', maxTarget: 3, lane: 'mode' },
-    { id: 'harvestCrop', nameTemplate: 'Harvest {target} crop{plural}', icon: '🌱', target: 1, trackKey: 'harvestCount', maxTarget: 3, lane: 'mode' },
-    { id: 'visitPark', nameTemplate: 'Visit the Park {target} time{plural}', icon: '🌳', target: 1, trackKey: 'parkVisits', maxTarget: 2, lane: 'mode' },
-    { id: 'expeditionRun', nameTemplate: 'Complete {target} expedition{plural}', icon: '🧭', target: 1, trackKey: 'expeditionCount', maxTarget: 2, lane: 'mode' },
-    { id: 'arenaBattle', nameTemplate: 'Finish {target} arena battle{plural}', icon: '🏟️', target: 1, trackKey: 'battleCount', maxTarget: 3, lane: 'mode' }
+    { id: 'playMinigame', nameTemplate: 'Play {target} mini-game{plural}', icon: '🎮', target: 1, trackKey: 'minigameCount', maxTarget: 3, lane: 'mode', personalityTags: ['curious', 'lazy'] },
+    { id: 'harvestCrop', nameTemplate: 'Harvest {target} crop{plural}', icon: '🌱', target: 1, trackKey: 'harvestCount', maxTarget: 3, lane: 'mode', personalityTags: ['curious', 'lazy'] },
+    { id: 'visitPark', nameTemplate: 'Visit the Park {target} time{plural}', icon: '🌳', target: 1, trackKey: 'parkVisits', maxTarget: 2, lane: 'mode', personalityTags: ['energetic', 'playful'] },
+    { id: 'expeditionRun', nameTemplate: 'Complete {target} expedition{plural}', icon: '🧭', target: 1, trackKey: 'expeditionCount', maxTarget: 2, lane: 'mode', personalityTags: ['energetic', 'playful'] },
+    { id: 'arenaBattle', nameTemplate: 'Finish {target} arena battle{plural}', icon: '🏟️', target: 1, trackKey: 'battleCount', maxTarget: 3, lane: 'mode', personalityTags: ['energetic', 'playful'] }
 ];
 
 const DAILY_WILDCARD_TASKS = [
-    { id: 'wildBond', nameTemplate: 'Build bond points {target} time{plural}', icon: '💞', target: 1, trackKey: 'bondEvents', maxTarget: 2, lane: 'wildcard', minStage: 'child' },
-    { id: 'wildHatch', nameTemplate: 'Hatch {target} new family member{plural}', icon: '🥚', target: 1, trackKey: 'hatchCount', maxTarget: 2, lane: 'wildcard', minStage: 'adult' },
-    { id: 'wildMastery', nameTemplate: 'Gain {target} mastery point{plural}', icon: '🎯', target: 2, trackKey: 'masteryPoints', maxTarget: 6, lane: 'wildcard', minStage: 'adult' },
-    { id: 'wildExplorer', nameTemplate: 'Discover {target} world event{plural}', icon: '🗺️', target: 1, trackKey: 'discoveryEvents', maxTarget: 3, lane: 'wildcard', minStage: 'baby' }
+    { id: 'wildBond', nameTemplate: 'Build bond points {target} time{plural}', icon: '💞', target: 1, trackKey: 'bondEvents', maxTarget: 2, lane: 'wildcard', minStage: 'child', personalityTags: ['curious', 'playful', 'shy'] },
+    { id: 'wildHatch', nameTemplate: 'Hatch {target} new family member{plural}', icon: '🥚', target: 1, trackKey: 'hatchCount', maxTarget: 2, lane: 'wildcard', minStage: 'adult', personalityTags: ['curious', 'playful', 'shy'] },
+    { id: 'wildMastery', nameTemplate: 'Gain {target} mastery point{plural}', icon: '🎯', target: 2, trackKey: 'masteryPoints', maxTarget: 6, lane: 'wildcard', minStage: 'adult', personalityTags: ['energetic', 'playful'] },
+    { id: 'wildExplorer', nameTemplate: 'Discover {target} world event{plural}', icon: '🗺️', target: 1, trackKey: 'discoveryEvents', maxTarget: 3, lane: 'wildcard', minStage: 'baby', personalityTags: ['curious', 'playful', 'shy'] }
 ];
 
 const DAILY_SEASONAL_TASKS = {
@@ -3209,6 +3209,7 @@ const REWARD_BUNDLES = {
     streakDay5: { id: 'streakDay5', coins: 75, modifierId: 'careRush', collectible: { type: 'accessory', id: 'bandana' } },
     streakDay7: { id: 'streakDay7', coins: 90, modifierId: 'happyHour', collectible: { type: 'sticker', id: 'streakFlame' } },
     streakDay10: { id: 'streakDay10', coins: 110, modifierId: 'focusedTraining', collectible: { type: 'accessory', id: 'sunglasses' } },
+    streakDay12: { id: 'streakDay12', coins: 90, modifierId: 'luckyPaws' },
     streakDay14: { id: 'streakDay14', coins: 135, modifierId: 'familyAura', collectible: { type: 'sticker', id: 'heartSticker' } },
     streakDay21: { id: 'streakDay21', coins: 180, modifierId: 'luckyPaws', collectible: { type: 'accessory', id: 'crown' } },
     streakDay30: { id: 'streakDay30', coins: 240, modifierId: 'focusedTraining', collectible: { type: 'sticker', id: 'crownSticker' } },
@@ -3544,6 +3545,7 @@ const STREAK_MILESTONES = [
     { days: 5, bundleId: 'streakDay5', label: '5-Day Streak', description: 'Dedicated caretaker!' },
     { days: 7, bundleId: 'streakDay7', label: 'Week Streak', description: 'A whole week!', freezeTokens: 1 },
     { days: 10, bundleId: 'streakDay10', label: '10-Day Streak', description: 'Super dedicated!' },
+    { days: 12, bundleId: 'streakDay12', label: 'Day 12 Streak', description: 'Halfway to two weeks!' },
     { days: 14, bundleId: 'streakDay14', label: '2-Week Streak', description: 'True devotion!', freezeTokens: 1 },
     { days: 21, bundleId: 'streakDay21', label: '3-Week Streak', description: 'Incredible commitment!', freezeTokens: 1 },
     { days: 30, bundleId: 'streakDay30', label: 'Monthly Streak', description: 'Legendary caretaker!', freezeTokens: 2 }

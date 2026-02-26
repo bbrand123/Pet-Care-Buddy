@@ -1356,11 +1356,21 @@
         }
 
         // Show floating stat change text above pet
-        function showFloatingStatChange(container, label, amount) {
+        function showFloatingStatChange(container, label, amount, suffix) {
             if (!container || amount === 0) return;
             const el = document.createElement('div');
             el.className = 'stat-change-float ' + (amount > 0 ? 'positive' : 'negative');
-            el.textContent = (amount > 0 ? '+' : '') + amount + ' ' + label;
+            if (suffix) {
+                const mainSpan = document.createElement('span');
+                mainSpan.textContent = (amount > 0 ? '+' : '') + amount + ' ' + label;
+                el.appendChild(mainSpan);
+                const suffixSpan = document.createElement('span');
+                suffixSpan.className = 'stat-change-float-suffix';
+                suffixSpan.textContent = ' ' + suffix;
+                el.appendChild(suffixSpan);
+            } else {
+                el.textContent = (amount > 0 ? '+' : '') + amount + ' ' + label;
+            }
             el.style.left = (40 + Math.random() * 20) + '%';
             container.appendChild(el);
             setTimeout(() => el.remove(), 1600);
@@ -1989,14 +1999,21 @@
             };
             showStatDeltaNearNeedBubbles(statDeltas, { announce: false });
             // Feature 1: Floating +stat label above the pet (primary stat change only)
+            // R1: Detect care-decision multiplier status for subtle suffix label
             if (petContainer) {
+                let _f1Suffix = '';
+                if (careDecisionResult) {
+                    if (careDecisionResult.focused && !careDecisionResult.repeatApplied) _f1Suffix = '+Focus';
+                    else if (careDecisionResult.repeatApplied && !careDecisionResult.focused) _f1Suffix = '-Repeat';
+                    else if (careDecisionResult.focused && careDecisionResult.repeatApplied) _f1Suffix = '+Focus/-Repeat';
+                }
                 const _f1PrimaryKey = CARE_PRIMARY_NEED_MAP[action] || null;
                 if (_f1PrimaryKey && statDeltas[_f1PrimaryKey] !== 0) {
-                    showFloatingStatChange(petContainer, CARE_NEED_LABELS[_f1PrimaryKey] || _f1PrimaryKey, statDeltas[_f1PrimaryKey]);
+                    showFloatingStatChange(petContainer, CARE_NEED_LABELS[_f1PrimaryKey] || _f1PrimaryKey, statDeltas[_f1PrimaryKey], _f1Suffix || undefined);
                 } else {
                     const _f1Top = Object.entries(statDeltas).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
                     if (_f1Top && _f1Top[1] !== 0) {
-                        showFloatingStatChange(petContainer, CARE_NEED_LABELS[_f1Top[0]] || _f1Top[0], _f1Top[1]);
+                        showFloatingStatChange(petContainer, CARE_NEED_LABELS[_f1Top[0]] || _f1Top[0], _f1Top[1], _f1Suffix || undefined);
                     }
                 }
             }
@@ -2071,7 +2088,7 @@
                 if (_comboCount === 3) {
                     showToast('🔥 Care Combo ×3! Nice routine!', '#FF9800', { duration: 2200 });
                 } else if (_comboCount === 5) {
-                    // ×5: +10 coins bonus (rate-limited) + toast
+                    // ×5: +10 coins bonus (rate-limited) + toast — chain continues, no reset
                     if (typeof applyCoinGainRateLimits === 'function' && typeof gameState !== 'undefined') {
                         const _bonusCoins = 10;
                         const _limited = applyCoinGainRateLimits(_bonusCoins, 'combo');
@@ -2081,7 +2098,37 @@
                         }
                     }
                     showToast('🌟 Care Combo ×5! +10 coins!', '#FFD700', { duration: 2800 });
-                    _comboActions = []; // reset after milestone
+                } else if (_comboCount === 7) {
+                    // ×7: +15 coins (rate-limited)
+                    if (typeof applyCoinGainRateLimits === 'function' && typeof gameState !== 'undefined') {
+                        const _bonusCoins = 15;
+                        const _limited = applyCoinGainRateLimits(_bonusCoins, 'combo');
+                        if (_limited > 0) {
+                            gameState.coins = (gameState.coins || 0) + _limited;
+                            if (typeof saveGame === 'function') saveGame();
+                        }
+                    }
+                    showToast('✨ Care Combo ×7! +15 coins!', '#FFD700', { duration: 2800 });
+                } else if (_comboCount === 10) {
+                    // ×10: +25 coins (rate-limited) + brief full-screen glow
+                    if (typeof applyCoinGainRateLimits === 'function' && typeof gameState !== 'undefined') {
+                        const _bonusCoins = 25;
+                        const _limited = applyCoinGainRateLimits(_bonusCoins, 'combo');
+                        if (_limited > 0) {
+                            gameState.coins = (gameState.coins || 0) + _limited;
+                            if (typeof saveGame === 'function') saveGame();
+                        }
+                    }
+                    showToast('🌟 Care Combo ×10! +25 coins!', '#FFD700', { duration: 3200 });
+                    const _rmX10 = document.documentElement.getAttribute('data-reduced-motion') === 'true' ||
+                        !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+                    if (!_rmX10) {
+                        const _glowTarget = document.querySelector('.pet-container') || document.querySelector('.pet-area');
+                        if (_glowTarget) {
+                            _glowTarget.classList.add('combo-max-glow');
+                            setTimeout(() => _glowTarget.classList.remove('combo-max-glow'), 800);
+                        }
+                    }
                 }
             }
 
@@ -2877,4 +2924,77 @@
 
         if (typeof window !== 'undefined') {
             window.runMiniGameResetSmokeTest = runMiniGameResetSmokeTest;
+        }
+
+        // ==================== R6: ELDER MENTOR ACTION ====================
+
+        function isElderMentorAvailable() {
+            try {
+                const pet = (typeof gameState !== 'undefined' && gameState && gameState.pet) ? gameState.pet : null;
+                if (!pet || pet.growthStage !== 'elder') return false;
+                const pets = (gameState.pets && Array.isArray(gameState.pets)) ? gameState.pets : [];
+                return pets.some(p => p && p.id !== pet.id && p.growthStage !== 'elder' && !p.memorialized && !p.retired);
+            } catch (_) { return false; }
+        }
+
+        function isElderMentorUsedToday() {
+            try {
+                const pet = (typeof gameState !== 'undefined' && gameState && gameState.pet) ? gameState.pet : null;
+                if (!pet) return false;
+                const today = typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().slice(0, 10);
+                return pet.lastMentorDate === today;
+            } catch (_) { return false; }
+        }
+
+        function performMentorAction() {
+            const pet = (typeof gameState !== 'undefined' && gameState && gameState.pet) ? gameState.pet : null;
+            if (!pet || pet.growthStage !== 'elder') {
+                if (typeof showToast === 'function') showToast('Only Elder pets can mentor.', '#90A4AE');
+                return;
+            }
+            const today = typeof getTodayString === 'function' ? getTodayString() : new Date().toISOString().slice(0, 10);
+            if (pet.lastMentorDate === today) {
+                if (typeof showToast === 'function') showToast('Already mentored today.', '#90A4AE');
+                return;
+            }
+            const pets = (gameState.pets && Array.isArray(gameState.pets)) ? gameState.pets : [];
+            const eligibleTargets = pets.filter(p => p && p.id !== pet.id && p.growthStage !== 'elder' && !p.memorialized && !p.retired);
+            if (eligibleTargets.length === 0) {
+                if (typeof showToast === 'function') showToast('No younger pets to mentor.', '#90A4AE');
+                return;
+            }
+            // Youngest = lowest care actions count
+            const target = eligibleTargets.reduce((youngest, p) => {
+                return (Number(p.careActions) || 0) < (Number(youngest.careActions) || 0) ? p : youngest;
+            });
+
+            // Mark used today
+            pet.lastMentorDate = today;
+
+            // Assign mentor bond if not already set
+            const _assignBond = (typeof assignBond === 'function') ? assignBond
+                : (typeof MLFSimRelationships !== 'undefined' && MLFSimRelationships && typeof MLFSimRelationships.assignBond === 'function') ? MLFSimRelationships.assignBond : null;
+            if (_assignBond) _assignBond('mentor', pet.id, target.id);
+
+            // Grant +5 affinity toward elder
+            if (typeof addRelationshipPoints === 'function') addRelationshipPoints(pet.id, target.id, 5);
+
+            // Growth bonus: 1 extra care action credit toward next milestone
+            target.careActions = (target.careActions || 0) + 1;
+            if (typeof checkGrowthMilestone === 'function') checkGrowthMilestone(target);
+
+            // Journal entry
+            const elderName = pet.name || 'Elder';
+            const targetName = target.name || 'Young Pet';
+            if (typeof addJournalEntry === 'function') addJournalEntry('📚', `${elderName} shared wisdom with ${targetName} today.`);
+
+            // Toast
+            if (typeof showToast === 'function') showToast(`📚 ${elderName} mentored ${targetName}!`, '#8D6E63');
+
+            // Sync active pet into array and save
+            if (typeof syncActivePetToArray === 'function') syncActivePetToArray();
+            if (typeof saveGame === 'function') saveGame();
+
+            // Re-render after cooldown
+            setTimeout(() => { if (typeof renderPetPhase === 'function') renderPetPhase(); }, 600);
         }

@@ -753,6 +753,52 @@
 
         // ==================== INITIALIZATION ====================
 
+        // ==================== R5: WEEKLY ARC PROGRESS PILL ====================
+
+        function _updateArcPill(pillEl) {
+            const pill = pillEl || document.getElementById('arc-progress-pill');
+            if (!pill) return;
+            const arc = (typeof gameState !== 'undefined' && gameState && gameState.weeklyArc) ? gameState.weeklyArc : null;
+            if (!arc || arc.completed || !Array.isArray(arc.tasks) || arc.tasks.length === 0) {
+                pill.style.display = 'none';
+                return;
+            }
+            const total = arc.tasks.length;
+            const completed = arc.tasks.filter(t => t && t.done).length;
+            pill.textContent = `Arc: ${completed}/${total}`;
+            pill.style.display = '';
+        }
+
+        function _renderArcPill() {
+            const dailyBtn = document.getElementById('daily-btn');
+            if (!dailyBtn) return;
+            let pill = document.getElementById('arc-progress-pill');
+            if (!pill) {
+                pill = document.createElement('span');
+                pill.id = 'arc-progress-pill';
+                pill.className = 'arc-progress-pill';
+                pill.setAttribute('aria-hidden', 'true');
+                dailyBtn.appendChild(pill);
+            }
+            _updateArcPill(pill);
+        }
+
+        function initArcProgressPill() {
+            setTimeout(_renderArcPill, 300);
+            // Re-render pill on any care event that drives arc progress
+            const _arcUpdateEvents = [
+                'pet:fed', 'pet:played', 'pet:slept', 'pet:washed', 'pet:groomed',
+                'pet:exercised', 'pet:medicated', 'pet:cuddled',
+                EVENTS && EVENTS.CARE_ACTION_DONE || 'pet:care',
+                EVENTS && EVENTS.DAILY_TASK_COMPLETED || 'reward:dailyTaskCompleted',
+                EVENTS && EVENTS.MINIGAME_COMPLETED || 'minigame:completed',
+                'game:newDay'
+            ].filter(Boolean);
+            _arcUpdateEvents.forEach(ev => {
+                try { _featureUnsubs.push(EventBus.on(ev, () => _renderArcPill())); } catch (_) {}
+            });
+        }
+
         function initAllFeatures() {
             if (_featuresInitialized) return;
             _featuresInitialized = true;
@@ -783,6 +829,9 @@
 
             // Feature 21: Pet relationship duo bonus toasts
             initRelationshipFeature();
+
+            // R5: Weekly Arc Progress Pill
+            initArcProgressPill();
         }
 
         function teardownAllFeatures() {

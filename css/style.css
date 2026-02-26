@@ -3046,6 +3046,215 @@
     color: #29414e;
 }
 
+/* R8: Difficulty tag on summary card */
+.mg-summary-diff-tag {
+    display: inline-block;
+    font-size: 0.78em;
+    font-weight: 600;
+    background: rgba(90,178,222,0.13);
+    color: #3a7fa0;
+    border-radius: 6px;
+    padding: 1px 6px;
+    vertical-align: middle;
+}
+
+/* R8: Difficulty selector modal */
+.mg-difficulty-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1400;
+}
+
+.mg-difficulty-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px 20px 18px;
+    width: min(320px, 92vw);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    text-align: center;
+}
+
+.mg-difficulty-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text, #1a2e35);
+}
+
+.mg-difficulty-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.mg-diff-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 4px 8px;
+    border: 2px solid transparent;
+    border-radius: 12px;
+    background: #f0f6fa;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.mg-diff-btn:hover,
+.mg-diff-btn:focus-visible {
+    border-color: #5ab2de;
+    background: #e4f3fb;
+    outline: none;
+}
+
+.mg-diff-btn--selected {
+    border-color: #4a90d9;
+    background: #daf0fb;
+}
+
+.mg-diff-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.mg-diff-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text, #1a2e35);
+}
+
+.mg-diff-mult {
+    font-size: 0.7rem;
+    color: var(--color-text-secondary, #78909C);
+}
+
+.mg-difficulty-cancel {
+    align-self: center;
+    background: none;
+    border: none;
+    color: var(--color-text-secondary, #78909C);
+    font-size: 0.88rem;
+    cursor: pointer;
+    padding: 4px 12px;
+    border-radius: 8px;
+    font-family: inherit;
+}
+
+.mg-difficulty-cancel:hover {
+    color: var(--color-text, #1a2e35);
+}
+
+/* R9: Shop save hint */
+.shop-save-hint {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #e67e22;
+    margin: 2px 0 0;
+}
+
+/* R9: Prestige recommended badge */
+.prestige-rec-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(120deg, #f5a623, #e67e22);
+    border-radius: 6px;
+    padding: 2px 8px;
+    margin-bottom: 3px;
+}
+
+.prestige-rec-card {
+    border: 2px solid #f5a623;
+}
+
+/* R10: Offspring Preview Card */
+.offspring-preview-card {
+    background: linear-gradient(135deg, #f5f0ff 0%, #fdf3fc 100%);
+    border: 1px solid rgba(156, 39, 176, 0.2);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 8px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.offspring-preview-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #7b1fa2;
+    margin: 0;
+}
+
+.offspring-preview-type,
+.offspring-preview-chances,
+.offspring-preview-traits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+}
+
+.offspring-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: rgba(156, 39, 176, 0.12);
+    color: #6a0dad;
+    border-radius: 8px;
+    padding: 2px 8px;
+}
+
+.offspring-chance-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 2px 7px;
+}
+
+.offspring-mutation-badge {
+    background: rgba(233, 30, 99, 0.1);
+    color: #c2185b;
+}
+
+.offspring-hybrid-badge {
+    background: rgba(33, 150, 243, 0.1);
+    color: #1565c0;
+}
+
+.offspring-trait-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: rgba(76, 175, 80, 0.12);
+    color: #2e7d32;
+    border-radius: 8px;
+    padding: 2px 7px;
+}
+
+.offspring-no-traits {
+    font-size: 0.72rem;
+    color: var(--color-text-secondary, #78909C);
+    font-style: italic;
+}
+
         /* ==================== SHARED MINIGAME STYLES ==================== */
 
         .fetch-game-overlay,
@@ -10107,6 +10316,41 @@
 
 .stat-change-float.positive { color: #43A047; }
 .stat-change-float.negative { color: #E53935; }
+.stat-change-float-suffix { font-size: 0.7em; font-weight: 400; opacity: 0.7; }
+
+/* R5: Weekly arc progress pill */
+.arc-progress-pill {
+    display: block;
+    font-size: 0.6rem;
+    font-weight: 500;
+    color: var(--color-text-secondary, #78909C);
+    background: rgba(0,0,0,0.07);
+    border-radius: 8px;
+    padding: 0 4px;
+    margin-top: 1px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+/* R2: ×10 combo full-screen glow overlay on pet container */
+.combo-max-glow {
+    position: relative;
+}
+.combo-max-glow::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.18) 0%, transparent 70%);
+    border-radius: inherit;
+    pointer-events: none;
+    animation: comboMaxGlowFade 0.8s ease-out forwards;
+    z-index: 5;
+}
+@keyframes comboMaxGlowFade {
+    0%   { opacity: 0; }
+    20%  { opacity: 1; }
+    100% { opacity: 0; }
+}
 
 @keyframes statFloat {
     0% { opacity: 1; transform: translateX(-50%) translateY(0); }

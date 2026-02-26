@@ -105,6 +105,7 @@
             if (pool.length <= 2) return pool;
             const usage = getDailyModeUsageCounts();
             const recentIds = getRecentDailyModeTaskIds();
+            const _personality = (gameState && gameState.pet && gameState.pet.personality) || null;
             const selected = [];
             let seed = hashDailySeed(`mode:${dateKey}`);
             while (pool.length > 0 && selected.length < 2) {
@@ -114,7 +115,8 @@
                     const count = Math.max(0, Number(usage[task.trackKey]) || 0);
                     const underuseBoost = 1 + Math.max(0, (minUsage + 8 - count)) * 0.08;
                     const repeatPenalty = recentIds.has(task.id) ? 0.68 : 1;
-                    return Math.max(0.25, underuseBoost * repeatPenalty);
+                    const personalityMult = (_personality && Array.isArray(task.personalityTags) && task.personalityTags.includes(_personality)) ? 2 : 1;
+                    return Math.max(0.25, underuseBoost * repeatPenalty) * personalityMult;
                 });
                 const totalWeight = weights.reduce((sum, w) => sum + w, 0);
                 let pick = totalWeight > 0 ? ((seed >>> 0) / 4294967296) * totalWeight : 0;
@@ -147,8 +149,18 @@
         function pickDailyWildcardTask(stage, dateKey) {
             const pool = (Array.isArray(DAILY_WILDCARD_TASKS) ? DAILY_WILDCARD_TASKS : []).filter((task) => canUseWildcardTask(task, stage));
             if (pool.length === 0) return null;
-            const idx = hashDailySeed(`wild:${dateKey}:${stage}`) % pool.length;
-            return pool[idx];
+            const _personality = (gameState && gameState.pet && gameState.pet.personality) || null;
+            const weights = pool.map((task) =>
+                (_personality && Array.isArray(task.personalityTags) && task.personalityTags.includes(_personality)) ? 2 : 1
+            );
+            const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+            const seed = hashDailySeed(`wild:${dateKey}:${stage}`);
+            let pick = (totalWeight > 0) ? ((seed >>> 0) / 4294967296) * totalWeight : 0;
+            for (let i = 0; i < pool.length; i++) {
+                pick -= weights[i];
+                if (pick <= 0) return pool[i];
+            }
+            return pool[pool.length - 1];
         }
 
         function buildDailyTaskEntry(task, stage) {

@@ -305,7 +305,17 @@
             });
 
         Object.keys(relationships).forEach((key) => {
-            relationships[key] = Relationships.applyPassiveDrift(relationships[key], nowMs, dtMs);
+            const _driftPairIds = key.split('|');
+            const _driftPetA = petsById[_driftPairIds[0]];
+            const _driftPetB = petsById[_driftPairIds[1]];
+            const _driftOpts = {
+                petAName: (_driftPetA && _driftPetA.name) || null,
+                petBName: (_driftPetB && _driftPetB.name) || null,
+                petAAlive: !!(_driftPetA && !_driftPetA.memorialized && !_driftPetA.retired),
+                petBAlive: !!(_driftPetB && !_driftPetB.memorialized && !_driftPetB.retired),
+                isRelPanelOpen: !!(typeof document !== 'undefined' && document.querySelector && document.querySelector('.relationship-panel-overlay'))
+            };
+            relationships[key] = Relationships.applyPassiveDrift(relationships[key], nowMs, dtMs, _driftOpts);
         });
 
         return { household: Object.assign({}, household, { relationships }), retentionBeats };

@@ -205,11 +205,17 @@
                                 }
                             }
                         }
+                        // R9: "Save X more coins" hint — show when halfway to affording item
+                        const _r9Diff = price - balance;
+                        const _r9SaveHint = (available && balance < price && balance >= price * 0.5)
+                            ? `<div class="shop-save-hint">\uD83D\uDCB0 Save ${_r9Diff} more coin${_r9Diff !== 1 ? 's' : ''}!</div>`
+                            : '';
                         return `
                             <div class="economy-card">
                                 <div><strong>${item.emoji} ${item.name}</strong></div>
                                 <div class="explore-subtext">${item.description || ''}</div>
                                 <div class="explore-subtext">Owned: ${ownedCount}</div>
+                                ${_r9SaveHint}
                                 ${durabilityHTML}
                                 <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
                                     <button class="modal-btn confirm" data-shop-buy="${category.key}:${item.id}">Buy (${price}🪙)</button>
@@ -249,11 +255,23 @@
                 // Rec 6: Prestige shop section
                 let prestigeHTML = '';
                 if (typeof PRESTIGE_PURCHASES !== 'undefined') {
+                    // R9: Find cheapest unowned prestige item within 2× balance for "Recommended upgrade" label
+                    let _r9PrestigeRec = null;
+                    Object.values(PRESTIGE_PURCHASES).forEach((item) => {
+                        const _owned = (typeof hasPrestigePurchase === 'function') ? hasPrestigePurchase(item.id) : false;
+                        if (_owned) return;
+                        const _cost = Number(item.cost) || Infinity;
+                        if (_cost <= balance * 2) {
+                            if (!_r9PrestigeRec || _cost < (Number(_r9PrestigeRec.cost) || Infinity)) _r9PrestigeRec = item;
+                        }
+                    });
                     const prestigeCards = Object.values(PRESTIGE_PURCHASES).map((item) => {
                         const owned = (typeof hasPrestigePurchase === 'function') ? hasPrestigePurchase(item.id) : false;
+                        const _isRecommended = !owned && _r9PrestigeRec && item.id === _r9PrestigeRec.id;
                         return `
-                            <div class="economy-card" ${owned ? 'style="opacity:0.6;"' : ''}>
+                            <div class="economy-card${_isRecommended ? ' prestige-rec-card' : ''}" ${owned ? 'style="opacity:0.6;"' : ''}>
                                 <div><strong>${item.emoji} ${item.name}</strong></div>
+                                ${_isRecommended ? '<div class="prestige-rec-badge">\u2605 Recommended upgrade</div>' : ''}
                                 <div class="explore-subtext">${item.description || ''}</div>
                                 ${owned ? '<div class="explore-subtext" style="color:#66BB6A;">Owned</div>'
                                     : `<button class="modal-btn confirm" data-prestige-buy="${item.id}">Buy (${item.cost}🪙)</button>`}

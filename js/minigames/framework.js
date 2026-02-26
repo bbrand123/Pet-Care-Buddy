@@ -1,5 +1,79 @@
         // ==================== MINI GAMES ====================
 
+        // R8: Difficulty tiers — session variable (not persisted)
+        var _minigameDifficulty = 'normal';
+        var _DIFFICULTY_CONFIG = {
+            easy:   { label: 'Easy',   coinMult: 0.8,  icon: '\uD83C\uDF31' },
+            normal: { label: 'Normal', coinMult: 1.0,  icon: '\u2B50' },
+            hard:   { label: 'Hard',   coinMult: 1.3,  icon: '\uD83D\uDD25' }
+        };
+
+        // R8: Show difficulty selection modal, call onConfirm() when a tier is chosen
+        function showDifficultySelector(gameId, onConfirm) {
+            var _dsExisting = document.querySelector('.mg-difficulty-overlay');
+            if (_dsExisting) _dsExisting.remove();
+
+            var _dsOverlay = document.createElement('div');
+            _dsOverlay.className = 'mg-difficulty-overlay';
+            _dsOverlay.setAttribute('role', 'dialog');
+            _dsOverlay.setAttribute('aria-modal', 'true');
+            _dsOverlay.setAttribute('aria-label', 'Select difficulty');
+
+            _dsOverlay.innerHTML = '<div class="mg-difficulty-card">' +
+                '<h3 class="mg-difficulty-title">Select Difficulty</h3>' +
+                '<div class="mg-difficulty-btns">' +
+                  '<button class="mg-diff-btn" data-diff="easy" type="button" aria-label="Easy — 0.8x coins">' +
+                    '<span class="mg-diff-icon" aria-hidden="true">\uD83C\uDF31</span>' +
+                    '<span class="mg-diff-label">Easy</span>' +
+                    '<span class="mg-diff-mult">\u00D70.8 coins</span>' +
+                  '</button>' +
+                  '<button class="mg-diff-btn mg-diff-btn--selected" data-diff="normal" type="button" aria-label="Normal — 1.0x coins" aria-pressed="true">' +
+                    '<span class="mg-diff-icon" aria-hidden="true">\u2B50</span>' +
+                    '<span class="mg-diff-label">Normal</span>' +
+                    '<span class="mg-diff-mult">\u00D71.0 coins</span>' +
+                  '</button>' +
+                  '<button class="mg-diff-btn" data-diff="hard" type="button" aria-label="Hard — 1.3x coins">' +
+                    '<span class="mg-diff-icon" aria-hidden="true">\uD83D\uDD25</span>' +
+                    '<span class="mg-diff-label">Hard</span>' +
+                    '<span class="mg-diff-mult">\u00D71.3 coins</span>' +
+                  '</button>' +
+                '</div>' +
+                '<button class="mg-difficulty-cancel" type="button">Cancel</button>' +
+                '</div>';
+
+            function _dsClose() {
+                if (typeof popModalEscape === 'function') popModalEscape(_dsClose);
+                if (_dsOverlay.parentNode) _dsOverlay.remove();
+            }
+
+            // Highlight the last-used difficulty
+            _dsOverlay.querySelectorAll('.mg-diff-btn').forEach(function(btn) {
+                var d = btn.getAttribute('data-diff');
+                if (d === _minigameDifficulty) {
+                    btn.classList.add('mg-diff-btn--selected');
+                    btn.setAttribute('aria-pressed', 'true');
+                } else {
+                    btn.classList.remove('mg-diff-btn--selected');
+                    btn.removeAttribute('aria-pressed');
+                }
+                btn.addEventListener('click', function() {
+                    _minigameDifficulty = btn.getAttribute('data-diff') || 'normal';
+                    _dsClose();
+                    if (typeof onConfirm === 'function') onConfirm();
+                });
+            });
+
+            _dsOverlay.querySelector('.mg-difficulty-cancel').addEventListener('click', _dsClose);
+            _dsOverlay.addEventListener('click', function(e) { if (e.target === _dsOverlay) _dsClose(); });
+
+            document.body.appendChild(_dsOverlay);
+            if (typeof pushModalEscape === 'function') pushModalEscape(_dsClose);
+            if (typeof trapFocus === 'function') trapFocus(_dsOverlay);
+            // Focus the currently selected difficulty button
+            var _dsSelectedBtn = _dsOverlay.querySelector('.mg-diff-btn--selected') || _dsOverlay.querySelector('.mg-diff-btn');
+            if (_dsSelectedBtn) _dsSelectedBtn.focus();
+        }
+
         // Fisher-Yates shuffle for unbiased randomization
         function shuffleArray(arr) {
             for (let i = arr.length - 1; i > 0; i--) {
@@ -556,12 +630,12 @@
                 if (e.target === overlay) closeMenu();
             });
 
-            // Game card listeners
+            // Game card listeners — R8: show difficulty selector before starting
             overlay.querySelectorAll('.minigame-card').forEach(card => {
                 card.addEventListener('click', () => {
                     const gameId = card.getAttribute('data-game');
                     closeMenu();
-                    startMiniGame(gameId);
+                    showDifficultySelector(gameId, () => startMiniGame(gameId));
                 });
             });
 
@@ -593,6 +667,7 @@
             const personalBest = Number.isFinite(options.personalBest) ? options.personalBest : null;
             const medal = options.medal && options.medal.tier ? options.medal : null;
             const rewardHint = typeof options.rewardHint === 'string' ? options.rewardHint : '';
+            const difficultyLabel = typeof options.difficultyLabel === 'string' ? options.difficultyLabel : ''; // R8
 
             const existing = document.querySelector('.minigame-summary-overlay');
             if (existing) existing.remove();
@@ -619,7 +694,7 @@
                     <h3 class="minigame-summary-title">${escapeHTML(gameName)} Results</h3>
                     ${medalHTML}
                     ${personalBestHTML}
-                    <p class="minigame-summary-scoreline">Score: <strong>${score}</strong> • Coins: <strong>+${coinReward}</strong></p>
+                    <p class="minigame-summary-scoreline">Score: <strong>${score}</strong> • Coins: <strong>+${coinReward}</strong>${difficultyLabel ? ` • <span class="mg-summary-diff-tag">${escapeHTML(difficultyLabel)}</span>` : ''}</p>
                     ${rewardHint ? `<p class="minigame-summary-scoreline" style="font-size:0.86rem;color:#546E7A;">${escapeHTML(rewardHint)}</p>` : ''}
                     <div class="minigame-summary-grid">${statsHTML}</div>
                     <div class="minigame-summary-actions">
@@ -781,12 +856,24 @@
 
             if (!config.skipPlayCount) incrementMinigamePlayCount(gameId, score);
             const statAggregate = applyMiniGameStatChangesToPets(pets, config.statDelta);
-            const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins(gameId, coinScore) : 0;
+
+            // R8: Apply difficulty multiplier to coin score
+            const _r8Diff = (_DIFFICULTY_CONFIG && _DIFFICULTY_CONFIG[_minigameDifficulty]) ? _minigameDifficulty : 'normal';
+            const _r8DiffConf = _DIFFICULTY_CONFIG[_r8Diff] || { label: 'Normal', coinMult: 1.0 };
+            const _r8CoinScore = Math.round(coinScore * _r8DiffConf.coinMult);
+
+            const coinReward = (typeof awardMiniGameCoins === 'function') ? awardMiniGameCoins(gameId, _r8CoinScore) : 0;
             const rewardContext = (gameState && gameState._lastMinigameRewardContext && gameState._lastMinigameRewardContext.source === 'minigame' && gameState._lastMinigameRewardContext.gameId === gameId)
                 ? gameState._lastMinigameRewardContext
                 : null;
             const previousBest = Number((gameState.minigameHighScores || {})[gameId] || 0);
             const isNewBest = updateMinigameHighScore(gameId, score);
+
+            // R8: Track per-difficulty high scores
+            if (!gameState.minigameHighScoresByDiff) gameState.minigameHighScoresByDiff = {};
+            if (!gameState.minigameHighScoresByDiff[gameId]) gameState.minigameHighScoresByDiff[gameId] = {};
+            const _r8PrevDiffBest = Number(gameState.minigameHighScoresByDiff[gameId][_r8Diff] || 0);
+            if (score > _r8PrevDiffBest) gameState.minigameHighScoresByDiff[gameId][_r8Diff] = score;
 
             updateNeedDisplays();
             updatePetMood();
@@ -824,7 +911,8 @@
                 isNewBest,
                 personalBest: isNewBest ? Math.max(score, previousBest) : null,
                 medal: getMiniGameMedal(score, config.medalThresholds || null),
-                rewardHint: rewardContext && rewardContext.inDiminishingRewards ? rewardContext.summaryHint : ''
+                rewardHint: rewardContext && rewardContext.inDiminishingRewards ? rewardContext.summaryHint : '',
+                difficultyLabel: _r8DiffConf.icon + ' ' + _r8DiffConf.label  // R8
             });
             return { score, coinReward, isNewBest };
         }

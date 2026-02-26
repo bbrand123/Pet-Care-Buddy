@@ -2059,7 +2059,13 @@
                                     <span class="action-btn-tooltip">Breed Pets</span>
                                     <span class="btn-icon" aria-hidden="true">💕</span>
                                     <span>Breed</span>
-                                </button>` : ''}
+                                </button>
+                                ${typeof isElderMentorAvailable === 'function' && isElderMentorAvailable() ? `
+                                <button class="action-btn mentor-btn${typeof isElderMentorUsedToday === 'function' && isElderMentorUsedToday() ? ' action-btn-used' : ''}" id="mentor-btn" aria-label="Mentor youngest pet"${typeof isElderMentorUsedToday === 'function' && isElderMentorUsedToday() ? ' disabled' : ''}>
+                                    <span class="action-btn-tooltip">Share wisdom with youngest pet</span>
+                                    <span class="btn-icon" aria-hidden="true">📚</span>
+                                    <span>${typeof isElderMentorUsedToday === 'function' && isElderMentorUsedToday() ? 'Mentored today ✓' : 'Mentor'}</span>
+                                </button>` : ''}` : ''}
                             </div>
                         </div>
                     </div>
@@ -2372,6 +2378,12 @@
             const breedBtn = document.getElementById('breed-btn');
             if (breedBtn) {
                 breedBtn.addEventListener('click', () => showBreedingModal());
+            }
+            const mentorBtn = document.getElementById('mentor-btn');
+            if (mentorBtn) {
+                mentorBtn.addEventListener('click', () => {
+                    if (typeof performMentorAction === 'function') performMentorAction();
+                });
             }
             // Breeding egg collect buttons
             document.querySelectorAll('.breeding-egg-collect-btn').forEach(btn => {

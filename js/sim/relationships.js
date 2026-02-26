@@ -149,7 +149,7 @@
         };
     }
 
-    function applyPassiveDrift(rel, nowMs, dtMs) {
+    function applyPassiveDrift(rel, nowMs, dtMs, opts) {
         const current = normalizeRelationship(rel, nowMs);
         const now = Number.isFinite(nowMs) ? nowMs : current.lastInteractionAt;
         const dt = Math.max(0, Number(dtMs) || 0);
@@ -158,6 +158,27 @@
         const sinceLast = Math.max(0, now - (Number(current.lastInteractionAt) || 0));
         let familiarity = current.familiarity;
         let affinity = current.affinity;
+
+        // R7: Affinity drift warning — fire once per day when 18h threshold crossed
+        const _DRIFT_WARN_THRESHOLD_MS = 18 * 60 * 60 * 1000;
+        if (sinceLast > _DRIFT_WARN_THRESHOLD_MS && affinity > 20) {
+            const _driftToday = typeof now === 'number' ? new Date(now).toISOString().slice(0, 10) : '';
+            if (_driftToday && current.driftWarnedDate !== _driftToday) {
+                const _warnOpts = (opts && typeof opts === 'object') ? opts : {};
+                const _bothAlive = _warnOpts.petAAlive !== false && _warnOpts.petBAlive !== false;
+                const _relPanelOpen = !!_warnOpts.isRelPanelOpen;
+                if (_bothAlive && !_relPanelOpen) {
+                    const _pA = _warnOpts.petAName || 'Pet A';
+                    const _pB = _warnOpts.petBName || 'Pet B';
+                    try {
+                        if (typeof showToast === 'function') {
+                            showToast(`\uD83D\uDC9B ${_pA} and ${_pB} haven\u2019t interacted today`, '#f5c842', { duration: 4000 });
+                        }
+                    } catch (_) {}
+                    current.driftWarnedDate = _driftToday;
+                }
+            }
+        }
 
         if (sinceLast > 12 * 60 * 60 * 1000) {
             const famDecayPerHour = 0.5;
@@ -176,7 +197,9 @@
             affinity: clamp(Math.round(affinity), AFFINITY_MIN, AFFINITY_MAX),
             familiarity: clamp(Math.round(familiarity), FAMILIARITY_MIN, FAMILIARITY_MAX),
             lastInteractionAt: current.lastInteractionAt,
-            tags: current.tags
+            driftWarnedDate: current.driftWarnedDate || null,
+            tags: current.tags,
+            bondType: current.bondType
         });
     }
 

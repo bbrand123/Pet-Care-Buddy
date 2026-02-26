@@ -316,6 +316,7 @@
 
                 // Compatibility preview
                 let compatHTML = '';
+                let offspringPreviewHTML = ''; // R10
                 if (selectedParent1 !== null && selectedParent2 !== null) {
                     const p1 = gameState.pets[selectedParent1];
                     const p2 = gameState.pets[selectedParent2];
@@ -352,6 +353,47 @@
                             ${!pairCheck.eligible ? `<div class="breeding-preview-error">${escapeHTML(pairCheck.reason || '')}</div>` : ''}
                         </div>
                     `;
+
+                    // R10: Offspring Preview Card
+                    const _r10MutPct = Math.round((BREEDING_CONFIG.mutationChance || 0) * 100);
+                    const _r10HybPct = hybridData ? Math.round((BREEDING_CONFIG.hybridChance || 0) * 100) : 0;
+                    const _r10OffspringType = hybridData || getAllPetTypeData(p1.type) || {};
+                    const _r10TypeEmoji = _r10OffspringType.emoji || '🐣';
+                    const _r10TypeName = escapeHTML(_r10OffspringType.name || p1.type || 'Offspring');
+
+                    // Trait boost badges from room incubation bonuses
+                    let _r10TraitBadges = '';
+                    if (incubRoomBonus && incubRoomBonus.statBoosts && typeof incubRoomBonus.statBoosts === 'object') {
+                        Object.entries(incubRoomBonus.statBoosts).forEach(function([stat, boost]) {
+                            const statData = (typeof GENETIC_STATS !== 'undefined' && GENETIC_STATS[stat]) || null;
+                            const statLabel = statData ? statData.label : stat;
+                            const statEmoji = statData ? (statData.emoji || '') : '';
+                            if (Number(boost) > 0) {
+                                _r10TraitBadges += `<span class="offspring-trait-badge">${statEmoji} +${Math.round(Number(boost) * 10) / 10} ${escapeHTML(statLabel)}</span>`;
+                            }
+                        });
+                    }
+                    // Also check INCUBATION_ROOM_BONUSES label for display if no stat boosts parsed
+                    if (!_r10TraitBadges && incubRoomBonus && incubRoomBonus.label) {
+                        _r10TraitBadges = `<span class="offspring-trait-badge">\uD83C\uDFE0 ${escapeHTML(incubRoomBonus.label)}</span>`;
+                    }
+
+                    offspringPreviewHTML = `
+                        <div class="offspring-preview-card" aria-label="Offspring preview">
+                            <div class="offspring-preview-title">\uD83D\uDC23 Offspring Preview</div>
+                            <div class="offspring-preview-type">
+                                <span class="offspring-type-badge">${_r10TypeEmoji} ${_r10TypeName}</span>
+                                ${hybridData ? `<span class="offspring-type-badge offspring-hybrid-badge">\uD83E\uDDEC Hybrid: ${escapeHTML(hybridData.name)}</span>` : ''}
+                            </div>
+                            <div class="offspring-preview-chances">
+                                <span class="offspring-chance-badge offspring-mutation-badge">\uD83C\uDF08 ${_r10MutPct}% Mutation</span>
+                                ${_r10HybPct > 0 ? `<span class="offspring-chance-badge offspring-hybrid-badge">\uD83E\uDDEC ${_r10HybPct}% Hybrid</span>` : ''}
+                            </div>
+                            <div class="offspring-preview-traits">
+                                ${_r10TraitBadges || '<span class="offspring-no-traits">No trait boosts</span>'}
+                            </div>
+                        </div>
+                    `;
                 }
 
                 // Breeding eggs count
@@ -375,6 +417,7 @@
                             </div>
                         </div>
                         ${compatHTML}
+                        ${offspringPreviewHTML}
                         <div class="modal-buttons">
                             <button class="modal-btn cancel" id="breeding-cancel">Cancel</button>
                             <button class="modal-btn confirm" id="breeding-confirm" ${selectedParent1 === null || selectedParent2 === null ? 'disabled' : ''}>🥚 Breed!</button>
