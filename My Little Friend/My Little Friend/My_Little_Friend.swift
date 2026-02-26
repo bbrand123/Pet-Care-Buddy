@@ -116,6 +116,8 @@ struct GameWebView: UIViewRepresentable {
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
         configuration.userContentController.add(context.coordinator, name: "haptics")
         configuration.userContentController.add(context.coordinator, name: "lifecycleSave")
         configuration.userContentController.add(context.coordinator, name: "notifications")

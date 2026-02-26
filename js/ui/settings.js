@@ -1135,6 +1135,7 @@
                     if (typeof GameAudio.getEnabled === 'function' && typeof GameAudio.toggle === 'function' && !GameAudio.getEnabled()) GameAudio.toggle();
                     if (typeof GameAudio.getMusicEnabled === 'function' && typeof GameAudio.toggleMusic === 'function' && !GameAudio.getMusicEnabled()) GameAudio.toggleMusic();
                     if (typeof GameAudio.getSamplePackEnabled === 'function' && typeof GameAudio.toggleSamplePack === 'function' && GameAudio.getSamplePackEnabled()) GameAudio.toggleSamplePack();
+                    if (typeof GameAudio.getMuted === 'function' && typeof GameAudio.setMuted === 'function' && GameAudio.getMuted('ambient')) GameAudio.setMuted('ambient', false);
                 }
             } catch (e) {}
         })();
