@@ -1,6 +1,6 @@
 # Runtime Boundaries and Approved Extension Points
 
-This project ships as an iOS app with an embedded `WKWebView` runtime. To keep save/load behavior reliable and the modular runtime maintainable, new features should plug into approved extension points instead of patching global runtime behavior ad hoc.
+This project ships as a **web app** from static assets (for example Cloudflare Pages). To keep save/load behavior reliable and the modular runtime maintainable, new features should plug into approved extension points instead of patching global runtime behavior ad hoc.
 
 ## Core Boundaries (What Owns What)
 
@@ -73,41 +73,10 @@ Avoid:
 - Adding production script tags manually to `index.html` (outside the supported boot entries).
 - Depending on script load order not represented in generated manifests.
 
-## Good vs Avoid Examples
-
-### Add a Save Field
-
-Good:
-- Add field defaults in the canonical state shape / normalization path.
-- Add a migration in `js/save/migrations/*`.
-- Add fixture coverage in `tests/fixtures/saves/*` and migration tests.
-
-Avoid:
-- `if (!save.newField) save.newField = ...` in unrelated UI render functions.
-
-### Add a New UI Modal
-
-Good:
-- Implement in `js/ui/modals.js` (or a focused UI module) with accessible labels and diagnostics hooks if it handles failures.
-
-Avoid:
-- Injecting modal HTML directly in `js/core.js` unless it is core bootstrap/recovery behavior and no UI module exists yet.
-
-### Add Native/iOS Bridge Behavior
-
-Good:
-- Add a focused JS bridge module under `js/save/*` or `js/diagnostics/*` (or another clearly scoped module).
-- Add message handlers in `/Users/williambrandon/Documents/GitHub/My-Little-Friend/My Little Friend/My Little Friend/My_Little_Friend.swift` with timeout/error reporting.
-- Add tests on both JS contract and Swift smoke path where practical.
-
-Avoid:
-- Calling `webkit.messageHandlers.*` ad hoc throughout gameplay/UI code.
-
 ## Legacy / Secondary Paths
 
-- Browser/PWA support remains useful for local development, but it is secondary to iOS behavior.
 - Legacy monoliths are archived references and must not be used for production changes.
-- Service worker / PWA work should be treated as legacy maintenance unless explicitly requested.
+- Service worker / PWA work is optional and should be maintained only when required for web distribution goals.
 
 ## Change Checklist for New Features
 
@@ -115,4 +84,4 @@ Avoid:
 - Added tests for new modules and edge cases.
 - Regenerated runtime manifests if load order changed (`npm run gen:runtime`).
 - Considered save schema/migration impact.
-- Considered diagnostics logging and iOS lifecycle/bridge behavior if relevant.
+- Considered diagnostics logging, mobile touch ergonomics, and browser compatibility where relevant.
