@@ -57,6 +57,26 @@ npx wrangler pages deploy . --project-name <your-project-name>
 
 If the project name does not exist yet, create it first in Cloudflare Pages.
 
+### Troubleshooting: seeing "Hello World" on Cloudflare
+
+If your Cloudflare URL still shows a generic **Hello World** page, Cloudflare is usually serving a default Worker or the wrong project output instead of this repo's `index.html`.
+
+Fix checklist:
+
+1. In **Pages → Settings → Builds & deployments**, confirm:
+   - Framework preset: `None`
+   - Build command: *(empty)*
+   - Build output directory: `.`
+2. In **Workers & Pages**, make sure no Worker route is attached to the same custom domain/path that would override the Pages project.
+3. Redeploy the latest commit from the correct branch.
+4. If using CLI, deploy from repo root so static assets are uploaded:
+
+```bash
+npx wrangler pages deploy . --project-name <your-project-name>
+```
+
+This repo now includes `wrangler.toml` with `pages_build_output_dir = "."` to make the correct Pages output directory explicit for CLI-driven deploys.
+
 ## ✅ Validation
 
 - Unit/integration tests:
